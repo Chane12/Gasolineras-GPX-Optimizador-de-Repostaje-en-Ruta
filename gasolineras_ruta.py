@@ -633,15 +633,50 @@ def generate_map(
     # Leaflet (y por tanto folium) necesita para pintar los puntos en el mapa.
     gdf_wgs84 = gdf_top_stations.to_crs(CRS_WGS84)
 
-    # Calcular el ranking por precio para la escala de colores
-    # method='min' asigna el mismo ranking a precios iguales
-    gdf_wgs84["rank_precio"] = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(1).astype(int) - 1
+    # ---------------------------------------------------------------------------
+    # Gradiente de color basado en precio: verde (barato) → amarillo → rojo (caro)
+    # Se normaliza el precio de cada gasolinera entre el mín y máx del conjunto
+    # y se interpola la Hue en HSL: 120° (verde puro) → 60° (amarillo) → 0° (rojo)
+    # ---------------------------------------------------------------------------
+    precio_min = gdf_wgs84["precio_seleccionado"].min()
+    precio_max = gdf_wgs84["precio_seleccionado"].max()
 
-    # Colores degradados para el ranking (verde=barato, rojo=caro)
-    rank_colors = ["#16a34a", "#65a30d", "#ca8a04", "#ea580c", "#dc2626"]
+    def price_to_hex_color(precio: float) -> str:
+        """Convierte un precio a un color hex del gradiente verde→amarillo→rojo."""
+        if precio_max == precio_min:
+            # Todos los precios son iguales → verde neutro (precio único)
+            return "#16a34a"
+        # t = 0.0 (más barato) → 1.0 (más caro)
+        t = (precio - precio_min) / (precio_max - precio_min)
+        # Hue: 120° (verde) a 0° (rojo) pasando por 60° (amarillo)
+        hue = 120 * (1.0 - t)   # 120 → 0
+        saturation = 88          # % saturación alta para colores vivos
+        lightness = 40           # % luminosidad media para buen contraste
+        # Conversión HSL → RGB → HEX
+        h = hue / 360.0
+        s = saturation / 100.0
+        l = lightness / 100.0
+        if s == 0:
+            r = g = b = l
+        else:
+            def hue_to_rgb(p: float, q: float, t_val: float) -> float:
+                t_val = t_val % 1.0
+                if t_val < 1/6: return p + (q - p) * 6 * t_val
+                if t_val < 1/2: return q
+                if t_val < 2/3: return p + (q - p) * (2/3 - t_val) * 6
+                return p
+            q = l * (1 + s) if l < 0.5 else l + s - l * s
+            p = 2 * l - q
+            r = hue_to_rgb(p, q, h + 1/3)
+            g = hue_to_rgb(p, q, h)
+            b = hue_to_rgb(p, q, h - 1/3)
+        return "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
+
+    # Ordenar por precio para asignar rank visual correcto (1 = más barato)
+    precios_ordenados = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(1).astype(int)
 
     for i, (_, row) in enumerate(gdf_wgs84.iterrows()):
-        rank_visual = i + 1  # Orden en el que aparece en la lista devuelta (puede ser cronológico o por precio)
+        rank_visual = i + 1
         lat = row.geometry.y
         lon = row.geometry.x
         precio = row.get("precio_seleccionado", float("nan"))
@@ -650,8 +685,7 @@ def generate_map(
         provincia = row.get("Provincia", "")
         direccion = row.get("Dirección", "")
         horario = row.get("Horario", "")
-        color_idx = row["rank_precio"]
-        color = rank_colors[color_idx] if color_idx < len(rank_colors) else "#6b7280"
+        color = price_to_hex_color(precio)
 
         popup_html = f"""
         <div style="font-family:sans-serif; min-width:220px;">
@@ -708,7 +742,7 @@ def generate_map(
             popup=folium.Popup(popup_html, max_width=280),
         ).add_to(mapa)
 
-    # Leyenda
+    # Leyenda con gradiente de precio
     legend_html = f"""
     <div style="
         position:fixed; bottom:30px; left:30px;
@@ -716,13 +750,20 @@ def generate_map(
         padding:14px 18px; border-radius:8px;
         box-shadow:0 2px 8px rgba(0,0,0,0.2);
         font-family:sans-serif; font-size:13px;
+        min-width: 200px;
     ">
         <b>Optimizador de Gasolineras</b><br>
-        <span style="color:#2563EB;">--</span> Ruta GPX<br>
-        <span style="color:#16a34a;">o</span> Gasolineras mas baratas<br>
-        <i style="font-size:11px; color:#888;">
-            Combustible: {fuel_column.replace("Precio ", "")}
-        </i>
+        <span style="color:#2563EB;">──</span> Ruta GPX<br><br>
+        <b>Precio {fuel_column.replace("Precio ", "")}:</b><br>
+        <div style="
+            background: linear-gradient(to right, #16a34a, #eab308, #dc2626);
+            height: 12px; border-radius: 4px; margin: 5px 0;
+            border: 1px solid #ddd;
+        "></div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#555;">
+            <span>&#9679; {precio_min:.3f}€ (más barato)</span>
+            <span>{precio_max:.3f}€ &#9679;</span>
+        </div>
     </div>
     """
     mapa.get_root().html.add_child(folium.Element(legend_html))
