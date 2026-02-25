@@ -674,7 +674,7 @@ def generate_map(
         </div>
         """
 
-        # Aumentamos radius de 14 a 18 y el weight del borde a 3 para hacerlo más fácil de clicar
+        # El CircleMarker dibuja el fondo de color
         folium.CircleMarker(
             location=[lat, lon],
             radius=18,
@@ -687,21 +687,25 @@ def generate_map(
             popup=folium.Popup(popup_html, max_width=280),
         ).add_to(mapa)
 
-        # Número de ranking encima del círculo
-        # Aumentamos también el área del div que hace de overlay clickeable
+        # El DivIcon superpone el número.
+        # Le añadimos EL MISMO POPUP y TOOLTIP para que, si el usuario hace clic o hover 
+        # en el número (que está por encima en el z-index), también funcione perfectamente.
         folium.Marker(
             location=[lat, lon],
             icon=folium.DivIcon(
                 html=f"""
                 <div style="
-                    font-size:12px; font-weight:bold;
+                    font-size:13px; font-weight:bold;
                     color:white; text-align:center;
                     line-height:36px; width:36px;
+                    border-radius:50%; /* Ayuda a que la forma coincida con el círculo */
                 ">#{rank_visual}</div>
                 """,
                 icon_size=(36, 36),
                 icon_anchor=(18, 18),
             ),
+            tooltip=f"#{rank_visual} {nombre} -- {precio:.3f} EUR/L",
+            popup=folium.Popup(popup_html, max_width=280),
         ).add_to(mapa)
 
     # Leyenda
