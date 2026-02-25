@@ -674,11 +674,12 @@ def generate_map(
         </div>
         """
 
+        # Aumentamos radius de 14 a 18 y el weight del borde a 3 para hacerlo más fácil de clicar
         folium.CircleMarker(
             location=[lat, lon],
-            radius=14,
+            radius=18,
             color="white",
-            weight=2,
+            weight=3,
             fill=True,
             fill_color=color,
             fill_opacity=0.9,
@@ -687,18 +688,19 @@ def generate_map(
         ).add_to(mapa)
 
         # Número de ranking encima del círculo
+        # Aumentamos también el área del div que hace de overlay clickeable
         folium.Marker(
             location=[lat, lon],
             icon=folium.DivIcon(
                 html=f"""
                 <div style="
-                    font-size:11px; font-weight:bold;
+                    font-size:12px; font-weight:bold;
                     color:white; text-align:center;
-                    line-height:28px; width:28px;
+                    line-height:36px; width:36px;
                 ">#{rank_visual}</div>
                 """,
-                icon_size=(28, 28),
-                icon_anchor=(14, 14),
+                icon_size=(36, 36),
+                icon_anchor=(18, 18),
             ),
         ).add_to(mapa)
 
