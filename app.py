@@ -311,37 +311,48 @@ with st.sidebar:
 
     # 3. Datos del vehículo (para estimador de coste y autonomía)
     st.markdown('<p class="sidebar-title">3. Tu Vehículo</p>', unsafe_allow_html=True)
-    with st.expander("Parámetros del depósito y consumo", expanded=False):
-        deposito_total_l = st.number_input(
-            "Capacidad del depósito (litros)",
-            min_value=5.0, max_value=300.0,
-            value=max(5.0, _litros_default) if _litros_default > 0 else 20.0,
-            step=1.0,
-            help="Litros totales que cabe en el depósito de tu vehículo.",
-        )
-        consumo_l100km = st.number_input(
-            "Consumo aproximado (L/100 km)",
-            min_value=1.0, max_value=40.0,
-            value=_consumo_default,
-            step=0.5,
-            help="Consumo medio de tu vehículo. Consúltalo en el cuadro de mandos o en la ficha técnica.",
-        )
-        fuel_inicio_pct = st.slider(
-            "Combustible disponible al salir (%)",
-            min_value=0, max_value=100,
-            value=_inicio_pct_default,
-            step=5,
-            help="Nivel de combustible en el depósito al inicio de la ruta.",
-        )
-        combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
-        st.caption(
-            f"▸ Tienes **{combustible_actual_l:.1f} L** disponibles "
-            f"→ autonomía estimada de **{(combustible_actual_l / consumo_l100km * 100):.0f} km**"
-            if consumo_l100km > 0 else ""
-        )
-
-    # Calcular autonomía actual a partir de los datos del vehículo
-    autonomia_km = int(combustible_actual_l / consumo_l100km * 100) if consumo_l100km > 0 else 0
+    usar_vehiculo = st.checkbox(
+        "Introducir datos de mi vehículo",
+        value=False,
+        help="Activa esta opción para calcular el consumo estimado y el coste del repostaje.",
+    )
+    if usar_vehiculo:
+        with st.expander("Parámetros del depósito y consumo", expanded=True):
+            deposito_total_l = st.number_input(
+                "Capacidad del depósito (litros)",
+                min_value=5.0, max_value=300.0,
+                value=max(5.0, _litros_default) if _litros_default > 0 else 20.0,
+                step=1.0,
+                help="Litros totales que cabe en el depósito de tu vehículo.",
+            )
+            consumo_l100km = st.number_input(
+                "Consumo aproximado (L/100 km)",
+                min_value=1.0, max_value=40.0,
+                value=_consumo_default,
+                step=0.5,
+                help="Consumo medio de tu vehículo. Consúltalo en el cuadro de mandos o en la ficha técnica.",
+            )
+            fuel_inicio_pct = st.slider(
+                "Combustible disponible al salir (%)",
+                min_value=0, max_value=100,
+                value=_inicio_pct_default,
+                step=5,
+                help="Nivel de combustible en el depósito al inicio de la ruta.",
+            )
+            combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
+            st.caption(
+                f"▸ Tienes **{combustible_actual_l:.1f} L** disponibles "
+                f"→ autonomía estimada de **{(combustible_actual_l / consumo_l100km * 100):.0f} km**"
+                if consumo_l100km > 0 else ""
+            )
+        autonomia_km = int(combustible_actual_l / consumo_l100km * 100) if consumo_l100km > 0 else 0
+    else:
+        # Valores neutros cuando el vehículo no está configurado
+        deposito_total_l = 0.0
+        consumo_l100km = 0.0
+        fuel_inicio_pct = 100
+        combustible_actual_l = 0.0
+        autonomia_km = 0
     st.markdown('<p class="sidebar-title">4. Filtros Avanzados</p>', unsafe_allow_html=True)
     with st.expander("Ajustar parámetros de búsqueda", expanded=False):
         radio_km = st.slider(
@@ -581,7 +592,7 @@ if "pipeline_results" in st.session_state:
         st.metric(f"Total en ±{radio_km} km", f"{total_zona} Est.")
 
     # 2. Estimador de coste inteligente basado en el vehículo
-    if deposito_total_l > 0 and consumo_l100km > 0:
+    if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
         # Longitud real de la ruta en km (usando el track UTM ya proyectado)
         ruta_km = track_utm.length / 1000.0
 
