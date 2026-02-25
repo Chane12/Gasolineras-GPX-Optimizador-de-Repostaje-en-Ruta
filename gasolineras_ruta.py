@@ -35,6 +35,7 @@ import pandas as pd
 import requests
 from shapely.geometry import LineString, Point
 from shapely.ops import transform
+from pyproj import Geod
 import pyproj
 
 # Silencia advertencias de GeoPandas sobre índices espaciales (dependiendo de versión)
@@ -682,6 +683,11 @@ def filter_cheapest_stations(
             f"Columnas de precio disponibles: {available}"
         )
 
+    # Coerción numérica estricta — protege contra datos sucios del MITECO
+    # (strings residuales como "N/A" o "Agotado" que sobrevivan a la limpieza)
+    gdf = gdf.copy()
+    gdf[fuel_column] = pd.to_numeric(gdf[fuel_column], errors="coerce")
+
     # Filtrar filas con precio válido (eliminar NaN y ceros)
     mask = gdf[fuel_column].notna() & (gdf[fuel_column] > 0)
     gdf_valid = gdf[mask].copy()
@@ -794,12 +800,19 @@ def get_real_distance_osrm(
             return None
         resp.raise_for_status()
         data = resp.json()
-        route = data.get("routes", [None])[0]
-        if route is None:
+
+        # Validación defensiva estricta — OSRM puede devolver HTTP 200 con error
+        if data.get("code") != "Ok" or not data.get("routes"):
             return None
-        leg = route.get("legs", [None])[0]
-        if leg is None:
+
+        route = data["routes"][0]
+        if not route.get("legs"):
             return None
+
+        leg = route["legs"][0]
+        if "distance" not in leg or "duration" not in leg:
+            return None
+
         distance_km = leg["distance"] / 1000.0   # metros → km
         duration_min = leg["duration"] / 60.0    # segundos → minutos
         return {"distance_km": distance_km, "duration_min": duration_min}
@@ -973,7 +986,13 @@ def generate_map(
 
         if station_km_list:
             # Calcular longitud total de la ruta
-            track_length_km = LineString(track_coords).length * 111.0  # grados → km aprox
+            # Calcular longitud total de la ruta con pyproj (geodésica exacta)
+            # — Más preciso que la aproximación «× 111 km/grado» que falla en rutas largas
+            _geod = Geod(ellps="WGS84")
+            _lons = [c[0] for c in track_coords]
+            _lats = [c[1] for c in track_coords]
+            _, _, _dist_m = _geod.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
+            track_length_km = sum(_dist_m) / 1000.0  # metros → km (geodésico exacto)
             # Puntos de referencia: km 0, cada gasolinera y el fin de ruta
             checkpoints = [0.0] + station_km_list + [track_length_km]
 

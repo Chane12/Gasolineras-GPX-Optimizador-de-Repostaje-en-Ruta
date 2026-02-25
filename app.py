@@ -41,11 +41,13 @@ def cached_fetch_gasolineras() -> object:
     return fetch_gasolineras()
 
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_resource(ttl=1800, show_spinner=False)
 def cached_build_stations_gdf(_df) -> object:
     """
     Construye el GeoDataFrame con índice R-Tree (una vez cada 30 min).
-    El prefijo '_' evita que Streamlit intente hashear el DataFrame.
+    Usamos cache_resource (no cache_data) porque los objetos Shapely y el
+    índice espacial GEOS no deben ser clonados por pickle — evita fugas
+    de memoria en servidores con 1 GB de RAM como Streamlit Cloud.
     """
     return build_stations_geodataframe(_df)
 
