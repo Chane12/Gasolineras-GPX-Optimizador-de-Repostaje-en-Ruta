@@ -20,6 +20,7 @@ Dependencias:
 
 from __future__ import annotations
 
+import json
 import math
 import warnings
 from pathlib import Path
@@ -81,21 +82,6 @@ COORD_COLUMNS: list[str] = ["Latitud", "Longitud (WGS84)"]
 def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
     """
     Descarga el catálogo completo de gasolineras desde la API REST del MITECO.
-
-    El JSON devuelto tiene una clave "ListaEESSPrecio" con los registros.
-    Los campos numéricos (precios y coordenadas) usan coma como separador
-    decimal en lugar de punto, por lo que hay que limpiarlos.
-
-    Parameters
-    ----------
-    timeout : int
-        Segundos de espera máximos para la petición HTTP.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame con todas las gasolineras y coordenadas ya como float.
-        Las filas sin latitud o longitud válida son eliminadas.
     """
     import urllib.parse
 
@@ -154,8 +140,7 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
                 # allorigins /get devuelve {"contents": "...", "status": {...}}
                 if "allorigins.win/get" in proxy_url:
                     wrapper = resp.json()
-                    import json as _json
-                    data = _json.loads(wrapper["contents"])
+                    data = json.loads(wrapper["contents"])
                 else:
                     data = resp.json()
 
@@ -276,6 +261,59 @@ def load_gpx_track(gpx_path: str | Path) -> LineString:
 
     print(f"[GPX] Puntos cargados del track: {len(coords)}")
     return LineString(coords)
+
+
+# ===========================================================================
+# VALIDACIÓN DEL GPX
+# Límites de seguridad antes de lanzar el pipeline completo.
+# ===========================================================================
+
+# Bounding box de España peninsular + Baleares + Canarias + Ceuta/Melilla
+_BBOX_SPAIN = {"min_lat": 27.6, "max_lat": 44.0, "min_lon": -18.2, "max_lon": 4.3}
+_MAX_TRACK_POINTS = 50_000
+
+
+def validate_gpx_track(track: LineString) -> None:
+    """
+    Valida que el track GPX sea seguro de procesar.
+
+    Comprueba:
+    1. Que no exceda el máximo de puntos permitido (protección OOM).
+    2. Que el centroide de la ruta esté dentro del territorio español.
+
+    Parameters
+    ----------
+    track : LineString
+        LineString en WGS84 con las coordenadas de la ruta.
+
+    Raises
+    ------
+    ValueError
+        Si el track tiene demasiados puntos o no está en España.
+    """
+    n_pts = len(track.coords)
+    if n_pts > _MAX_TRACK_POINTS:
+        raise ValueError(
+            f"La ruta tiene demasiados puntos ({n_pts:,}). "
+            f"Máximo permitido: {_MAX_TRACK_POINTS:,}. "
+            "Simplifica el GPX antes de subirlo."
+        )
+
+    # Centroide aproximado: media de coordenadas del track
+    lons = [c[0] for c in track.coords]
+    lats = [c[1] for c in track.coords]
+    c_lon = sum(lons) / len(lons)
+    c_lat = sum(lats) / len(lats)
+
+    bb = _BBOX_SPAIN
+    if not (bb["min_lat"] < c_lat < bb["max_lat"] and bb["min_lon"] < c_lon < bb["max_lon"]):
+        raise ValueError(
+            f"La ruta no parece estar en territorio español "
+            f"(centroide: lat={c_lat:.3f}, lon={c_lon:.3f}). "
+            "Esta herramienta solo cubre España peninsular, Baleares y Canarias."
+        )
+
+    print(f"[Validación] Track OK: {n_pts:,} puntos, centroide ({c_lat:.3f}, {c_lon:.3f}).")
 
 
 # ===========================================================================
@@ -554,6 +592,7 @@ def generate_map(
     gdf_top_stations: gpd.GeoDataFrame,
     fuel_column: str,
     output_path: str | Path = "mapa_gasolineras.html",
+    autonomy_km: float = 0.0,
 ) -> Path:
     """
     Genera un mapa interactivo en HTML con folium mostrando:
@@ -605,15 +644,56 @@ def generate_map(
     ).add_to(mapa)
 
     # --- Dibujar la ruta GPX ---
-    # Folium/Leaflet usa (lat, lon), no (lon, lat) como Shapely.
     route_latlon = [(lat, lon) for lon, lat in track_coords]
     folium.PolyLine(
         locations=route_latlon,
-        color="#2563EB",    # azul
+        color="#2563EB",
         weight=4,
         opacity=0.85,
         tooltip="Ruta GPX",
+        name="Ruta GPX",
     ).add_to(mapa)
+
+    # --- Zonas de peligro por autonomía ---
+    if autonomy_km > 0 and not gdf_top_stations.empty:
+        # Reproyectar estaciones a WGS84 para obtener km_ruta en WGS84
+        gdf_for_danger = gdf_top_stations.copy()
+        if gdf_for_danger.crs and gdf_for_danger.crs.to_epsg() != 4326:
+            gdf_for_danger = gdf_for_danger.to_crs(CRS_WGS84)
+
+        # Construir lista de km de ruta donde hay gasolinera
+        station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist()) if "km_ruta" in gdf_for_danger.columns else []
+
+        if station_km_list:
+            # Calcular longitud total de la ruta
+            track_length_km = LineString(track_coords).length * 111.0  # grados → km aprox
+            # Puntos de referencia: km 0, cada gasolinera y el fin de ruta
+            checkpoints = [0.0] + station_km_list + [track_length_km]
+
+            # Acumular segmentos entre checkpoints donde la brecha supera la autonomía
+            danger_segments = []
+            for j in range(len(checkpoints) - 1):
+                gap = checkpoints[j + 1] - checkpoints[j]
+                if gap > autonomy_km:
+                    # Localizar los puntos de la polilínea que caen en ese intervalo
+                    total_pts = len(route_latlon)
+                    seg_start_idx = int((checkpoints[j] / track_length_km) * total_pts)
+                    seg_end_idx = int((checkpoints[j + 1] / track_length_km) * total_pts)
+                    seg_start_idx = max(0, min(seg_start_idx, total_pts - 1))
+                    seg_end_idx = max(seg_start_idx + 1, min(seg_end_idx, total_pts))
+                    danger_segments.append(route_latlon[seg_start_idx:seg_end_idx])
+
+            for seg in danger_segments:
+                if len(seg) >= 2:
+                    folium.PolyLine(
+                        locations=seg,
+                        color="#ef4444",
+                        weight=6,
+                        opacity=0.85,
+                        dash_array="10 6",
+                        tooltip=f"⚠️ Tramo sin gasolineras en {autonomy_km:.0f} km",
+                        name="Zonas de riesgo",
+                    ).add_to(mapa)
 
     # Marcadores de inicio y fin de ruta
     folium.Marker(
