@@ -755,7 +755,11 @@ def generate_map(
     # Ordenar por precio para asignar rank visual correcto (1 = más barato)
     precios_ordenados = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(1).astype(int)
 
-    for i, (_, row) in enumerate(gdf_wgs84.iterrows()):
+    # Para que las más baratas aparezcan por encima al solaparse en el mapa,
+    # Leaflet necesita que se dibujen las últimas. Como gdf_wgs84 está ordenado
+    # de más barato a más caro (índice 0 es la más barata), iteramos al revés.
+    for i in range(len(gdf_wgs84) - 1, -1, -1):
+        row = gdf_wgs84.iloc[i]
         rank_visual = i + 1
         lat = row.geometry.y
         lon = row.geometry.x
