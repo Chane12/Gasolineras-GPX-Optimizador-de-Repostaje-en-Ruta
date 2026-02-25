@@ -8,7 +8,6 @@ Cómo ejecutar:
 """
 
 import tempfile
-import uuid
 from pathlib import Path
 
 import geopandas as gpd
@@ -47,15 +46,6 @@ def cached_build_stations_gdf(_df) -> object:
     """
     return build_stations_geodataframe(_df)
 
-
-# ---------------------------------------------------------------------------
-# ID de sesión único — HTML de mapa aislado por usuario
-# ---------------------------------------------------------------------------
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = str(uuid.uuid4())[:8]
-
-session_id = st.session_state["session_id"]
-output_html = Path(tempfile.gettempdir()) / f"mapa_gasolineras_{session_id}.html"
 
 # ---------------------------------------------------------------------------
 # Configuración de la página
@@ -435,12 +425,10 @@ if _pipeline_active:
             st.stop()
 
         progress.progress(88, text="🖼️ Generando mapa…")
-        # T2: Nombre de archivo único por sesión (evita colisión entre usuarios)
         _, mapa_obj = generate_map(
             track_original=track,
             gdf_top_stations=gdf_top,
             fuel_column=fuel_column,
-            output_path=output_html,
             autonomy_km=float(autonomia_km),  # F3: Zonas de peligro por autonomía
         )
 
@@ -594,18 +582,6 @@ if _pipeline_active:
     )
     if not map_active:
         st.caption("ℹ️ Activa la interacción arriba para hacer zoom y desplazarte por el mapa.")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    with open(output_html, "rb") as f:
-        html_bytes = f.read()
-    st.download_button(
-        label="⬇️ Descargar Mapa Interactivo (Offline HTML)",
-        data=html_bytes,
-        file_name="mapa_gasolineras_ruta.html",
-        mime="text/html",
-        use_container_width=False,
-    )
 
     st.markdown("---")
 

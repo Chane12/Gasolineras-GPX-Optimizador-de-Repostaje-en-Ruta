@@ -58,8 +58,6 @@ CÓMO USAR LA APLICACIÓN
      nombre, dirección, precio actual y horario.
    - **Mapa interactivo**: haz clic en cada círculo de
      color para ver todos los detalles de esa gasolinera.
-   - **Botón "Descargar mapa"**: guarda el mapa como HTML
-     para consultarlo offline con cualquier navegador.
 
 4. Para cerrar la aplicación, ve a la terminal y pulsa
    Ctrl+C.

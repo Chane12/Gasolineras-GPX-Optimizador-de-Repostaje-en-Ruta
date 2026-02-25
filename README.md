@@ -115,7 +115,7 @@ gasolineras-gpx/
 └── .gitignore
 ```
 
-> Los archivos `.gpx`, `.html` generados y cualquier dato espacial intermedio están excluidos del repositorio por `.gitignore`.
+> Los archivos `.gpx` y cualquier dato espacial intermedio están excluidos del repositorio por `.gitignore`.
 
 ---
 

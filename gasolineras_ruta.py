@@ -591,9 +591,9 @@ def generate_map(
     track_original: LineString,
     gdf_top_stations: gpd.GeoDataFrame,
     fuel_column: str,
-    output_path: str | Path = "mapa_gasolineras.html",
+    output_path: Optional[str | Path] = None,
     autonomy_km: float = 0.0,
-) -> Path:
+) -> tuple[Optional[Path], folium.Map]:
     """
     Genera un mapa interactivo en HTML con folium mostrando:
       - La ruta GPX original.
@@ -615,10 +615,11 @@ def generate_map(
 
     Returns
     -------
-    tuple[Path, folium.Map]
+    tuple[Optional[Path], folium.Map]
         Ruta absoluta del archivo HTML generado y el objeto folium.Map.
     """
-    output_path = Path(output_path)
+    if output_path is not None:
+        output_path = Path(output_path)
 
     # --- Centro del mapa: centroide del track original ---
     track_coords = list(track_original.coords)
@@ -855,9 +856,11 @@ def generate_map(
     # --- Control de capas ---
     folium.LayerControl().add_to(mapa)
 
-    mapa.save(str(output_path))
-    print(f"\n[Mapa] [SUCCESS] Mapa guardado en: {output_path.resolve()}")
-    return output_path.resolve(), mapa
+    if output_path is not None:
+        mapa.save(str(output_path))
+        print(f"\n[Mapa] [SUCCESS] Mapa guardado en: {output_path.resolve()}")
+
+    return (output_path.resolve() if output_path else None), mapa
 
 
 # ===========================================================================
@@ -870,7 +873,7 @@ def run_pipeline(
     buffer_meters: float = 5000.0,
     top_n: int = 5,
     simplify_tolerance: float = 0.0005,
-    output_html: str | Path = "mapa_gasolineras.html",
+    output_html: Optional[str | Path] = None,
     segment_km: float = 0.0,
 ) -> dict:
     """
@@ -889,8 +892,8 @@ def run_pipeline(
         Número de gasolineras más baratas a mostrar.
     simplify_tolerance : float
         Tolerancia RDP en grados (~0.0005° ≈ 50m).
-    output_html : str | Path
-        Ruta de salida del mapa HTML.
+    output_html : Optional[str | Path]
+        Ruta de salida del mapa HTML (opcional).
 
     Returns
     -------
@@ -975,7 +978,7 @@ if __name__ == "__main__":
     BUFFER_METROS = 5000.0
     TOP_N = 5
     SIMPLIFY_TOL = 0.0005
-    OUTPUT_HTML = "mapa_gasolineras.html"
+    # OUTPUT_HTML = "mapa_gasolineras.html"  # Desactivado por defecto
 
     print("=" * 60)
     print(" OPTIMIZADOR DE GASOLINERAS EN RUTA -- Espana")
@@ -1049,7 +1052,7 @@ if __name__ == "__main__":
             buffer_meters=float(BUFFER_METROS),
             top_n=int(TOP_N),
             simplify_tolerance=float(SIMPLIFY_TOL),
-            output_html=OUTPUT_HTML,
+            output_html=None,
         )
 
         print(f"\n[RESUMEN FINAL]:")
