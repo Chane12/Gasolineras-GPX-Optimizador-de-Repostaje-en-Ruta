@@ -1135,7 +1135,7 @@ def generate_map(
             <div style="text-align:center; background:#f8fafc; border-radius:8px;
                         padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color};
-                            line-height:1;">{precio:.3f if not _math.isnan(precio) else "N/A"} €/L</div>
+                            line-height:1;">{f"{precio:.3f}" if not _math.isnan(precio) else "N/A"} €/L</div>
                 <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
                     {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp;
                     Km {row.get('km_ruta', 0):.1f} en ruta</div>
