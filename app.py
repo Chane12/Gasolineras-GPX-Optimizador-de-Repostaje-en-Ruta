@@ -94,17 +94,10 @@ st.markdown(
         padding: 15px 20px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    div[data-testid="stMetricValue"] {
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: #0f172a;
-    }
+    div[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: 700; color: #0f172a; }
     div[data-testid="stMetricLabel"] {
-        font-size: 0.78rem;
-        font-weight: 500;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
+        font-size: 0.78rem; font-weight: 500; color: #64748b;
+        text-transform: uppercase; letter-spacing: 0.025em;
     }
 
     div.stButton > button {
@@ -125,33 +118,94 @@ st.markdown(
         box-shadow: 0 10px 15px -3px rgba(37,99,235,0.3) !important;
     }
 
+    /* --- Welcome screen --- */
     .welcome-container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 4rem 2rem;
+        padding: 3rem 2rem;
         text-align: center;
         background: white;
         border: 1px dashed #cbd5e1;
         border-radius: 12px;
         margin-top: 2rem;
     }
-    .welcome-icon { font-size: 4rem; margin-bottom: 1rem; }
-    .welcome-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; }
-    .welcome-text { font-size: 1rem; color: #64748b; max-width: 600px; line-height: 1.6; }
+    .welcome-icon  { font-size: 3.5rem; margin-bottom: 0.8rem; }
+    .welcome-title { font-size: 1.4rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; }
+    .welcome-text  { font-size: 0.95rem; color: #64748b; max-width: 560px; line-height: 1.6; margin-bottom: 1.5rem; }
 
+    /* --- Cost box: MOBILE-FIRST grid --- */
     .cost-box {
         background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         border: 1px solid #86efac;
         border-radius: 10px;
-        padding: 18px 24px;
+        padding: 18px 20px;
         margin: 12px 0;
     }
     .cost-box-title { font-weight: 700; color: #166534; font-size: 1rem; margin-bottom: 6px; }
-    .cost-saving { font-size: 1.4rem; font-weight: 800; color: #16a34a; }
+    .cost-saving    { font-size: 1.4rem; font-weight: 800; color: #16a34a; }
+
+    /* Cost grid snaps to single column on narrow screens */
+    .cost-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 10px;
+    }
+    /* Cost breakdown row also wraps on small screens */
+    .cost-breakdown {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #86efac;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    /* --- Scroll-trap guard: disable pointer events on map iframe touch --- */
+    .map-guard {
+        position: relative;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+    }
+    .map-guard-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.01);
+        z-index: 999;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 12px;
+        pointer-events: none;
+    }
 
     .stDataFrame { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+
+    /* ============================================================
+       MOBILE BREAKPOINTS — target < 768px (tablets / phones)
+       ============================================================ */
+    @media (max-width: 768px) {
+        /* Stack cost grid vertically */
+        .cost-grid { grid-template-columns: 1fr !important; }
+        /* Stack breakdown items too */
+        .cost-breakdown { flex-direction: column; gap: 0.75rem; }
+        /* Smaller headings */
+        .welcome-title { font-size: 1.2rem; }
+        .welcome-text  { font-size: 0.88rem; }
+        /* Prevent map from trapping scroll on touch devices */
+        iframe { touch-action: pan-y !important; }
+    }
+
+    /* Extra small phones (320–480px) */
+    @media (max-width: 480px) {
+        .cost-box { padding: 14px 12px; }
+        .cost-saving { font-size: 1.15rem; }
+        div[data-testid="stMetricValue"] { font-size: 1.2rem; }
+        .welcome-container { padding: 2rem 1rem; }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -204,9 +258,13 @@ with st.sidebar:
     st.markdown("## ⚙️ Configuración del Viaje")
     st.markdown("---")
 
-    # 1. Archivo GPX
+    # 1. Archivo GPX – uploader + modo demo
     st.markdown('<p class="sidebar-title">1. Archivo de Ruta (.GPX)</p>', unsafe_allow_html=True)
     gpx_file = st.file_uploader("Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed")
+
+    # Si no hay archivo pero hay modo demo activo, indicarlo visualmente
+    if gpx_file is None and st.session_state.get("demo_mode"):
+        st.success("✅ Cargada ruta de demo (Madrid Norte ~55 km)")
     with st.expander("¿Cómo obtengo mi archivo GPX?"):
         st.markdown(
             """
@@ -304,14 +362,27 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
 # ---------------------------------------------------------------------------
-if run_btn:
-    if gpx_file is None:
+_pipeline_active = run_btn or (st.session_state.get("demo_mode") and not run_btn)
+
+# Bandera para saber si se usó el demo en este ciclo de ejecución
+_using_demo = (_pipeline_active and gpx_file is None and st.session_state.get("demo_mode"))
+
+if _pipeline_active:
+    if gpx_file is None and not st.session_state.get("demo_mode"):
         st.error("📂 Primero sube tu archivo GPX.")
         st.stop()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
-        tmp.write(gpx_file.read())
-        tmp_path = Path(tmp.name)
+    if _using_demo:
+        # Cargar el GPX de demo desde disco
+        demo_gpx_path = Path(__file__).parent / "demo_route.gpx"
+        if not demo_gpx_path.exists():
+            st.error("⚠️ No se encontró el archivo de demo. Contacta con el administrador.")
+            st.stop()
+        tmp_path = demo_gpx_path
+    else:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
+            tmp.write(gpx_file.read())
+            tmp_path = Path(tmp.name)
 
     progress = st.progress(0, text="Iniciando búsqueda…")
 
@@ -391,11 +462,15 @@ if run_btn:
         )
         st.stop()
     finally:
-        tmp_path.unlink(missing_ok=True)
+        # Solo borrar si es un archivo temporal real (no la ruta de demo)
+        if not _using_demo:
+            tmp_path.unlink(missing_ok=True)
 
     # -----------------------------------------------------------------------
     # Resultados — Dashboard
     # -----------------------------------------------------------------------
+    if _using_demo:
+        st.info("🏍️ **Modo Demo activo** — Ruta Madrid Norte ~55 km. Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
     # 1. KPIs principales
@@ -445,15 +520,14 @@ if run_btn:
         # trate como texto plano en lugar de HTML — esto lo evita.
         if necesita_reposte:
             cost_breakdown_html = (
-                f'<div style="margin-top:14px;padding-top:12px;border-top:1px solid #86efac;'
-                f'display:flex;gap:2rem;flex-wrap:wrap;">'
+                '<div class="cost-breakdown">'
                 f'<div><div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>'
                 f'<div class="cost-saving">{coste_barata:.2f} €</div></div>'
                 f'<div><div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>'
                 f'<div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div></div>'
                 f'<div><div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>'
                 f'<div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div></div>'
-                f'</div>'
+                '</div>'
             )
         else:
             cost_breakdown_html = (
@@ -465,7 +539,7 @@ if run_btn:
             f"""
             <div class="cost-box">
                 <div class="cost-box-title">🚗 Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
+                <div class="cost-grid">
                     <div>
                         <div style="font-size:0.78rem;color:#475569;font-weight:600;">DEPÓSITO AL SALIR</div>
                         <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{combustible_actual_l:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({fuel_inicio_pct}%)</span></div>
@@ -500,7 +574,26 @@ if run_btn:
     else:
         st.caption("Haz clic en los marcadores para ver la información de la gasolinera.")
 
-    st_folium(mapa_obj, width="100%", height=620, returned_objects=[])
+    # Mapa — anti scroll-trap: el usuario puede desactivar la interactividad
+    # para que el scroll de la página no quede "atrapado" dentro del iframe
+    # (problema frecuente en móvil con mapas Leaflet/Folium).
+    map_active = st.checkbox(
+        "🖱️ Activar interacción con el mapa (zoom / arrastrar)",
+        value=True,
+        help=(
+            "En móvil, desactívalo para poder hacer scroll en la página "
+            "sin que el mapa capture el gesto."
+        ),
+    )
+    map_height = 580 if map_active else 340
+
+    st_folium(
+        mapa_obj, width="100%",
+        height=map_height,
+        returned_objects=[],
+    )
+    if not map_active:
+        st.caption("ℹ️ Activa la interacción arriba para hacer zoom y desplazarte por el mapa.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -549,19 +642,34 @@ if run_btn:
 
 else:
     # -----------------------------------------------------------------------
-    # PANTALLA INICIAL
+    # PANTALLA INICIAL — Estado vacío con CTA activo (Zero-Friction Onboarding)
     # -----------------------------------------------------------------------
     st.markdown(
         """
         <div class="welcome-container">
-            <div class="welcome-icon">🗺️⛽</div>
-            <div class="welcome-title">Bienvenido al Optimizador de Repostaje en Ruta</div>
+            <div class="welcome-icon">🏍️⛽</div>
+            <div class="welcome-title">Optimizador de Repostaje para Moteros</div>
             <div class="welcome-text">
-                Planifica tu viaje de manera inteligente. Configura tu ruta en el panel lateral a la izquierda,
-                selecciona tu combustible, y nosotros buscaremos las estaciones de servicio más económicas de
-                España cruzando datos geográficos con la API oficial del MITECO en tiempo real.
+                Sube el GPX de tu ruta, indica tu combustible y el depósito de tu moto.
+                Encontramos las gasolineras más baratas de España <strong>en tiempo real</strong>
+                cruzando datos geográficos con la API oficial del MITECO.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    # ----- Demo CTA -------------------------------------------------------
+    # Psicología: reducir la barrera de entrada («¿Y si no tengo un GPX ahora?»)
+    # con un botón de prueba inmediata que carga una ruta real de 55 km.
+    st.markdown("<br>", unsafe_allow_html=True)
+    _demo_col, _ = st.columns([2, 3])
+    with _demo_col:
+        if st.button(
+            "🏍️  Probar con ruta de Demo (Madrid Norte)",
+            use_container_width=True,
+            help="Carga automáticamente una ruta de ~55 km alrededor de Madrid para que veas la app en funcionamiento sin necesidad de subir un GPX.",
+        ):
+            # Activar modo demo y relanzar la app para que el pipeline lo detecte
+            st.session_state["demo_mode"] = True
+            st.rerun()
