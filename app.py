@@ -367,7 +367,7 @@ with st.sidebar:
         buscar_tramos = st.checkbox(
             "Buscar gasolinera obligatoriamente cada X km",
             value=True,
-            help="Añade la gasolinera más barata por tramo. Ideal para motos."
+            help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas o vehículos con depósitos pequeños."
         )
         if buscar_tramos:
             segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10)
@@ -568,7 +568,7 @@ if "pipeline_results" in st.session_state:
     _using_demo = _r["using_demo"]
 
     if _using_demo:
-        st.info("🏍️ **Modo Demo activo** — Ruta Madrid Norte ~55 km. Sube tu propio GPX desde el panel lateral cuando quieras.")
+        st.info("🧭 **Modo Demo activo** — Escapada por la Sierra (~55 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
     # 1. KPIs principales
@@ -777,12 +777,12 @@ else:
     st.markdown(
         """
         <div class="welcome-container">
-            <div class="welcome-icon">🏍️⛽</div>
-            <div class="welcome-title">Optimizador de Repostaje para Moteros</div>
+            <div class="welcome-icon">🛣️⛽</div>
+            <div class="welcome-title">Planificador Inteligente de Repostaje en Ruta</div>
             <div class="welcome-text">
-                Sube el GPX de tu ruta, indica tu combustible y el depósito de tu moto.
+                Sube el GPX de tu próximo viaje, indica tu combustible y el depósito de tu vehículo.
                 Encontramos las gasolineras más baratas de España <strong>en tiempo real</strong>
-                cruzando datos geográficos con la API oficial del MITECO.
+                cruzando datos geográficos con la API oficial del MITECO. ¡Ahorra en cada escapada!
             </div>
         </div>
         """,
@@ -796,9 +796,9 @@ else:
     _demo_col, _ = st.columns([2, 3])
     with _demo_col:
         if st.button(
-            "🏍️  Probar con ruta de Demo (Madrid Norte)",
+            "🚗  Probar con ruta de Escapada (Madrid Norte)",
             use_container_width=True,
-            help="Carga automáticamente una ruta de ~55 km alrededor de Madrid para que veas la app en funcionamiento sin necesidad de subir un GPX.",
+            help="Carga automáticamente una ruta real de ~55 km para que veas la app en funcionamiento sin necesidad de subir un GPX.",
         ):
             # Activar modo demo y relanzar la app para que el pipeline lo detecte
             st.session_state["demo_mode"] = True
