@@ -97,42 +97,20 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
         DataFrame con todas las gasolineras y coordenadas ya como float.
         Las filas sin latitud o longitud válida son eliminadas.
     """
-    import subprocess
-    import json
-    import sys
+    print("[MITECO] Descargando datos via requests...")
 
-    print(f"[MITECO] Descargando datos via PowerShell (Invoke-RestMethod)...")
-    
-    # Usamos shell=True y redirección para evitar problemas de buffer en algunos entornos
-    ps_command = (
-        f'$ProgressPreference = "SilentlyContinue"; '
-        f'Invoke-RestMethod -Uri "{MITECO_API_URL}" -Method Get | ConvertTo-Json -Depth 10'
-    )
-    
     try:
-        # Usamos run con capture_output=True pero sin text=True para manejar bytes
-        # y evitar errores de encoding automáticos
-        result = subprocess.run(
-            ["powershell", "-Command", ps_command],
-            capture_output=True,
-            check=True
+        response = requests.get(MITECO_API_URL, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.Timeout:
+        raise TimeoutError(
+            f"La API del MITECO tardó más de {timeout}s en responder. "
+            "Comprueba tu conexión a Internet e inténtalo de nuevo."
         )
-        
-        if not result.stdout:
-            print(f"[MITECO] ERROR: PowerShell no devolvió datos.")
-            print(f"STDERR: {result.stderr.decode('cp1252', errors='replace')}")
-            raise ValueError("PowerShell returned no data")
+    except requests.exceptions.RequestException as e:
+        raise ConnectionError(f"Error al conectar con la API del MITECO: {e}")
 
-        # El encoding de PowerShell en máquinas Windows españolas suele ser cp1252 o similar
-        # Usamos errors='replace' para no bloquearnos por un caracter mal formado
-        raw_data = result.stdout.decode('cp1252', errors='replace')
-        
-        data = json.loads(raw_data)
-    except Exception as e:
-        print(f"[MITECO] Error crítico: {e}")
-        if 'result' in locals():
-            print(f"Detalle STDERR: {result.stderr.decode('cp1252', errors='replace')[:500]}")
-        raise e
     records = data.get("ListaEESSPrecio", [])
     if not records:
         raise ValueError("La API del MITECO no devolvió registros. Comprueba el endpoint.")
@@ -206,8 +184,14 @@ def load_gpx_track(gpx_path: str | Path) -> LineString:
     if not gpx_path.exists():
         raise FileNotFoundError(f"No se encuentra el archivo GPX: {gpx_path}")
 
-    with open(gpx_path, "r", encoding="utf-8") as f:
-        gpx = gpxpy.parse(f)
+    # Intentar UTF-8 primero (estándar); fallback a latin-1 para archivos
+    # exportados desde Garmin/Windows con caracteres especiales (tildes, etc.)
+    try:
+        with open(gpx_path, "r", encoding="utf-8") as f:
+            gpx = gpxpy.parse(f)
+    except UnicodeDecodeError:
+        with open(gpx_path, "r", encoding="latin-1") as f:
+            gpx = gpxpy.parse(f)
 
     coords: list[tuple[float, float]] = []
 
