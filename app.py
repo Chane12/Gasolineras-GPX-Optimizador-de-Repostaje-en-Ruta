@@ -8,6 +8,7 @@ Cómo ejecutar:
 """
 
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 import geopandas as gpd
@@ -684,6 +685,19 @@ if "pipeline_results" in st.session_state:
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
 
+    # Construir URL de Google Maps para cada dirección (columna LinkColumn)
+    if "Dirección" in df_show.columns and "Municipio" in df_show.columns:
+        df_show["_maps_url"] = df_show.apply(
+            lambda r: "https://maps.google.com/?q=" + urllib.parse.quote_plus(
+                f"{r.get('Dirección', '')}, {r.get('Municipio', '')}"
+            ),
+            axis=1,
+        )
+    elif "Dirección" in df_show.columns:
+        df_show["_maps_url"] = df_show["Dirección"].apply(
+            lambda d: "https://maps.google.com/?q=" + urllib.parse.quote_plus(str(d))
+        )
+
     # Nota: el formateo de números (km, min, €/L) se gestiona en column_config
     # más abajo — no aplicamos .apply() que convertiría los números a strings
     # y rompería el ProgressColumn y NumberColumn de Streamlit.
@@ -722,9 +736,18 @@ if "pipeline_results" in st.session_state:
             "Rótulo / Marca",
             help="Nombre comercial de la gasolinera.",
         ),
+        # La dirección se muestra como enlace a Google Maps
+        "_maps_url": st.column_config.LinkColumn(
+            "Dirección 📍",
+            help="Clic para abrir en Google Maps (desde allí puedes copiar la dirección).",
+            display_text="📍 Ver / Copiar dirección",
+        ),
+        # Ocultar la columna de texto plano (ya está en el enlace)
+        "Dirección": None,
     }
     # Eliminar del config las columnas que no existen en df_show
-    col_config = {k: v for k, v in col_config.items() if k in df_show.columns}
+    # (None en column_config oculta la columna sin eliminarla del df)
+    col_config = {k: v for k, v in col_config.items() if k in df_show.columns or v is None}
 
     table_event = st.dataframe(
         df_show,
