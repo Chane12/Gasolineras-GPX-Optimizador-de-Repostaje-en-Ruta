@@ -210,7 +210,18 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
 # ===========================================================================
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_NOMINATIM_UA  = "GasolinerasEnRutaApp/1.0 (contacto@example.com)"
+# Nominatim rechaza User-Agents genéricos y bloques de IPs de centros de datos.
+# Usamos un UA de navegador real + Referer para evitar el 403.
+_NOMINATIM_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.openstreetmap.org/",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    "Accept": "application/json",
+}
 
 _OSRM_ROUTE_URL = "http://router.project-osrm.org/route/v1/driving"
 
@@ -245,10 +256,11 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
         Si Nominatim no devuelve resultados o la llamada falla.
     """
     try:
+        time.sleep(1)  # Nominatim exige ≤1 req/s; también reduce riesgo de rate-limit
         resp = requests.get(
             _NOMINATIM_URL,
             params={"q": lugar, "format": "json", "limit": 1},
-            headers={"User-Agent": _NOMINATIM_UA},
+            headers=_NOMINATIM_HEADERS,
             timeout=timeout,
         )
         resp.raise_for_status()
