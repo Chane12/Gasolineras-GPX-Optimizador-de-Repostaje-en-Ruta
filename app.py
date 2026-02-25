@@ -202,6 +202,39 @@ st.markdown(
         div[data-testid="stMetricValue"] { font-size: 1.2rem; }
         .welcome-container { padding: 2rem 1rem; }
     }
+
+    /* === Radar de Autonomía Crítica === */
+    .radar-header {
+        font-size: 1.1rem; font-weight: 700; color: #0f172a;
+        display: flex; align-items: center; gap: 0.5rem;
+        margin-bottom: 12px;
+    }
+    .radar-summary {
+        display: flex; gap: 16px; flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .radar-chip {
+        padding: 6px 14px; border-radius: 99px;
+        font-size: 0.82rem; font-weight: 700;
+    }
+    .radar-safe   { background: #dcfce7; color: #166534;  border: 1px solid #86efac; }
+    .radar-warn   { background: #fef9c3; color: #854d0e;  border: 1px solid #fde047; }
+    .radar-crit   { background: #fee2e2; color: #991b1b;  border: 1px solid #fca5a5; }
+    .radar-box {
+        background: white; border: 1px solid #e2e8f0;
+        border-radius: 10px; padding: 16px 20px; margin-bottom: 8px;
+    }
+    .radar-box-crit { border-left: 4px solid #ef4444; }
+    .radar-box-warn { border-left: 4px solid #eab308; }
+    .radar-box-safe { border-left: 4px solid #22c55e; }
+    .radar-km-badge {
+        font-size: 1.6rem; font-weight: 800; color: #0f172a;
+    }
+    .radar-detail { font-size: 0.82rem; color: #64748b; margin-top: 2px; }
+    @media (max-width: 768px) {
+        .radar-summary { flex-direction: column; gap: 8px; }
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -250,7 +283,6 @@ _autonomia_default = int(qp.get("autonomia", 0))
 # BARRA LATERAL — Controles de Configuración
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3035/3035041.png", width=60)
     st.markdown("## ⚙️ Configuración del Viaje")
     st.markdown("---")
 
@@ -499,7 +531,7 @@ if _pipeline_active:
                 st.stop()
 
             # ---- OSRM: Filtro Fino — Distancia real por carretera ----
-            st.write("�️ Calculando desvíos reales por carretera (OSRM)…")
+            st.write("�️ Calculando desvíos reales por carretera (Puede tardar un poco)…")
             try:
                 gdf_top = enrich_stations_with_osrm(
                     gdf_top,
@@ -774,6 +806,189 @@ if "pipeline_results" in st.session_state:
             sum(c[0] for c in track_coords_list) / len(track_coords_list),
         ]
         map_zoom = 10
+
+    st.divider()
+
+    # -----------------------------------------------------------------------
+    # 5. 🏍️ Radar de Autonomía Crítica
+    # -----------------------------------------------------------------------
+    st.subheader("🏍️ Radar de Autonomía Crítica")
+    st.caption(
+        "Análisis de los tramos entre gasolineras comparado con tu autonomía. "
+        "Los tramos **rojos** en el mapa marcan zonas donde podrías quedarte sin combustible."
+    )
+
+    # --- Cálculo de gaps entre gasolineras ---
+    import pyproj as _pyproj
+    _geod_radar = _pyproj.Geod(ellps="WGS84")
+    _track_coords = list(track.coords)  # (lon, lat)
+    _lons = [c[0] for c in _track_coords]
+    _lats = [c[1] for c in _track_coords]
+    _, _, _dists_m = _geod_radar.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
+    route_total_km = sum(_dists_m) / 1000.0
+
+    # Km de las gasolineras sugeridas en la ruta (ya calculados por el pipeline)
+    station_km_list: list[float] = []
+    if "km_ruta" in gdf_top.columns:
+        station_km_list = sorted(gdf_top["km_ruta"].dropna().tolist())
+
+    # Checkpoints: km 0, cada gasolinera, km final
+    checkpoints = [0.0] + station_km_list + [route_total_km]
+
+    # Calcular gap entre cada par de checkpoints
+    tramos: list[dict] = []
+    for j in range(len(checkpoints) - 1):
+        km_inicio = checkpoints[j]
+        km_fin    = checkpoints[j + 1]
+        gap_km    = km_fin - km_inicio
+
+        if autonomia_km > 0:
+            pct = gap_km / autonomia_km
+            if pct >= 1.0:
+                nivel = "critico"
+                emoji = "🔴"
+                label = "CRÍTICO"
+            elif pct >= 0.80:
+                nivel = "atencion"
+                emoji = "🟡"
+                label = "ATENCIÓN"
+            else:
+                nivel = "seguro"
+                emoji = "🟢"
+                label = "SEGURO"
+        else:
+            # Sin autonomía configurada, solo mostramos los gaps
+            pct = 0.0
+            nivel = "seguro"
+            emoji = "🟢"
+            label = "—"
+
+        # Nombre del tramo
+        if j == 0 and station_km_list:
+            nombre_origen = "Inicio de ruta"
+            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j+1}")
+        elif j == len(checkpoints) - 2 and station_km_list:
+            nombre_origen = gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
+            nombre_destino = "Fin de ruta"
+        elif station_km_list and 0 < j < len(station_km_list):
+            sorted_gdf = gdf_top.sort_values("km_ruta")
+            nombre_origen  = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
+            nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j+1}")
+        else:
+            nombre_origen  = f"Km {km_inicio:.0f}"
+            nombre_destino = f"Km {km_fin:.0f}"
+
+        tramos.append({
+            "km_inicio":    km_inicio,
+            "km_fin":       km_fin,
+            "gap_km":       gap_km,
+            "nivel":        nivel,
+            "pct":          pct,
+            "emoji":        emoji,
+            "label":        label,
+            "origen":       nombre_origen,
+            "destino":      nombre_destino,
+        })
+
+    # --- Resumen general del radar ---
+    n_crit = sum(1 for t in tramos if t["nivel"] == "critico")
+    n_warn = sum(1 for t in tramos if t["nivel"] == "atencion")
+    n_safe = sum(1 for t in tramos if t["nivel"] == "seguro")
+    max_gap = max((t["gap_km"] for t in tramos), default=0.0)
+    tramo_crit = max(tramos, key=lambda t: t["gap_km"]) if tramos else None
+
+    # Banner de estado global
+    if n_crit > 0:
+        global_estado_html = (
+            '<div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:10px; '
+            'padding:14px 18px; margin-bottom:14px;">'
+            f'<b style="color:#991b1b; font-size:1rem;">🔴 Ruta con {n_crit} tramo(s) CRÍTICO(S)</b><br>'
+            f'<span style="color:#7f1d1d; font-size:0.88rem;">'
+            f'El tramo más largo sin gasolinera es de <b>{max_gap:.1f} km</b>. '
+            f'Tu autonomía configurada es de <b>{autonomia_km} km</b>. '
+            'Revisa los tramos marcados en rojo antes de salir.</span></div>'
+        ) if autonomia_km > 0 else (
+            '<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; '
+            'padding:14px 18px; margin-bottom:14px;">'
+            f'<b style="color:#334155;">ℹ️ Tramo más largo sin gasolinera: <b>{max_gap:.1f} km</b></b><br>'
+            '<span style="color:#64748b; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas críticas.</span></div>'
+        )
+    elif n_warn > 0:
+        global_estado_html = (
+            '<div style="background:#fef9c3; border:1px solid #fde047; border-radius:10px; '
+            'padding:14px 18px; margin-bottom:14px;">'
+            f'<b style="color:#854d0e; font-size:1rem;">🟡 Ruta con {n_warn} tramo(s) de ATENCIÓN</b><br>'
+            f'<span style="color:#713f12; font-size:0.88rem;">'
+            f'Ningún tramo supera tu autonomía ({autonomia_km} km), pero hay segmentos de más del 80%. '
+            'Procura no llegar a esas zonas con el depósito bajo.</span></div>'
+        )
+    else:
+        global_estado_html = (
+            '<div style="background:#dcfce7; border:1px solid #86efac; border-radius:10px; '
+            'padding:14px 18px; margin-bottom:14px;">'
+            f'<b style="color:#166534; font-size:1rem;">🟢 Ruta completamente SEGURA</b><br>'
+            f'<span style="color:#14532d; font-size:0.88rem;">'
+            f'Todos los tramos entre gasolineras están por debajo de tu autonomía ({autonomia_km} km). '
+            '¡Puedes salir tranquilo!</span></div>'
+        ) if autonomia_km > 0 else (
+            '<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; '
+            'padding:14px 18px; margin-bottom:14px;">'
+            f'<b style="color:#334155;">ℹ️ Tramo más largo sin gasolinera: {max_gap:.1f} km</b><br>'
+            '<span style="color:#64748b; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas.</span></div>'
+        )
+
+    st.markdown(global_estado_html, unsafe_allow_html=True)
+
+    # --- Chips de resumen rápido ---
+    _chip_html = '<div class="radar-summary">'
+    _chip_html += f'<span class="radar-chip radar-safe">🟢 {n_safe} tramo(s) seguros</span>'
+    if n_warn:
+        _chip_html += f'<span class="radar-chip radar-warn">🟡 {n_warn} tramo(s) de atención</span>'
+    if n_crit:
+        _chip_html += f'<span class="radar-chip radar-crit">🔴 {n_crit} tramo(s) críticos</span>'
+    _chip_html += f'<span class="radar-chip" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;">🛣️ Ruta total: {route_total_km:.1f} km</span>'
+    if autonomia_km > 0:
+        _chip_html += f'<span class="radar-chip" style="background:#eff6ff;color:#1e40af;border:1px solid #93c5fd;">⛽ Autonomía: {autonomia_km} km</span>'
+    _chip_html += '</div>'
+    st.markdown(_chip_html, unsafe_allow_html=True)
+
+    # --- Detalle de cada tramo ---
+    with st.expander("Ver detalle de todos los tramos", expanded=(n_crit > 0 or n_warn > 0)):
+        for t in tramos:
+            css_cls  = "radar-box-crit" if t["nivel"] == "critico" else (
+                       "radar-box-warn" if t["nivel"] == "atencion" else "radar-box-safe")
+            chip_cls = "radar-crit" if t["nivel"] == "critico" else (
+                       "radar-warn" if t["nivel"] == "atencion" else "radar-safe")
+
+            pct_bar  = min(100, int(t["pct"] * 100)) if autonomia_km > 0 else 0
+            bar_color = "#ef4444" if t["nivel"] == "critico" else (
+                        "#eab308" if t["nivel"] == "atencion" else "#22c55e")
+
+            aviso = ""
+            if autonomia_km > 0 and t["nivel"] == "critico":
+                aviso = (f'<div style="margin-top:6px; font-size:0.8rem; color:#991b1b; font-weight:600;">'
+                         f'⚠️ Supera tu autonomía en {t["gap_km"] - autonomia_km:.1f} km — '
+                         'Repostar OBLIGATORIAMENTE antes de este tramo.</div>')
+            elif autonomia_km > 0 and t["nivel"] == "atencion":
+                aviso = (f'<div style="margin-top:6px; font-size:0.8rem; color:#854d0e; font-weight:600;">'
+                         '⚡ Entra en este tramo con el depósito al menos 80% de tu autonomía.</div>')
+
+            st.markdown(f"""
+            <div class="radar-box {css_cls}">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                    <div>
+                        <div class="radar-km-badge">{t['gap_km']:.1f} km</div>
+                        <div class="radar-detail">Km {t['km_inicio']:.0f} → Km {t['km_fin']:.0f}</div>
+                        <div style="font-size:0.85rem; color:#334155; margin-top:4px;">
+                            <b>{t['origen']}</b> → <b>{t['destino']}</b>
+                        </div>
+                    </div>
+                    <span class="radar-chip {chip_cls}">{t['emoji']} {t['label']}</span>
+                </div>
+                {f'<div style="margin-top:10px; background:#f1f5f9; border-radius:4px; height:6px; overflow:hidden;"><div style="height:6px; width:{pct_bar}%; background:{bar_color}; border-radius:4px;"></div></div>' if autonomia_km > 0 else ''}
+                {aviso}
+            </div>
+            """, unsafe_allow_html=True)
 
     st.divider()
 
