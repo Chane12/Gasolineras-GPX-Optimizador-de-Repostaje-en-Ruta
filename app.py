@@ -19,6 +19,7 @@ from gasolineras_ruta import (
     CRS_WGS84,
     build_route_buffer,
     build_stations_geodataframe,
+    enrich_stations_with_osrm,
     fetch_gasolineras,
     filter_cheapest_stations,
     generate_map,
@@ -424,7 +425,17 @@ if _pipeline_active:
             )
             st.stop()
 
-        progress.progress(88, text="🖼️ Generando mapa…")
+        # ---- OSRM: Filtro Fino — Distancia real por carretera ----
+        progress.progress(82, text="🚗 Calculando desvíos reales (OSRM)...")
+        try:
+            gdf_top = enrich_stations_with_osrm(
+                gdf_top,
+                track_original=track,
+            )
+        except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
+            pass
+
+        progress.progress(90, text="🖼️ Generando mapa…")
         _, mapa_obj = generate_map(
             track_original=track,
             gdf_top_stations=gdf_top,
@@ -589,13 +600,15 @@ if _pipeline_active:
     st.subheader("🏆 Ranking de Gasolineras")
 
     COLS = {
-        "km_ruta":   "Km Aprox.",
-        "Rotulo":    "Rótulo / Marca",
-        "Municipio": "Municipio",
-        "Provincia": "Provincia",
-        "Direccion": "Dirección",
-        fuel_column: f"Precio {combustible_elegido} (€/L)",
-        "Horario":   "Horario",
+        "km_ruta":            "Km en Ruta",
+        "Rotulo":             "Rótulo / Marca",
+        "Municipio":          "Municipio",
+        "Provincia":          "Provincia",
+        "Direccion":          "Dirección",
+        fuel_column:          f"Precio {combustible_elegido} (€/L)",
+        "osrm_distance_km":   "Desvío Real (km)",
+        "osrm_duration_min":  "Desvío (min)",
+        "Horario":            "Horario",
     }
 
     col_map = {}
@@ -610,8 +623,16 @@ if _pipeline_active:
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
 
-    if "Km Aprox." in df_show.columns:
-        df_show["Km Aprox."] = df_show["Km Aprox."].apply(lambda x: f"{x:.1f}")
+    if "Km en Ruta" in df_show.columns:
+        df_show["Km en Ruta"] = df_show["Km en Ruta"].apply(lambda x: f"{x:.1f}")
+    if "Desvío Real (km)" in df_show.columns:
+        df_show["Desvío Real (km)"] = df_show["Desvío Real (km)"].apply(
+            lambda x: f"{x:.1f}" if x == x else "—"   # NaN → guion
+        )
+    if "Desvío (min)" in df_show.columns:
+        df_show["Desvío (min)"] = df_show["Desvío (min)"].apply(
+            lambda x: f"{x:.0f}" if x == x else "—"
+        )
 
     df_show.index = [""] * len(df_show)
     st.dataframe(df_show, use_container_width=True, hide_index=True)

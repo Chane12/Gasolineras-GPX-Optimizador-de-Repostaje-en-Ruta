@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -584,6 +585,153 @@ def filter_cheapest_stations(
 
 
 # ===========================================================================
+# 5b. FILTRO FINO — OSRM Hybrid Funnel
+# ===========================================================================
+
+# URL pública gratuita de OSRM. Se puede sustituir por una instancia propia.
+_OSRM_BASE_URL = "http://router.project-osrm.org/route/v1/driving"
+
+
+def get_real_distance_osrm(
+    lon_origen: float,
+    lat_origen: float,
+    lon_destino: float,
+    lat_destino: float,
+    timeout: float = 2.0,
+) -> Optional[dict]:
+    """
+    Consulta la API pública de OSRM para obtener distancia y duración reales
+    por carretera entre dos puntos.
+
+    Utiliza ``overview=false`` para minimizar el tamaño de la respuesta y
+    reducir la latencia. Solo pedimos el resumen (distancia + duración).
+
+    Parameters
+    ----------
+    lon_origen, lat_origen : float
+        Coordenadas WGS84 del punto de partida (punto de la ruta GPX).
+    lon_destino, lat_destino : float
+        Coordenadas WGS84 del destino (gasolinera).
+    timeout : float
+        Tiempo máximo de espera en segundos. Por defecto 2 s.
+
+    Returns
+    -------
+    dict | None
+        Diccionario ``{"distance_km": float, "duration_min": float}`` si la
+        llamada tiene éxito; ``None`` en cualquier caso de error (timeout,
+        rate-limit HTTP 429, error de red, JSON inesperado, etc.).
+        La función NUNCA propaga excepciones hacia el caller.
+    """
+    url = (
+        f"{_OSRM_BASE_URL}"
+        f"/{lon_origen},{lat_origen}"
+        f";{lon_destino},{lat_destino}"
+        f"?overview=false&alternatives=false&steps=false"
+    )
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 429:
+            print("[OSRM] Rate-limit (429). Usando fallback euclidiano.")
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        route = data.get("routes", [None])[0]
+        if route is None:
+            return None
+        leg = route.get("legs", [None])[0]
+        if leg is None:
+            return None
+        distance_km = leg["distance"] / 1000.0   # metros → km
+        duration_min = leg["duration"] / 60.0    # segundos → minutos
+        return {"distance_km": distance_km, "duration_min": duration_min}
+    except Exception as exc:  # noqa: BLE001 — silencio intencional
+        print(f"[OSRM] Fallo silencioso ({type(exc).__name__}). Usando fallback euclidiano.")
+        return None
+
+
+def enrich_stations_with_osrm(
+    gdf_top: gpd.GeoDataFrame,
+    track_original: LineString,
+    delay_s: float = 0.12,
+) -> gpd.GeoDataFrame:
+    """
+    Enriquece el GeoDataFrame de gasolineras Top-N con datos reales de
+    distancia y tiempo de desvío obtenidos de la API OSRM.
+
+    Para cada gasolinera:
+    1. Localiza el punto exacto de la ruta GPX más cercano (usando
+       ``LineString.project`` + ``LineString.interpolate`` sobre el track
+       original en WGS84 — suficientemente preciso para calcular el punto
+       de origen del desvío).
+    2. Llama a ``get_real_distance_osrm`` entre ese punto y la gasolinera.
+    3. Si falla, deja ``osrm_distance_km`` y ``osrm_duration_min`` como NaN
+       para que el caller use el fallback euclidiano de forma transparente.
+
+    Parámetro ``delay_s`` añade una pequeña pausa entre llamadas para no
+    saturar el servidor público (cortesía / evitar rate-limit).
+
+    Parameters
+    ----------
+    gdf_top : gpd.GeoDataFrame
+        Gasolineras en EPSG:25830 (salida de filter_cheapest_stations).
+    track_original : LineString
+        Ruta GPX completa en EPSG:4326 (WGS84).
+    delay_s : float
+        Pausa en segundos entre llamadas a OSRM. Por defecto 0.12 s.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        El mismo GeoDataFrame con dos columnas nuevas:
+        ``osrm_distance_km`` y ``osrm_duration_min`` (float, NaN si falló).
+    """
+    import math as _math
+    gdf = gdf_top.copy()
+    gdf["osrm_distance_km"] = float("nan")
+    gdf["osrm_duration_min"] = float("nan")
+
+    # Reproyectar gasolineras a WGS84 para obtener lon/lat de la gasolinera
+    gdf_wgs84 = gdf.to_crs("EPSG:4326")
+
+    for idx in gdf.index:
+        row_wgs84 = gdf_wgs84.loc[idx]
+        gas_lon = row_wgs84.geometry.x
+        gas_lat = row_wgs84.geometry.y
+
+        # 1. Punto más cercano de la ruta GPX a esta gasolinera
+        #    ``project`` devuelve la distancia curvilínea (en grados, pero
+        #    suficiente para encontrar el índice relativo del waypoint exacto).
+        dist_along = track_original.project(
+            Point(gas_lon, gas_lat), normalized=False
+        )
+        nearest_on_route = track_original.interpolate(dist_along)
+        origin_lon = nearest_on_route.x
+        origin_lat = nearest_on_route.y
+
+        # 2. Llamada defensiva a OSRM
+        result = get_real_distance_osrm(
+            lon_origen=origin_lon,
+            lat_origen=origin_lat,
+            lon_destino=gas_lon,
+            lat_destino=gas_lat,
+        )
+
+        if result is not None:
+            gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
+            gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+            print(
+                f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
+                f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
+            )
+
+        if delay_s > 0:
+            time.sleep(delay_s)
+
+    return gdf
+
+
+# ===========================================================================
 # 6. OUTPUT VISUAL - Mapa Folium
 # ===========================================================================
 
@@ -772,6 +920,19 @@ def generate_map(
         horario = row.get("Horario", "")
         color = price_to_hex_color(precio)
 
+        # Datos de OSRM (pueden ser NaN si la llamada falló)
+        import math as _math
+        osrm_dist = row.get("osrm_distance_km", float("nan"))
+        osrm_dur = row.get("osrm_duration_min", float("nan"))
+        if not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur):
+            osrm_line = (
+                f'<p style="margin:4px 0; background:#f0fdf4; border-radius:4px; '
+                f'padding:4px 6px; font-size:0.9em;">'
+                f"🚗 <b>Desvío real:</b> {osrm_dist:.1f} km ({osrm_dur:.0f} min)</p>"
+            )
+        else:
+            osrm_line = ""
+
         popup_html = f"""
         <div style="font-family:sans-serif; min-width:220px;">
             <h4 style="margin:0 0 6px; color:{color};">
@@ -783,6 +944,7 @@ def generate_map(
                     {precio:.3f} €/L
                 </span>
             </p>
+            {osrm_line}
             <p style="margin:2px 0;"><b>📍</b> {direccion}</p>
             <p style="margin:2px 0;">
                 {municipio}, {provincia}
