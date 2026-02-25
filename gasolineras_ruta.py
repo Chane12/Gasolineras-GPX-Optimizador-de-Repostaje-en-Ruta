@@ -273,7 +273,7 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
             )
         lat = float(results[0]["lat"])
         lon = float(results[0]["lon"])
-        print(f"[Geocode] «{lugar}» → ({lat:.5f}, {lon:.5f})")
+        print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f})")
         return lat, lon
     except RouteTextError:
         raise
@@ -353,7 +353,7 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
             raise RouteTextError("La ruta devuelta por OSRM es demasiado corta.")
         track = LineString(coords)  # Shapely acepta [lon, lat] → EPSG:4326
         dist_km = routes[0]["legs"][0]["distance"] / 1000.0
-        print(f"[OSRM] Ruta «{origen}» → «{destino}»: {dist_km:.1f} km, "
+        print(f"[OSRM] Ruta «{origen}» -> «{destino}»: {dist_km:.1f} km, "
               f"{len(coords)} puntos.")
         return track
     except RouteTextError:
@@ -1103,67 +1103,96 @@ def generate_map(
         osrm_dur = row.get("osrm_duration_min", float("nan"))
         if not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur):
             osrm_line = (
-                f'<p style="margin:4px 0; background:#f0fdf4; border-radius:4px; '
-                f'padding:4px 6px; font-size:0.9em;">'
-                f"🚗 <b>Desvío real:</b> {osrm_dist:.1f} km ({osrm_dur:.0f} min)</p>"
+                f'<div style="margin:6px 0; padding:6px 8px; background:#eff6ff; '
+                f'border-left:3px solid #2563eb; border-radius:4px; font-size:0.82em; color:#1e40af;">'
+                f"&#128652; <b>Desvío real:</b> {osrm_dist:.1f} km &nbsp;·&nbsp; {osrm_dur:.0f} min</div>"
             )
         else:
             osrm_line = ""
 
+        # ------- Popup: tarjeta profesional ---------------------------------
+        maps_url = f"https://maps.google.com/?q={lat},{lon}"
+        badge_color = "#16a34a" if rank_visual == 1 else ("#2563eb" if rank_visual <= 3 else color)
+        badge_label = "⭐ Más Barata" if rank_visual == 1 else f"#{rank_visual}"
+
         popup_html = f"""
-        <div style="font-family:sans-serif; min-width:220px;">
-            <h4 style="margin:0 0 6px; color:{color};">
-                #{rank_visual} {nombre}
-            </h4>
-            <p style="margin:2px 0;">
-                <b>💰 {fuel_column.replace("Precio ", "")}:</b>
-                <span style="color:{color}; font-size:1.1em; font-weight:bold;">
-                    {precio:.3f} €/L
-                </span>
-            </p>
+        <div style="font-family:'Segoe UI',Arial,sans-serif; min-width:240px; max-width:280px;">
+
+            <!-- Header: nombre + badge -->
+            <div style="display:flex; align-items:center; justify-content:space-between;
+                        margin-bottom:8px;">
+                <b style="font-size:1rem; color:#0f172a;">{nombre}</b>
+                <span style="background:{badge_color}; color:white; font-size:0.7rem;
+                             font-weight:700; padding:2px 7px; border-radius:99px;
+                             white-space:nowrap; margin-left:6px;">{badge_label}</span>
+            </div>
+
+            <!-- Precio destacado -->
+            <div style="text-align:center; background:#f8fafc; border-radius:8px;
+                        padding:10px 0; margin-bottom:8px;">
+                <div style="font-size:2rem; font-weight:800; color:{color};
+                            line-height:1;">{precio:.3f} €/L</div>
+                <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+                    {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp;
+                    Km {row.get('km_ruta', 0):.1f} en ruta</div>
+            </div>
+
             {osrm_line}
-            <p style="margin:2px 0;"><b>📍</b> {direccion}</p>
-            <p style="margin:2px 0;">
-                {municipio}, {provincia}
-            </p>
-            <p style="margin:2px 0; color:#6b7280;">
-                🕐 {horario}
-            </p>
+
+            <!-- Dirección -->
+            <div style="font-size:0.82em; color:#475569; margin:4px 0;">
+                &#128205; {direccion}<br>{municipio}, {provincia}
+            </div>
+
+            <!-- Horario -->
+            <div style="font-size:0.78em; color:#94a3b8; margin:4px 0;">
+                &#128336; {horario if horario else '—'}
+            </div>
+
+            <!-- CTA: Llévame -->
+            <a href="{maps_url}" target="_blank" style="
+                display:block; margin-top:10px; padding:8px;
+                background:#2563eb; color:white; text-align:center;
+                text-decoration:none; border-radius:6px;
+                font-size:0.85em; font-weight:600;
+            ">&#128652;&nbsp; Llévame aquí (Google Maps)</a>
         </div>
         """
 
         # El CircleMarker dibuja el fondo de color
+        circle_border_color = "gold" if rank_visual == 1 else "white"
+        circle_border_weight = 4 if rank_visual == 1 else 2
         folium.CircleMarker(
             location=[lat, lon],
-            radius=18,
-            color="white",
-            weight=3,
+            radius=20 if rank_visual == 1 else 17,
+            color=circle_border_color,
+            weight=circle_border_weight,
             fill=True,
             fill_color=color,
-            fill_opacity=0.9,
-            tooltip=f"#{rank_visual} {nombre} -- {precio:.3f} EUR/L",
-            popup=folium.Popup(popup_html, max_width=280),
+            fill_opacity=0.95,
+            tooltip=f"#{rank_visual} {nombre} — {precio:.3f} €/L",
+            popup=folium.Popup(popup_html, max_width=300),
         ).add_to(mapa)
 
-        # El DivIcon superpone el número.
-        # Le añadimos EL MISMO POPUP y TOOLTIP para que, si el usuario hace clic o hover 
-        # en el número (que está por encima en el z-index), también funcione perfectamente.
+        # El DivIcon muestra el PRECIO encima del círculo (visible sin hacer clic)
+        precio_str = f"{precio:.2f}€" if not _math.isnan(precio) else "–"
         folium.Marker(
             location=[lat, lon],
             icon=folium.DivIcon(
                 html=f"""
                 <div style="
-                    font-size:13px; font-weight:bold;
+                    font-size:10px; font-weight:700;
                     color:white; text-align:center;
-                    line-height:36px; width:36px;
-                    border-radius:50%; /* Ayuda a que la forma coincida con el círculo */
-                ">#{rank_visual}</div>
+                    line-height:40px; width:40px;
+                    border-radius:50%;
+                    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                ">{precio_str}</div>
                 """,
-                icon_size=(36, 36),
-                icon_anchor=(18, 18),
+                icon_size=(40, 40),
+                icon_anchor=(20, 20),
             ),
-            tooltip=f"#{rank_visual} {nombre} -- {precio:.3f} EUR/L",
-            popup=folium.Popup(popup_html, max_width=280),
+            tooltip=f"#{rank_visual} {nombre} — {precio:.3f} €/L",
+            popup=folium.Popup(popup_html, max_width=300),
         ).add_to(mapa)
 
     # Leyenda con gradiente de precio

@@ -393,7 +393,7 @@ with st.sidebar:
             "inicio_pct": str(fuel_inicio_pct),
             "autonomia":  str(autonomia_km),
         })
-        st.success("✅ URL actualizada. Copia la barra de direcciones de tu navegador para compartirla.")
+        st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
 
     st.caption("Datos en tiempo real del MITECO · Ministerio de Transición Ecológica.")
 
@@ -422,22 +422,20 @@ if _pipeline_active:
 
     if _input_mode == "texto" and _hay_ruta_texto:
         # ---- MODO TEXTO: obtener track vía Nominatim + OSRM ----
-        progress = st.progress(0, text="Iniciando búsqueda…")
-        try:
-            progress.progress(15, text=f"🗺️ Trazando ruta {origen_txt} → {destino_txt}…")
-            track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
-        except RouteTextError as exc:
-            progress.empty()
-            st.error(
-                f"🚧 **No hemos podido trazar la ruta entre estas ciudades.**\n\n{exc}"
-            )
-            st.stop()
-        except Exception as exc:
-            progress.empty()
-            st.error(f"⚠️ Error inesperado al trazar la ruta: {exc}")
-            st.stop()
+        with st.status("🗺️ Trazando tu ruta…", expanded=True) as _status_txt:
+            st.write(f"� Geocodificando **{origen_txt}** y **{destino_txt}**…")
+            try:
+                track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
+                _status_txt.update(label="✅ Ruta trazada", state="complete", expanded=False)
+            except RouteTextError as exc:
+                _status_txt.update(label="❌ Error al trazar la ruta", state="error", expanded=True)
+                st.error(f"🚧 **No hemos podido trazar la ruta entre estas ciudades.**\n\n{exc}")
+                st.stop()
+            except Exception as exc:
+                _status_txt.update(label="❌ Error inesperado", state="error", expanded=True)
+                st.error(f"⚠️ Error inesperado al trazar la ruta: {exc}")
+                st.stop()
     else:
-        progress = st.progress(0, text="Iniciando búsqueda…")
         if _using_demo:
             demo_gpx_path = Path(__file__).parent / "demo_route.gpx"
             if not demo_gpx_path.exists():
@@ -448,111 +446,110 @@ if _pipeline_active:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
                 tmp.write(gpx_file.read())
                 tmp_path = Path(tmp.name)
-
-        progress.progress(20, text="🗺️ Leyendo tu ruta GPX…")
         track = None   # se asigna en el bloque try más abajo
 
-    try:
-        progress.progress(8, text="⏬ Descargando precios en tiempo real…")
-        df_gas = cached_fetch_gasolineras()
-
-        # --- Carga del track (solo GPX; en modo texto ya está listo) ---
-        if track is None:
-            progress.progress(20, text="🗺️ Leyendo tu ruta GPX…")
-            track = load_gpx_track(tmp_path)
-            progress.progress(28, text="🔎 Validando ruta…")
-            validate_gpx_track(track)
-
-        progress.progress(40, text="✂️ Simplificando la ruta…")
-        track_simp = simplify_track(track, tolerance_deg=0.0005)
-
-        progress.progress(55, text="📡 Buscando gasolineras cercanas…")
-        gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
-        # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché)
-        gdf_utm = cached_build_stations_gdf(df_gas)
-        gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
-
-        progress.progress(72, text="💰 Calculando las más baratas…")
-
-        if fuel_column not in gdf_within.columns or gdf_within[fuel_column].isna().all():
-            st.warning(
-                f"No encontramos gasolineras con precio de **{combustible_elegido}** "
-                f"en un radio de {radio_km} km. "
-                "Prueba a ampliar la distancia en las opciones avanzadas."
-            )
-            st.stop()
-
-        gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
-        track_utm = gdf_track_utm.geometry.iloc[0]
-
-        gdf_top = filter_cheapest_stations(
-            gdf_within,
-            fuel_column=fuel_column,
-            top_n=top_n,
-            track_utm=track_utm,
-            segment_km=segment_km,
-        )
-
-        if gdf_top.empty:
-            st.warning(
-                "No hay gasolineras con ese tipo de combustible en la zona de búsqueda. "
-                "Prueba con otro combustible o amplía la distancia de búsqueda."
-            )
-            st.stop()
-
-        # ---- OSRM: Filtro Fino — Distancia real por carretera ----
-        progress.progress(82, text="🚗 Calculando desvíos reales (OSRM)...")
+    with st.status("⛽ Buscando las mejores gasolineras para tu viaje…", expanded=True) as status:
         try:
-            gdf_top = enrich_stations_with_osrm(
-                gdf_top,
-                track_original=track,
+            st.write("⏬ Descargando precios en tiempo real del MITECO…")
+            df_gas = cached_fetch_gasolineras()
+
+            # --- Carga del track (solo GPX; en modo texto ya está listo) ---
+            if track is None:
+                st.write("🗺️ Leyendo y validando tu ruta GPX…")
+                track = load_gpx_track(tmp_path)
+                validate_gpx_track(track)
+
+            st.write("✂️ Simplificando y procesando la geometría de la ruta…")
+            track_simp = simplify_track(track, tolerance_deg=0.0005)
+
+            st.write("📡 Cruzando con estaciones de servicio cercanas a tu ruta…")
+            gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
+            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché)
+            gdf_utm = cached_build_stations_gdf(df_gas)
+            gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
+
+            if fuel_column not in gdf_within.columns or gdf_within[fuel_column].isna().all():
+                status.update(label="⚠️ Sin resultados para ese combustible", state="error", expanded=True)
+                st.warning(
+                    f"No encontramos gasolineras con precio de **{combustible_elegido}** "
+                    f"en un radio de {radio_km} km. "
+                    "Prueba a ampliar la distancia en las opciones avanzadas."
+                )
+                st.stop()
+
+            st.write("💰 Calculando el ranking de las más baratas…")
+            gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
+            track_utm = gdf_track_utm.geometry.iloc[0]
+
+            gdf_top = filter_cheapest_stations(
+                gdf_within,
+                fuel_column=fuel_column,
+                top_n=top_n,
+                track_utm=track_utm,
+                segment_km=segment_km,
             )
-        except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
-            pass
 
-        progress.progress(90, text="🖼️ Generando mapa…")
-        _, mapa_obj = generate_map(
-            track_original=track,
-            gdf_top_stations=gdf_top,
-            fuel_column=fuel_column,
-            autonomy_km=float(autonomia_km),  # F3: Zonas de peligro por autonomía
-        )
+            if gdf_top.empty:
+                status.update(label="⚠️ Sin resultados", state="error", expanded=True)
+                st.warning(
+                    "No hay gasolineras con ese tipo de combustible en la zona de búsqueda. "
+                    "Prueba con otro combustible o amplía la distancia de búsqueda."
+                )
+                st.stop()
 
-        progress.progress(100, text="✅ ¡Listo!")
+            # ---- OSRM: Filtro Fino — Distancia real por carretera ----
+            st.write("�️ Calculando desvíos reales por carretera (OSRM)…")
+            try:
+                gdf_top = enrich_stations_with_osrm(
+                    gdf_top,
+                    track_original=track,
+                )
+            except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
+                pass
 
-        # --- Guardar resultados en session_state para sobrevivir reruns ---
-        st.session_state["pipeline_results"] = {
-            "gdf_top":       gdf_top,
-            "gdf_within":    gdf_within,
-            "mapa_obj":      mapa_obj,
-            "track":         track,
-            "track_utm":     track_utm,
-            "using_demo":    _using_demo,
-        }
+            st.write("🖼️ Generando mapa interactivo…")
+            _, mapa_obj = generate_map(
+                track_original=track,
+                gdf_top_stations=gdf_top,
+                fuel_column=fuel_column,
+                autonomy_km=float(autonomia_km),  # F3: Zonas de peligro por autonomía
+            )
 
-    except RouteTextError as exc:
-        progress.empty()
-        st.error(f"🚧 **Ruta imposible:** {exc}")
-        st.stop()
-    except ValueError as exc:
-        progress.empty()
-        st.error(f"⚠️ {exc}")
-        st.stop()
-    except FileNotFoundError:
-        progress.empty()
-        st.error("No se pudo leer el archivo GPX. Asegúrate de que sea un archivo GPX válido.")
-        st.stop()
-    except Exception as exc:
-        progress.empty()
-        st.error(
-            "Se produjo un error inesperado. Comprueba tu conexión a Internet "
-            f"e inténtalo de nuevo.\n\n*Detalle técnico: {exc}*"
-        )
-        st.stop()
-    finally:
-        # Solo borrar el archivo temporal en modo GPX real
-        if tmp_path is not None and not _using_demo and _input_mode == "gpx":
-            tmp_path.unlink(missing_ok=True)
+            status.update(label="✅ ¡Ruta analizada y optimizada!", state="complete", expanded=False)
+
+            # --- Guardar resultados en session_state para sobrevivir reruns ---
+            st.session_state["pipeline_results"] = {
+                "gdf_top":       gdf_top,
+                "gdf_within":    gdf_within,
+                "mapa_obj":      mapa_obj,
+                "track":         track,
+                "track_utm":     track_utm,
+                "using_demo":    _using_demo,
+            }
+
+        except RouteTextError as exc:
+            status.update(label="❌ Ruta imposible", state="error", expanded=True)
+            st.error(f"🚧 **Ruta imposible:** {exc}")
+            st.stop()
+        except ValueError as exc:
+            status.update(label="❌ Error de datos", state="error", expanded=True)
+            st.error(f"⚠️ {exc}")
+            st.stop()
+        except FileNotFoundError:
+            status.update(label="❌ Archivo no encontrado", state="error", expanded=True)
+            st.error("No se pudo leer el archivo GPX. Asegúrate de que sea un archivo GPX válido.")
+            st.stop()
+        except Exception as exc:
+            status.update(label="❌ Error inesperado", state="error", expanded=True)
+            st.error(
+                "Se produjo un error inesperado. Comprueba tu conexión a Internet "
+                f"e inténtalo de nuevo.\n\n*Detalle técnico: {exc}*"
+            )
+            st.stop()
+        finally:
+            # Solo borrar el archivo temporal en modo GPX real
+            if tmp_path is not None and not _using_demo and _input_mode == "gpx":
+                tmp_path.unlink(missing_ok=True)
 
 # -----------------------------------------------------------------------
 # Dashboard — se renderiza si hay resultados en session_state
@@ -689,16 +686,9 @@ if "pipeline_results" in st.session_state:
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
 
-    if "Km en Ruta" in df_show.columns:
-        df_show["Km en Ruta"] = df_show["Km en Ruta"].apply(lambda x: f"{x:.1f}")
-    if "Desvío Real (km)" in df_show.columns:
-        df_show["Desvío Real (km)"] = df_show["Desvío Real (km)"].apply(
-            lambda x: f"{x:.1f}" if x == x else "—"
-        )
-    if "Desvío (min)" in df_show.columns:
-        df_show["Desvío (min)"] = df_show["Desvío (min)"].apply(
-            lambda x: f"{x:.0f}" if x == x else "—"
-        )
+    # Nota: el formateo de números (km, min, €/L) se gestiona en column_config
+    # más abajo — no aplicamos .apply() que convertiría los números a strings
+    # y rompería el ProgressColumn y NumberColumn de Streamlit.
 
     # Coordenadas WGS84 de cada gasolinera (para el zoom del mapa)
     gdf_top_wgs84 = gdf_top.to_crs("EPSG:4326")
@@ -707,12 +697,49 @@ if "pipeline_results" in st.session_state:
         for _, row in gdf_top_wgs84.iterrows()
     ]
 
+    # --- column_config: barra visual de precios + formats profesionales ---
+    precio_col_label = f"Precio {combustible_elegido} (€/L)"
+    _precio_min = float(df_show[precio_col_label].min()) if precio_col_label in df_show.columns else 0.0
+    _precio_max = float(df_show[precio_col_label].max()) if precio_col_label in df_show.columns else 2.0
+
+    col_config = {
+        precio_col_label: st.column_config.ProgressColumn(
+            precio_col_label,
+            help="Precio en €/L. Barra proporcional: verde = más barato, rojo = más caro.",
+            format="%.3f €",
+            min_value=_precio_min * 0.98,
+            max_value=_precio_max * 1.02,
+        ),
+        "Km en Ruta": st.column_config.NumberColumn(
+            "Km en Ruta",
+            help="Distancia desde el inicio de la ruta hasta la gasolinera.",
+            format="%.1f km",
+        ),
+        "Desvío Real (km)": st.column_config.NumberColumn(
+            "Desvío Real (km)",
+            help="Desvío real por carretera calculado por OSRM.",
+            format="%.1f km",
+        ),
+        "Desvío (min)": st.column_config.NumberColumn(
+            "Desvío (min)",
+            help="Tiempo estimado de desvío ida+vuelta.",
+            format="%.0f min",
+        ),
+        "Rótulo / Marca": st.column_config.TextColumn(
+            "Rótulo / Marca",
+            help="Nombre comercial de la gasolinera.",
+        ),
+    }
+    # Eliminar del config las columnas que no existen en df_show
+    col_config = {k: v for k, v in col_config.items() if k in df_show.columns}
+
     table_event = st.dataframe(
         df_show,
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
+        column_config=col_config,
     )
 
     # Determinar el centro del mapa según la selección
@@ -796,7 +823,7 @@ else:
     _demo_col, _ = st.columns([2, 3])
     with _demo_col:
         if st.button(
-            "🚗  Probar con ruta de Escapada (Madrid - Valencia)",
+            "🚗  Probar herramienta con ruta de Escapada (Madrid - Valencia)",
             use_container_width=True,
             help="Carga automáticamente una ruta real de ~356 km para que veas la app en funcionamiento sin necesidad de subir un GPX.",
         ):
