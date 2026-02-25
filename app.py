@@ -238,7 +238,7 @@ _top_default = int(qp.get("top", 5))
 _top_default = max(1, min(20, _top_default))
 _litros_default = float(qp.get("litros", 0))
 _consumo_default = float(qp.get("consumo", 5.0))
-_inicio_pct_default = int(qp.get("inicio_pct", 20))
+_inicio_pct_default = int(qp.get("inicio_pct", 100))
 _autonomia_default = int(qp.get("autonomia", 0))
 
 # ---------------------------------------------------------------------------
