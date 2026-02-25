@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GasolinerasEnRuta-Demo"
+    xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Ruta Demo – Circuito Madrid Norte (55 km)</name>
+    <desc>Ruta de demostración. Collado Villalba → Galapagar → Las Rozas → Majadahonda → Boadilla → retorno. Zona con muchas gasolineras.</desc>
+  </metadata>
+  <trk>
+    <name>Ruta Demo Madrid Norte</name>
+    <trkseg>
+      <!-- Collado Villalba -->
+      <trkpt lat="40.6318" lon="-4.0035"/>
+      <trkpt lat="40.6280" lon="-3.9900"/>
+      <trkpt lat="40.6240" lon="-3.9750"/>
+      <!-- Galapagar -->
+      <trkpt lat="40.6190" lon="-3.9600"/>
+      <trkpt lat="40.6100" lon="-3.9450"/>
+      <trkpt lat="40.6000" lon="-3.9280"/>
+      <!-- Zona Las Rozas -->
+      <trkpt lat="40.5900" lon="-3.9100"/>
+      <trkpt lat="40.5820" lon="-3.8950"/>
+      <trkpt lat="40.5750" lon="-3.8780"/>
+      <!-- Las Rozas centro -->
+      <trkpt lat="40.4930" lon="-3.8730"/>
+      <trkpt lat="40.4850" lon="-3.8680"/>
+      <!-- Majadahonda -->
+      <trkpt lat="40.4730" lon="-3.8720"/>
+      <trkpt lat="40.4700" lon="-3.8850"/>
+      <!-- Boadilla del Monte -->
+      <trkpt lat="40.4050" lon="-3.8800"/>
+      <trkpt lat="40.4000" lon="-3.8700"/>
+      <trkpt lat="40.3950" lon="-3.8600"/>
+      <!-- Brunete -->
+      <trkpt lat="40.4060" lon="-3.9880"/>
+      <trkpt lat="40.4100" lon="-4.0050"/>
+      <!-- Villanueva del Pardillo -->
+      <trkpt lat="40.4500" lon="-3.9800"/>
+      <trkpt lat="40.4600" lon="-3.9700"/>
+      <!-- Retorno Galapagar -->
+      <trkpt lat="40.5800" lon="-3.9700"/>
+      <trkpt lat="40.6050" lon="-3.9800"/>
+      <!-- Collado Villalba (cierre) -->
+      <trkpt lat="40.6318" lon="-4.0035"/>
+    </trkseg>
+  </trk>
+</gpx>
