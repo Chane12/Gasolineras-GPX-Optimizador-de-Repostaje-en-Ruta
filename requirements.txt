@@ -6,5 +6,6 @@ gpxpy>=1.6.0
 pyproj>=3.6.0
 pandas>=2.0.0
 
-streamlit
-streamlit-folium
+streamlit>=1.35.0
+streamlit-folium>=0.21.0
+altair<6.0.0
