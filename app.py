@@ -45,61 +45,107 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# CSS personalizado: fuente moderna, colores más cálidos, paso-a-paso
+# CSS personalizado: diseño profesional tipo dashboard
 # ---------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-    /* Tarjetas de paso */
-    .step-card {
-        background: #f8faff;
-        border: 1.5px solid #dce8ff;
-        border-radius: 12px;
-        padding: 20px 24px;
-        margin-bottom: 18px;
+    /* Barra lateral */
+    .css-1d391kg { /* stSidebar */
+        background-color: #f8fafc;
+        border-right: 1px solid #e2e8f0;
     }
-    .step-title {
-        font-size: 1.05rem;
+    
+    /* Títulos de sección en sidebar */
+    .sidebar-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Tarjetas de métricas (KPIs) */
+    div[data-testid="stMetric"] {
+        background-color: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 15px 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem;
         font-weight: 700;
-        color: #1a3c6e;
-        margin-bottom: 4px;
+        color: #0f172a;
     }
-    .step-num {
-        display: inline-block;
-        background: #1a3c6e;
-        color: white;
-        border-radius: 50%;
-        width: 26px;
-        height: 26px;
-        text-align: center;
-        line-height: 26px;
+    div[data-testid="stMetricLabel"] {
         font-size: 0.85rem;
-        font-weight: 700;
-        margin-right: 8px;
+        font-weight: 500;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
     }
-    .result-box {
-        background: #edfff4;
-        border: 1.5px solid #6ee7a0;
-        border-radius: 12px;
-        padding: 16px 20px;
-        margin-bottom: 18px;
-        font-size: 1rem;
-    }
-    .stButton > button {
-        background: #1a3c6e !important;
+
+    /* Botón principal (sidebar) */
+    div.stButton > button {
+        background: #2563eb !important;
         color: white !important;
-        font-size: 1.1rem !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-        height: 3rem !important;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        height: 2.75rem !important;
         border: none !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1) !important;
+        transition: all 0.2s ease-in-out !important;
+        margin-top: 1rem;
     }
-    .stButton > button:hover {
-        background: #2a5ca8 !important;
+    div.stButton > button:hover {
+        background: #1d4ed8 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Estado inicial / Guía visual */
+    .welcome-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        background: white;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        margin-top: 2rem;
+    }
+    .welcome-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    .welcome-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    .welcome-text {
+        font-size: 1rem;
+        color: #64748b;
+        max-width: 600px;
+        line-height: 1.6;
+    }
+    
+    /* DataFrames */
+    .stDataFrame {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
     }
     </style>
     """,
@@ -107,14 +153,10 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# Cabecera
+# Panel Principal (Cabecera)
 # ---------------------------------------------------------------------------
-st.markdown("## ⛽ Gasolineras baratas en tu ruta")
-st.markdown(
-    "Descubre las gasolineras **más económicas** a lo largo de tu recorrido "
-    "con precios actualizados del Ministerio de Industria."
-)
-st.divider()
+st.title("⛽ Gasolineras en Ruta Dashboard")
+st.markdown("Encuentra las estaciones de servicio más económicas a lo largo de tu viaje.")
 
 # ---------------------------------------------------------------------------
 # Tipos de combustible — etiquetas en lenguaje natural
@@ -135,99 +177,79 @@ COMBUSTIBLES = {
 }
 
 # ---------------------------------------------------------------------------
-# Paso 1 — Archivo GPX
+# BARRA LATERAL (SIDEBAR) - Controles de Configuración
 # ---------------------------------------------------------------------------
-st.markdown(
-    '<div class="step-card">'
-    '<p class="step-title"><span class="step-num">1</span>Sube el archivo de tu ruta</p>',
-    unsafe_allow_html=True,
-)
-gpx_file = st.file_uploader(
-    "Elige un archivo .gpx",
-    type=["gpx"],
-    label_visibility="collapsed",
-    help=(
-        "Exporta tu ruta desde Wikiloc, Komoot, Garmin Connect o Strava "
-        "en formato GPX y súbela aquí."
-    ),
-)
-with st.expander("¿Cómo obtengo mi archivo GPX?"):
-    st.markdown(
-        """
-        - **Wikiloc**: abre la ruta → *Descargar* → *.gpx*
-        - **Komoot**: abre la ruta → ⋯ → *Exportar como GPX*
-        - **Garmin Connect**: Actividades → selecciona la salida → *Exportar GPX*
-        - **Strava**: actividad → ⋯ → *Exportar GPX*
-        - **Google Maps**: usa [mapstogpx.com](https://mapstogpx.com) para convertir
-        """
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/3035/3035041.png", width=60) # Icono decorativo opcional
+    st.markdown("## ⚙️ Configuración del Viaje")
+    st.markdown("---")
+    
+    # Paso 1: Archivo GPX
+    st.markdown('<p class="sidebar-title">1. ARCHIVO DE RUTA (.GPX)</p>', unsafe_allow_html=True)
+    gpx_file = st.file_uploader(
+        "Sube tu archivo .gpx:",
+        type=["gpx"],
+        label_visibility="collapsed",
     )
-st.markdown("</div>", unsafe_allow_html=True)
+    with st.expander("¿Cómo obtengo mi archivo GPX?"):
+        st.markdown(
+            """
+            - **Wikiloc**: ruta → Descargar → *.gpx*
+            - **Komoot**: ruta → ⋯ → *Exportar como GPX*
+            - **Garmin**: actividad → *Exportar GPX*
+            - **Strava**: actividad → ⋯ → *Exportar GPX*
+            - **Maps**: usa mapstogpx.com
+            """
+        )
 
-# ---------------------------------------------------------------------------
-# Paso 2 — Combustible
-# ---------------------------------------------------------------------------
-st.markdown(
-    '<div class="step-card">'
-    '<p class="step-title"><span class="step-num">2</span>Elige tu combustible</p>',
-    unsafe_allow_html=True,
-)
-combustible_elegido = st.selectbox(
-    "Tipo de combustible",
-    options=list(COMBUSTIBLES.keys()),
-    label_visibility="collapsed",
-)
-fuel_column = COMBUSTIBLES[combustible_elegido]
-st.markdown("</div>", unsafe_allow_html=True)
+    # Paso 2: Combustible
+    st.markdown('<p class="sidebar-title">2. TIPO DE COMBUSTIBLE</p>', unsafe_allow_html=True)
+    combustible_elegido = st.selectbox(
+        "Selecciona el combustible:",
+        options=list(COMBUSTIBLES.keys()),
+        label_visibility="collapsed",
+    )
+    fuel_column = COMBUSTIBLES[combustible_elegido]
 
-# ---------------------------------------------------------------------------
-# Opciones avanzadas (colapsadas por defecto)
-# ---------------------------------------------------------------------------
-with st.expander("⚙️ Opciones avanzadas"):
-    col_a, col_b = st.columns(2)
-    with col_a:
+    # Opciones Avanzadas
+    st.markdown('<p class="sidebar-title">3. FILTROS AVANZADOS</p>', unsafe_allow_html=True)
+    with st.expander("Ajustar parámetros de búsqueda", expanded=False):
         radio_km = st.slider(
-            "¿Hasta qué distancia de la ruta buscamos?",
+            "Distancia máxima a la ruta (km)",
             min_value=1,
             max_value=15,
             value=5,
             step=1,
-            format="%d km",
-            help="Distancia máxima lateral a la ruta en la que se buscan gasolineras.",
+            help="Distancia máxima lateral a la ruta para buscar gasolineras.",
         )
-    with col_b:
         top_n = st.slider(
-            "¿Cuántas gasolineras quieres ver?",
+            "Gasolineras a mostrar",
             min_value=1,
-            max_value=15,
+            max_value=20,
             value=5,
             step=1,
         )
+        st.markdown("---")
+        buscar_tramos = st.checkbox("Asegurar repostaje cada X km", help="Ideal para vehículos con poca autonomía (ej. motos)")
+        if buscar_tramos:
+            segment_km = st.slider(
+                "Distancia de seguridad (km)",
+                min_value=10,
+                max_value=300,
+                value=50,
+                step=10,
+            )
+        else:
+            segment_km = 0.0
+
+    buffer_m = radio_km * 1000  # convertir a metros
+
+    # Botón Búsqueda
+    st.markdown("<br>", unsafe_allow_html=True)
+    run_btn = st.button("🔍 Iniciar Búsqueda", use_container_width=True)
     
     st.markdown("---")
-    buscar_tramos = st.checkbox("Buscar gasolinera sí o sí cada X km (vehículos de poca autonomía)")
-    if buscar_tramos:
-        segment_km = st.slider(
-            "¿Cada cuántos kilómetros necesitas asegurar una gasolinera?",
-            min_value=10,
-            max_value=300,
-            value=50,
-            step=10,
-        )
-    else:
-        segment_km = 0.0
-
-buffer_m = radio_km * 1000  # convertir a metros para el motor GIS
-
-# ---------------------------------------------------------------------------
-# Paso 3 — Botón de búsqueda
-# ---------------------------------------------------------------------------
-st.markdown(
-    '<div class="step-card">'
-    '<p class="step-title"><span class="step-num">3</span>Busca las gasolineras más baratas</p>',
-    unsafe_allow_html=True,
-)
-run_btn = st.button("🔍  Buscar gasolineras", use_container_width=True)
-st.markdown("</div>", unsafe_allow_html=True)
+    st.caption("Los datos se obtienen en tiempo real de la API del Ministerio de Transición Ecológica (MITECO).")
 
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
@@ -314,78 +336,106 @@ if run_btn:
         tmp_path.unlink(missing_ok=True)
 
     # -----------------------------------------------------------------------
-    # Resultados
+    # Resultados - Layout Dashboard
     # -----------------------------------------------------------------------
-    st.markdown(
-        f'<div class="result-box">'
-        f'✅ Encontramos <strong>{len(gdf_within)}</strong> gasolineras en un radio de '
-        f'{radio_km} km alrededor de tu ruta. '
-        f'Te mostramos las <strong>{len(gdf_top)}</strong> con <strong>{combustible_elegido}</strong> más barato.'
-        f'</div>',
-        unsafe_allow_html=True,
+    st.success("✅ Ruta analizada con éxito")
+    
+    # 1. KPIs principales en la parte superior
+    col1, col2, col3, col4 = st.columns(4)
+    
+    precio_min = str(gdf_top[fuel_column].min()).replace('.', ',') + " €"
+    precio_max_zona = str(gdf_within[fuel_column].max()).replace('.', ',') + " €"
+    total_zona = len(gdf_within)
+    total_mostradas = len(gdf_top)
+    
+    with col1:
+        st.metric("Mejor Precio Sugerido", precio_min, None)
+    with col2:
+        st.metric(f"Precio Max. a {radio_km}km", precio_max_zona, None)
+    with col3:
+        st.metric("Top Optimizadas", f"{total_mostradas} Estaciones", None)
+    with col4:
+        st.metric("Total en la Zona", f"{total_zona} Est.", None)
+        
+    st.divider()
+
+    # 2. Área principal: Mapa a la izquierda, Tabla debajo o en pestañas/columnas
+    # Para aprovechar mejor el ancho ("wide"), pondremos el mapa primero muy grande.
+    
+    st.subheader("🗺️ Mapa Interactivo de la Ruta")
+    st.caption("Haz clic en los marcadores para ver la información de la gasolinera.")
+    
+    # Renderizamos el mapa folium con st_folium ajustado al ancho
+    st_folium(mapa_obj, width="100%", height=600, returned_objects=[])
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Botón de descarga
+    with open(output_html, "rb") as f:
+        html_bytes = f.read()
+    st.download_button(
+        label="⬇️ Descargar Mapa Interactivo (Versión Offline HTML)",
+        data=html_bytes,
+        file_name="mapa_gasolineras_ruta.html",
+        mime="text/html",
+        use_container_width=False,
     )
 
-    # Tabla de resultados limpia
-    st.subheader("🏆 Ranking de gasolineras")
+    st.markdown("---")
+
+    # 3. Tabla de Resultados limpia y profesional
+    st.subheader("🏆 Ranking de Gasolineras (Detalle)")
+    
     COLS = {
-        "km_ruta":     "Km aprox.",
-        "Rotulo":      "Nombre",
+        "km_ruta":     "Km Aprox.",
+        "Rotulo":      "Rótulo / Marca",
         "Municipio":   "Municipio",
         "Provincia":   "Provincia",
         "Direccion":   "Dirección",
         fuel_column:   f"Precio {combustible_elegido} (€/L)",
         "Horario":     "Horario",
     }
-    # Algunos nombres de columna en el MITECO usan tildes; buscamos ambas variantes
+    
+    # Búsqueda de columnas con posibles errores de tildes de la API MITECO
     col_map = {}
     for campo, etiqueta in COLS.items():
         if campo in gdf_top.columns:
             col_map[campo] = etiqueta
-        elif campo.replace("o", "ó") in gdf_top.columns:  # Rótulo, Dirección…
+        elif campo.replace("o", "ó") in gdf_top.columns:
             col_map[campo.replace("o", "ó")] = etiqueta
+        elif campo == "Direccion" and "Dirección" in gdf_top.columns:
+             col_map["Dirección"] = etiqueta
 
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
     
-    if "Km aprox." in df_show.columns:
-        df_show["Km aprox."] = df_show["Km aprox."].apply(lambda x: f"{x:.1f}")
+    if "Km Aprox." in df_show.columns:
+        df_show["Km Aprox."] = df_show["Km Aprox."].apply(lambda x: f"{x:.1f}")
         
-    df_show.index = range(1, len(df_show) + 1)
-    st.dataframe(df_show, use_container_width=True)
-
-    # Mapa
-    st.subheader("🗺️ Mapa interactivo")
-    st.caption("Haz clic en cada círculo para ver detalles de la gasolinera.")
-    st_folium(mapa_obj, width="100%", height=580, returned_objects=[])
-
-    # Botón de descarga del mapa HTML
-    with open(output_html, "rb") as f:
-        html_bytes = f.read()
-    st.download_button(
-        label="⬇️ Descargar mapa (abre en cualquier navegador sin internet)",
-        data=html_bytes,
-        file_name="mapa_gasolineras.html",
-        mime="text/html",
+    # Eliminar el índice visual en Streamlit para un aspecto más limpio
+    df_show.index = [""] * len(df_show)
+    
+    st.dataframe(
+        df_show,
         use_container_width=True,
+        hide_index=True
     )
 
 else:
-    # Estado inicial — guía visual
-    st.info(
-        "👆 Completa los 3 pasos de arriba y pulsa **Buscar gasolineras** para ver el resultado.",
-        icon="ℹ️",
+    # -----------------------------------------------------------------------
+    # ESTADO INICIAL (Cuando no se ha lanzado la búsqueda)
+    # -----------------------------------------------------------------------
+    st.markdown(
+        """
+        <div class="welcome-container">
+            <div class="welcome-icon">🗺️⛽</div>
+            <div class="welcome-title">Bienvenido al Optimizador de Repostaje en Ruta</div>
+            <div class="welcome-text">
+                Planifica tu viaje de manera inteligente. Configura tu ruta en el panel lateral a la izquierda, 
+                selecciona tu combustible, y nosotros buscaremos las estaciones de servicio más económicas de 
+                España directamente cruzando datos geográficos y la API oficial del MITECO en tiempo real.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-    with st.expander("¿Para qué sirve esta herramienta?"):
-        st.markdown(
-            """
-            Esta aplicación te ayuda a **ahorrar en combustible** cuando planificas un viaje en coche.
-
-            1. Sube la ruta de tu viaje en formato **.gpx**
-            2. Elige qué tipo de **combustible** usa tu vehículo
-            3. La app busca en toda la ruta las gasolineras más baratas y las muestra en un mapa
-
-            Los precios se descargan en **tiempo real** desde el Ministerio de Industria de España 
-            (API MITECO), por lo que siempre son actuales.
-            """
-        )
-# Trigger deployment clean
