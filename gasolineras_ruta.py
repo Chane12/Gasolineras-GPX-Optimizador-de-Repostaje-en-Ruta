@@ -116,13 +116,15 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
     # Intento 1 — conexión directa al MITECO
     # ----------------------------------------------------------------
     data = None
+    _err_direct: Exception | None = None  # guardado fuera del except (Python 3 borra 'as e')
     try:
         response = requests.get(MITECO_API_URL, headers=headers, timeout=timeout)
         response.raise_for_status()
         data = response.json()
         print("[MITECO] Conexión directa exitosa.")
     except requests.exceptions.RequestException as e_direct:
-        print(f"[MITECO] Conexión directa falló ({type(e_direct).__name__}). "
+        _err_direct = e_direct  # copiar antes de que Python lo borre al salir del bloque
+        print(f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). "
               "Intentando proxy público...")
 
     # ----------------------------------------------------------------
@@ -144,7 +146,7 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             raise ConnectionError(
                 "No se pudo conectar con la API del MITECO ni directamente ni "
                 f"mediante proxy. Comprueba tu conexión a Internet.\n"
-                f"Error directo: {e_direct}\n"
+                f"Error directo: {_err_direct}\n"
                 f"Error proxy: {e_proxy}"
             )
 
