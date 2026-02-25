@@ -290,7 +290,7 @@ with st.sidebar:
             gpx_file = None
 
         if gpx_file is None and st.session_state.get("demo_mode"):
-            st.success("✅ Cargada ruta de demo (Madrid Norte ~55 km)")
+            st.success("✅ Cargada ruta de demo (Madrid - Valencia ~356 km)")
         with st.expander("¿Cómo obtengo mi archivo GPX?"):
             st.markdown(
                 """
@@ -568,7 +568,7 @@ if "pipeline_results" in st.session_state:
     _using_demo = _r["using_demo"]
 
     if _using_demo:
-        st.info("🧭 **Modo Demo activo** — Escapada por la Sierra (~55 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
+        st.info("🧭 **Modo Demo activo** — Escapada Madrid - Valencia (~356 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
     # 1. KPIs principales
@@ -780,7 +780,7 @@ else:
             <div class="welcome-icon">🛣️⛽</div>
             <div class="welcome-title">Planificador Inteligente de Repostaje en Ruta</div>
             <div class="welcome-text">
-                Sube el GPX de tu próximo viaje, indica tu combustible y el depósito de tu vehículo.
+                Indica el Origen y Destino o sube el GPX de tu próximo viaje, indica tu combustible y el depósito de tu vehículo.
                 Encontramos las gasolineras más baratas de España <strong>en tiempo real</strong>
                 cruzando datos geográficos con la API oficial del MITECO. ¡Ahorra en cada escapada!
             </div>
@@ -796,9 +796,9 @@ else:
     _demo_col, _ = st.columns([2, 3])
     with _demo_col:
         if st.button(
-            "🚗  Probar con ruta de Escapada (Madrid Norte)",
+            "🚗  Probar con ruta de Escapada (Madrid - Valencia)",
             use_container_width=True,
-            help="Carga automáticamente una ruta real de ~55 km para que veas la app en funcionamiento sin necesidad de subir un GPX.",
+            help="Carga automáticamente una ruta real de ~356 km para que veas la app en funcionamiento sin necesidad de subir un GPX.",
         ):
             # Activar modo demo y relanzar la app para que el pipeline lo detecte
             st.session_state["demo_mode"] = True
