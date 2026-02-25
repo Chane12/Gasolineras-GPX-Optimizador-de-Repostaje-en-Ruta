@@ -353,7 +353,17 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
 # ---------------------------------------------------------------------------
-_pipeline_active = run_btn or (st.session_state.get("demo_mode") and not run_btn)
+# El pipeline sólo se (re)ejecuta cuando:
+#   a) El usuario pulsa "Iniciar Búsqueda" (run_btn), o
+#   b) Está en modo demo y no hay resultados guardados aún.
+# En cualquier otro rerun (p. ej. clic en tabla) se usan los resultados
+# guardados en session_state sin tocar el pipeline.
+_is_demo_first_run = st.session_state.get("demo_mode") and "pipeline_results" not in st.session_state
+_pipeline_active = run_btn or _is_demo_first_run
+
+# Cuando el usuario lanza una nueva búsqueda, invalida resultados anteriores
+if run_btn:
+    st.session_state.pop("pipeline_results", None)
 
 # Bandera para saber si se usó el demo en este ciclo de ejecución
 _using_demo = (_pipeline_active and gpx_file is None and st.session_state.get("demo_mode"))
@@ -445,6 +455,16 @@ if _pipeline_active:
 
         progress.progress(100, text="✅ ¡Listo!")
 
+        # --- Guardar resultados en session_state para sobrevivir reruns ---
+        st.session_state["pipeline_results"] = {
+            "gdf_top":       gdf_top,
+            "gdf_within":    gdf_within,
+            "mapa_obj":      mapa_obj,
+            "track":         track,
+            "track_utm":     track_utm,
+            "using_demo":    _using_demo,
+        }
+
     except ValueError as exc:
         progress.empty()
         st.error(f"⚠️ {exc}")
@@ -465,9 +485,19 @@ if _pipeline_active:
         if not _using_demo:
             tmp_path.unlink(missing_ok=True)
 
-    # -----------------------------------------------------------------------
-    # Resultados — Dashboard
-    # -----------------------------------------------------------------------
+# -----------------------------------------------------------------------
+# Dashboard — se renderiza si hay resultados en session_state
+# (tanto tras el pipeline como en reruns por interacción con la UI)
+# -----------------------------------------------------------------------
+if "pipeline_results" in st.session_state:
+    _r          = st.session_state["pipeline_results"]
+    gdf_top     = _r["gdf_top"]
+    gdf_within  = _r["gdf_within"]
+    mapa_obj    = _r["mapa_obj"]
+    track       = _r["track"]
+    track_utm   = _r["track_utm"]
+    _using_demo = _r["using_demo"]
+
     if _using_demo:
         st.info("🏍️ **Modo Demo activo** — Ruta Madrid Norte ~55 km. Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
