@@ -36,6 +36,7 @@ import requests
 from shapely.geometry import LineString, Point
 from shapely.ops import transform
 from pyproj import Geod
+import math as _math
 import pyproj
 
 # Silencia advertencias de GeoPandas sobre índices espaciales (dependiendo de versión)
@@ -857,7 +858,6 @@ def enrich_stations_with_osrm(
         El mismo GeoDataFrame con dos columnas nuevas:
         ``osrm_distance_km`` y ``osrm_duration_min`` (float, NaN si falló).
     """
-    import math as _math
     gdf = gdf_top.copy()
     gdf["osrm_distance_km"] = float("nan")
     gdf["osrm_duration_min"] = float("nan")
@@ -1097,11 +1097,15 @@ def generate_map(
         horario = row.get("Horario", "")
         color = price_to_hex_color(precio)
 
-        # Datos de OSRM (pueden ser NaN si la llamada falló)
-        import math as _math
+        # Datos de OSRM (pueden ser NaN o None si la llamada falló)
         osrm_dist = row.get("osrm_distance_km", float("nan"))
-        osrm_dur = row.get("osrm_duration_min", float("nan"))
-        if not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur):
+        osrm_dur  = row.get("osrm_duration_min", float("nan"))
+        # Proteger contra None: math.isnan(None) lanza TypeError
+        try:
+            _osrm_ok = not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur)
+        except TypeError:
+            _osrm_ok = False
+        if _osrm_ok:
             osrm_line = (
                 f'<div style="margin:6px 0; padding:6px 8px; background:#eff6ff; '
                 f'border-left:3px solid #2563eb; border-radius:4px; font-size:0.82em; color:#1e40af;">'
@@ -1131,7 +1135,7 @@ def generate_map(
             <div style="text-align:center; background:#f8fafc; border-radius:8px;
                         padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color};
-                            line-height:1;">{precio:.3f} €/L</div>
+                            line-height:1;">{precio:.3f if not _math.isnan(precio) else "N/A"} €/L</div>
                 <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
                     {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp;
                     Km {row.get('km_ruta', 0):.1f} en ruta</div>
