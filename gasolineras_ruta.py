@@ -502,18 +502,27 @@ def filter_cheapest_stations(
         # Calcular el punto de la ruta (en metros) al que se proyecta la gasolinera
         gdf_valid["km_ruta"] = gdf_valid.geometry.apply(lambda geom: _track.project(geom) / 1000.0)
 
+    # 1. Búsqueda global estándar (Top N global)
+    gdf_top_global = gdf_valid.nsmallest(top_n, fuel_column).copy()
+
     if track_utm is not None and segment_km > 0:
         # Búsqueda segmentada: 1 gasolinera más barata por cada tramo de segment_km
         gdf_valid["tramo"] = (gdf_valid["km_ruta"] // segment_km).astype(int)
         
         # Agrupamos por tramo y obtenemos el índice de la más barata
         idx_top_per_segment = gdf_valid.groupby("tramo")[fuel_column].idxmin()
-        gdf_top = gdf_valid.loc[idx_top_per_segment].copy()
+        gdf_top_segment = gdf_valid.loc[idx_top_per_segment].copy()
         
-        # Ordenamos cronológicamente según la ruta
+        # Unimos el Top N global con las obligatorias por tramo
+        gdf_top = pd.concat([gdf_top_global, gdf_top_segment])
+        
+        # Eliminamos duplicados (aquellas que ya estaban en el Top N global)
+        gdf_top = gdf_top.drop_duplicates(subset=["geometry"])
+        
+        # Ordenamos cronológicamente según la ruta para la visualización
         gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
 
-        print(f"\n[Filtrado] 1 gasolinera más barata por cada tramo de {segment_km} km para '{fuel_column}':")
+        print(f"\n[Filtrado] Top {top_n} global + 1 obligatoria cada {segment_km} km para '{fuel_column}':")
         for i, row in gdf_top.iterrows():
             nombre = row.get("Rótulo", row.get("C.P.", "N/A"))
             municipio = row.get("Municipio", "")
@@ -522,8 +531,8 @@ def filter_cheapest_stations(
             print(f"  Km {km:.1f} | {nombre} ({municipio}) --> {precio:.3f} EUR/L")
 
     else:
-        # Búsqueda global estándar (Top N global)
-        gdf_top = gdf_valid.nsmallest(top_n, fuel_column).reset_index(drop=True)
+        # Solo Búsqueda global estándar
+        gdf_top = gdf_top_global.reset_index(drop=True)
 
         print(f"\n[Filtrado] Top {top_n} más baratas para '{fuel_column}':")
         for i, row in gdf_top.iterrows():
