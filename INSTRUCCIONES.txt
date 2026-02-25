@@ -1,0 +1,108 @@
+============================================================
+  OPTIMIZADOR DE GASOLINERAS EN RUTA - INSTRUCCIONES
+============================================================
+Versión: 2.0  |  Febrero 2026
+
+------------------------------------------------------------
+¿PARA QUÉ SIRVE?
+------------------------------------------------------------
+Esta herramienta localiza las gasolineras MÁS BARATAS a lo
+largo de cualquier ruta GPX en España, con precios en tiempo
+real del Ministerio de Industria (MITECO).
+
+------------------------------------------------------------
+REQUISITOS PREVIOS
+------------------------------------------------------------
+1. Python 3.10 o superior.
+2. Conexión a Internet.
+3. Un archivo .gpx con tu ruta de viaje.
+
+------------------------------------------------------------
+INSTALACIÓN
+------------------------------------------------------------
+Abre una terminal (PowerShell o cmd) en la carpeta del
+proyecto y ejecuta UNA SOLA VEZ:
+
+  pip install -r requirements.txt
+
+Si pip falla con geopandas en Windows, usa conda:
+  conda install -c conda-forge geopandas
+
+------------------------------------------------------------
+CÓMO USAR LA APLICACIÓN
+------------------------------------------------------------
+1. Abre una terminal en la carpeta del proyecto y escribe:
+
+     streamlit run app.py
+
+   Se abrirá automáticamente el navegador en:
+     http://localhost:8501
+
+2. Sigue los 3 PASOS de la pantalla:
+
+   PASO 1 – Sube el archivo GPX de tu ruta
+     Haz clic en "Browse files" y selecciona tu .gpx.
+     ¿No tienes uno? Despliega "¿Cómo obtengo mi GPX?"
+     dentro de la propia app para ver las instrucciones.
+
+   PASO 2 – Elige tu combustible
+     Selecciona el tipo de combustible de tu vehículo
+     en el desplegable (Gasolina 95, Diésel, GLP, etc.).
+
+   PASO 3 – Pulsa "🔍 Buscar gasolineras"
+     El cálculo tarda entre 10 y 30 segundos
+     (descarga de precios + análisis de la ruta).
+
+3. Revisa los RESULTADOS:
+   - **Tabla**: ranking de las gasolineras más baratas con
+     nombre, dirección, precio actual y horario.
+   - **Mapa interactivo**: haz clic en cada círculo de
+     color para ver todos los detalles de esa gasolinera.
+   - **Botón "Descargar mapa"**: guarda el mapa como HTML
+     para consultarlo offline con cualquier navegador.
+
+4. Para cerrar la aplicación, ve a la terminal y pulsa
+   Ctrl+C.
+
+------------------------------------------------------------
+OPCIONES AVANZADAS (OPCIONALES)
+------------------------------------------------------------
+Despliega "⚙️ Opciones avanzadas" para ajustar:
+  - Radio de búsqueda (1–15 km, por defecto 5 km):
+    distancia lateral máxima desde la ruta donde se buscan
+    gasolineras. Auméntalo si no aparecen resultados.
+  - Número de gasolineras a mostrar (1–15, por defecto 5).
+
+------------------------------------------------------------
+CÓMO OBTENER UN ARCHIVO GPX
+------------------------------------------------------------
+  Wikiloc:        ruta → Descargar → .gpx
+  Komoot:         ruta → ⋯ → Exportar como GPX
+  Garmin Connect: Actividades → salida → Exportar GPX
+  Strava:         actividad → ⋯ → Exportar GPX
+  Google Maps:    usa mapstogpx.com para convertir
+
+------------------------------------------------------------
+PREGUNTAS FRECUENTES
+------------------------------------------------------------
+P: No aparecen resultados para mi combustible.
+R: Amplía el radio de búsqueda en "Opciones avanzadas"
+   o prueba con un combustible diferente.
+
+P: La aplicación tarda mucho.
+R: La descarga de más de 11.000 estaciones del MITECO
+   puede tardar varios segundos. Es normal.
+
+P: ¿Los precios son actuales?
+R: Sí. Se descargan en tiempo real cada vez que pulsas
+   "Buscar gasolineras".
+
+------------------------------------------------------------
+ARCHIVOS DEL PROYECTO
+------------------------------------------------------------
+  app.py                → Interfaz web (este es el que lanzas)
+  gasolineras_ruta.py   → Motor de cálculo interno
+  requirements.txt      → Dependencias Python
+  INSTRUCCIONES.txt     → Este manual
+
+============================================================

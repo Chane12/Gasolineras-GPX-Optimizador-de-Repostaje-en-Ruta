@@ -1,0 +1,10 @@
+geopandas>=0.14.0
+shapely>=2.0.0
+folium>=0.15.0
+requests>=2.31.0
+gpxpy>=1.6.0
+pyproj>=3.6.0
+pandas>=2.0.0
+
+streamlit
+streamlit-folium
