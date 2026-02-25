@@ -352,7 +352,8 @@ with st.sidebar:
         top_n = st.slider("Gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1)
         st.markdown("---")
         buscar_tramos = st.checkbox(
-            "Asegurar repostaje cada X km",
+            "Buscar gasolinera obligatoriamente cada X km",
+            value=True,
             help="Añade la gasolinera más barata por tramo. Ideal para motos."
         )
         if buscar_tramos:
