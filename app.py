@@ -24,6 +24,12 @@ from gasolineras_ruta import (
     generate_map,
 )
 
+# Caché de 30 minutos: evita repetir la llamada a la API del MITECO
+# en cada interacción del usuario con la interfaz.
+@st.cache_data(ttl=1800, show_spinner=False)
+def cached_fetch_gasolineras() -> object:
+    return fetch_gasolineras()
+
 # ---------------------------------------------------------------------------
 # Configuración de la página
 # ---------------------------------------------------------------------------
@@ -223,7 +229,7 @@ if run_btn:
 
     try:
         progress.progress(10, text="⏬ Descargando precios en tiempo real…")
-        df_gas = fetch_gasolineras()
+        df_gas = cached_fetch_gasolineras()
 
         progress.progress(30, text="🗺️ Leyendo tu ruta GPX…")
         track = load_gpx_track(tmp_path)

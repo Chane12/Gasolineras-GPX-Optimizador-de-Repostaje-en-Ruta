@@ -97,14 +97,11 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
         DataFrame con todas las gasolineras y coordenadas ya como float.
         Las filas sin latitud o longitud válida son eliminadas.
     """
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
+    import urllib.parse
 
     print("[MITECO] Descargando datos via requests...")
 
-    # Cabeceras que simulan un navegador real.
-    # El servidor del MITECO a veces rechaza peticiones de IPs de datacenter
-    # (p.ej. Streamlit Cloud / AWS) si no van con un User-Agent de navegador.
+    # Cabeceras de navegador para evitar filtros básicos de User-Agent
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -113,34 +110,43 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
         ),
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "es-ES,es;q=0.9",
-        "Referer": "https://geoportalgasolineras.es/",
-        "Connection": "keep-alive",
     }
 
-    # Reintentos automáticos con backoff exponencial ante errores de red
-    retry_strategy = Retry(
-        total=4,
-        backoff_factor=1.5,          # esperas: 0s, 1.5s, 3s, 6s
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session = requests.Session()
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-
+    # ----------------------------------------------------------------
+    # Intento 1 — conexión directa al MITECO
+    # ----------------------------------------------------------------
+    data = None
     try:
-        response = session.get(MITECO_API_URL, headers=headers, timeout=timeout)
+        response = requests.get(MITECO_API_URL, headers=headers, timeout=timeout)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.Timeout:
-        raise TimeoutError(
-            f"La API del MITECO tardó más de {timeout}s en responder. "
-            "Comprueba tu conexión a Internet e inténtalo de nuevo."
+        print("[MITECO] Conexión directa exitosa.")
+    except requests.exceptions.RequestException as e_direct:
+        print(f"[MITECO] Conexión directa falló ({type(e_direct).__name__}). "
+              "Intentando proxy público...")
+
+    # ----------------------------------------------------------------
+    # Intento 2 — proxy de paso (allorigins.win)
+    # El MITECO bloquea IPs de centros de datos (AWS/GCP).
+    # allorigins.win re-emite la petición desde su propio servidor.
+    # ----------------------------------------------------------------
+    if data is None:
+        proxy_url = (
+            "https://api.allorigins.win/raw?url="
+            + urllib.parse.quote(MITECO_API_URL, safe="")
         )
-    except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Error al conectar con la API del MITECO: {e}")
+        try:
+            response = requests.get(proxy_url, headers=headers, timeout=timeout + 20)
+            response.raise_for_status()
+            data = response.json()
+            print("[MITECO] Datos obtenidos via proxy allorigins.win.")
+        except requests.exceptions.RequestException as e_proxy:
+            raise ConnectionError(
+                "No se pudo conectar con la API del MITECO ni directamente ni "
+                f"mediante proxy. Comprueba tu conexión a Internet.\n"
+                f"Error directo: {e_direct}\n"
+                f"Error proxy: {e_proxy}"
+            )
 
     records = data.get("ListaEESSPrecio", [])
     if not records:
