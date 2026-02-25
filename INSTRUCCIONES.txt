@@ -33,7 +33,7 @@ CÓMO USAR LA APLICACIÓN
 ------------------------------------------------------------
 1. Abre una terminal en la carpeta del proyecto y escribe:
 
-     streamlit run app.py
+     python -m streamlit run app.py
 
    Se abrirá automáticamente el navegador en:
      http://localhost:8501
