@@ -13,6 +13,8 @@ from pathlib import Path
 import streamlit as st
 from streamlit_folium import st_folium
 
+import geopandas as gpd
+
 from gasolineras_ruta import (
     fetch_gasolineras,
     load_gpx_track,
@@ -22,6 +24,8 @@ from gasolineras_ruta import (
     spatial_join_within_buffer,
     filter_cheapest_stations,
     generate_map,
+    CRS_WGS84,
+    CRS_UTM30N,
 )
 
 # Caché de 30 minutos: evita repetir la llamada a la API del MITECO
@@ -198,6 +202,19 @@ with st.expander("⚙️ Opciones avanzadas"):
             value=5,
             step=1,
         )
+    
+    st.markdown("---")
+    buscar_tramos = st.checkbox("Buscar gasolinera sí o sí cada X km (vehículos de poca autonomía)")
+    if buscar_tramos:
+        segment_km = st.slider(
+            "¿Cada cuántos kilómetros necesitas asegurar una gasolinera?",
+            min_value=10,
+            max_value=300,
+            value=50,
+            step=10,
+        )
+    else:
+        segment_km = 0.0
 
 buffer_m = radio_km * 1000  # convertir a metros para el motor GIS
 
@@ -252,7 +269,17 @@ if run_btn:
             )
             st.stop()
 
-        gdf_top = filter_cheapest_stations(gdf_within, fuel_column=fuel_column, top_n=top_n)
+        # Extraer track en UTM para proyectar gasolineras y encontrar el km de ruta
+        gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
+        track_utm = gdf_track_utm.geometry.iloc[0]
+
+        gdf_top = filter_cheapest_stations(
+            gdf_within, 
+            fuel_column=fuel_column, 
+            top_n=top_n,
+            track_utm=track_utm,
+            segment_km=segment_km
+        )
 
         if gdf_top.empty:
             st.warning(
@@ -301,6 +328,7 @@ if run_btn:
     # Tabla de resultados limpia
     st.subheader("🏆 Ranking de gasolineras")
     COLS = {
+        "km_ruta":     "Km aprox.",
         "Rotulo":      "Nombre",
         "Municipio":   "Municipio",
         "Provincia":   "Provincia",
@@ -318,6 +346,10 @@ if run_btn:
 
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
+    
+    if "Km aprox." in df_show.columns:
+        df_show["Km aprox."] = df_show["Km aprox."].apply(lambda x: f"{x:.1f}")
+        
     df_show.index = range(1, len(df_show) + 1)
     st.dataframe(df_show, use_container_width=True)
 

@@ -450,6 +450,8 @@ def filter_cheapest_stations(
     gdf: gpd.GeoDataFrame,
     fuel_column: str = "Precio Gasoleo A",
     top_n: int = 5,
+    track_utm: Optional[LineString] = None,
+    segment_km: float = 0.0,
 ) -> gpd.GeoDataFrame:
     """
     Filtra las gasolineras con precio válido para el combustible elegido
@@ -495,15 +497,41 @@ def filter_cheapest_stations(
     gdf_valid["precio_seleccionado"] = gdf_valid[fuel_column]
     gdf_valid["combustible"] = fuel_column
 
-    # Ordenar y seleccionar Top N
-    gdf_top = gdf_valid.nsmallest(top_n, fuel_column).reset_index(drop=True)
+    if track_utm is not None:
+        _track = track_utm
+        # Calcular el punto de la ruta (en metros) al que se proyecta la gasolinera
+        gdf_valid["km_ruta"] = gdf_valid.geometry.apply(lambda geom: _track.project(geom) / 1000.0)
 
-    print(f"\n[Filtrado] Top {top_n} más baratas para '{fuel_column}':")
-    for i, row in gdf_top.iterrows():
-        nombre = row.get("Rótulo", row.get("C.P.", "N/A"))
-        municipio = row.get("Municipio", "")
-        precio = row["precio_seleccionado"]
-        print(f"  #{i+1} {nombre} ({municipio}) --> {precio:.3f} EUR/L")
+    if track_utm is not None and segment_km > 0:
+        # Búsqueda segmentada: 1 gasolinera más barata por cada tramo de segment_km
+        gdf_valid["tramo"] = (gdf_valid["km_ruta"] // segment_km).astype(int)
+        
+        # Agrupamos por tramo y obtenemos el índice de la más barata
+        idx_top_per_segment = gdf_valid.groupby("tramo")[fuel_column].idxmin()
+        gdf_top = gdf_valid.loc[idx_top_per_segment].copy()
+        
+        # Ordenamos cronológicamente según la ruta
+        gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
+
+        print(f"\n[Filtrado] 1 gasolinera más barata por cada tramo de {segment_km} km para '{fuel_column}':")
+        for i, row in gdf_top.iterrows():
+            nombre = row.get("Rótulo", row.get("C.P.", "N/A"))
+            municipio = row.get("Municipio", "")
+            precio = row["precio_seleccionado"]
+            km = row["km_ruta"]
+            print(f"  Km {km:.1f} | {nombre} ({municipio}) --> {precio:.3f} EUR/L")
+
+    else:
+        # Búsqueda global estándar (Top N global)
+        gdf_top = gdf_valid.nsmallest(top_n, fuel_column).reset_index(drop=True)
+
+        print(f"\n[Filtrado] Top {top_n} más baratas para '{fuel_column}':")
+        for i, row in gdf_top.iterrows():
+            nombre = row.get("Rótulo", row.get("C.P.", "N/A"))
+            municipio = row.get("Municipio", "")
+            precio = row["precio_seleccionado"]
+            km_str = f" (Km {row['km_ruta']:.1f})" if "km_ruta" in row else ""
+            print(f"  #{i+1} {nombre}{km_str} ({municipio}) --> {precio:.3f} EUR/L")
 
     return gdf_top
 
@@ -596,10 +624,15 @@ def generate_map(
     # Leaflet (y por tanto folium) necesita para pintar los puntos en el mapa.
     gdf_wgs84 = gdf_top_stations.to_crs(CRS_WGS84)
 
+    # Calcular el ranking por precio para la escala de colores
+    # method='min' asigna el mismo ranking a precios iguales
+    gdf_wgs84["rank_precio"] = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(1).astype(int) - 1
+
     # Colores degradados para el ranking (verde=barato, rojo=caro)
     rank_colors = ["#16a34a", "#65a30d", "#ca8a04", "#ea580c", "#dc2626"]
 
-    for rank, (_, row) in enumerate(gdf_wgs84.iterrows()):
+    for i, (_, row) in enumerate(gdf_wgs84.iterrows()):
+        rank_visual = i + 1  # Orden en el que aparece en la lista devuelta (puede ser cronológico o por precio)
         lat = row.geometry.y
         lon = row.geometry.x
         precio = row.get("precio_seleccionado", float("nan"))
@@ -608,12 +641,13 @@ def generate_map(
         provincia = row.get("Provincia", "")
         direccion = row.get("Dirección", "")
         horario = row.get("Horario", "")
-        color = rank_colors[rank] if rank < len(rank_colors) else "#6b7280"
+        color_idx = row["rank_precio"]
+        color = rank_colors[color_idx] if color_idx < len(rank_colors) else "#6b7280"
 
         popup_html = f"""
         <div style="font-family:sans-serif; min-width:220px;">
             <h4 style="margin:0 0 6px; color:{color};">
-                #{rank+1} {nombre}
+                #{rank_visual} {nombre}
             </h4>
             <p style="margin:2px 0;">
                 <b>💰 {fuel_column.replace("Precio ", "")}:</b>
@@ -639,7 +673,7 @@ def generate_map(
             fill=True,
             fill_color=color,
             fill_opacity=0.9,
-            tooltip=f"#{rank+1} {nombre} -- {precio:.3f} EUR/L",
+            tooltip=f"#{rank_visual} {nombre} -- {precio:.3f} EUR/L",
             popup=folium.Popup(popup_html, max_width=280),
         ).add_to(mapa)
 
@@ -652,7 +686,7 @@ def generate_map(
                     font-size:11px; font-weight:bold;
                     color:white; text-align:center;
                     line-height:28px; width:28px;
-                ">#{rank+1}</div>
+                ">#{rank_visual}</div>
                 """,
                 icon_size=(28, 28),
                 icon_anchor=(14, 14),
@@ -697,6 +731,7 @@ def run_pipeline(
     top_n: int = 5,
     simplify_tolerance: float = 0.0005,
     output_html: str | Path = "mapa_gasolineras.html",
+    segment_km: float = 0.0,
 ) -> dict:
     """
     Ejecuta el pipeline completo de extremo a extremo:
@@ -745,8 +780,18 @@ def run_pipeline(
     # 4c. Spatial Join: gasolineras dentro del buffer
     gdf_within = spatial_join_within_buffer(gdf_stations_utm, gdf_buffer)
 
-    # 5. Filtrado de negocio: Top N más baratas por combustible
-    gdf_top = filter_cheapest_stations(gdf_within, fuel_column=fuel_column, top_n=top_n)
+    # 4d. Extraer track en UTM
+    gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simplified], crs=CRS_WGS84).to_crs(CRS_UTM30N)
+    track_utm = gdf_track_utm.geometry.iloc[0]
+
+    # 5. Filtrado de negocio: Top N más baratas por combustible o por tramos
+    gdf_top = filter_cheapest_stations(
+        gdf_within, 
+        fuel_column=fuel_column, 
+        top_n=top_n,
+        track_utm=track_utm,
+        segment_km=segment_km,
+    )
 
     # 6. Generar mapa HTML
     ruta_html = None
