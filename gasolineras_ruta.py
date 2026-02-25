@@ -732,6 +732,194 @@ def enrich_stations_with_osrm(
 
 
 # ===========================================================================
+# 5c. PLANIFICADOR DE PARADAS — Price-Optimal Lazy Greedy
+# ===========================================================================
+
+class ImpossibleRouteError(ValueError):
+    """Se lanza cuando no existe ninguna gasolinera alcanzable desde la posición actual."""
+
+
+def calculate_optimal_stops(
+    gdf_within: gpd.GeoDataFrame,
+    fuel_column: str,
+    autonomia_actual_km: float,
+    rango_util_maximo_km: float,
+    distancia_total_ruta_km: float,
+    deposito_total_l: float,
+    consumo_l100km: float,
+) -> tuple[list[dict], gpd.GeoDataFrame]:
+    """
+    Genera un itinerario de repostaje óptimo usando el algoritmo
+    "Price-Optimal Lazy Greedy":
+
+    - **Lazy**: no para antes de lo necesario (maximiza la distancia entre
+      paradas, minimizando el número de paradas).
+    - **Price-Optimal**: dentro de la zona de búsqueda, elige siempre la
+      gasolinera más barata.
+
+    Estrategia de ventana
+    ----------------------
+    En cada iteración la "zona de confort" es la segunda mitad del rango
+    útil disponible:  [km_actual + R * 0.5, km_actual + R].
+    Buscar en la segunda mitad (50-100 % del rango) garantiza que no
+    pararemos antes de tiempo, mientras dejamos margen para encontrar
+    candidatos baratos.  Si esa ventana está vacía se hace backtracking
+    progresivo (desde R hasta 1 km) para encontrar la gasolinera más
+    próxima al límite máximo alcanzable.
+
+    Parámetros
+    ----------
+    gdf_within : gpd.GeoDataFrame
+        Gasolineras filtradas por buffer (EPSG:25830), con columna ``km_ruta``
+        (distancia proyectada sobre el track en km) y precio válido.
+    fuel_column : str
+        Columna de precio activa.
+    autonomia_actual_km : float
+        Kilómetros que puedes recorrer con el combustible de salida.
+    rango_util_maximo_km : float
+        Kilómetros máximos con el depósito lleno con margen de reserva
+        (típicamente ``autonomía_máxima * 0.85``).
+    distancia_total_ruta_km : float
+        Longitud total de la ruta en km.
+    deposito_total_l : float
+        Capacidad total del depósito en litros.
+    consumo_l100km : float
+        Consumo del vehículo en L/100 km.
+
+    Devuelve
+    -------
+    tuple[list[dict], gpd.GeoDataFrame]
+        - Lista de paradas ordenadas. Cada elemento es un dict con:
+          ``nombre``, ``municipio``, ``km_ruta``, ``precio``,
+          ``litros_repostados``, ``coste_parada``.
+        - GeoDataFrame con las gasolineras de las paradas seleccionadas
+          (para renderizar en el mapa con generate_map).
+
+    Lanza
+    -----
+    ImpossibleRouteError
+        Si en algún punto no se puede alcanzar ninguna gasolinera dentro
+        de la autonomía disponible.
+    ValueError
+        Si la columna de precio no existe o no hay precios válidos.
+    """
+    # --- Sanidad de inputs ---
+    if fuel_column not in gdf_within.columns:
+        raise ValueError(f"Columna '{fuel_column}' no encontrada en gdf_within.")
+
+    mask = gdf_within[fuel_column].notna() & (gdf_within[fuel_column] > 0)
+    gdf_valid = gdf_within[mask].copy()
+
+    if "km_ruta" not in gdf_valid.columns:
+        raise ValueError(
+            "gdf_within debe contener la columna 'km_ruta'. "
+            "Asegúrate de llamar a filter_cheapest_stations con track_utm."
+        )
+
+    if gdf_valid.empty:
+        raise ImpossibleRouteError(
+            "No hay gasolineras con precio válido dentro del corredor de la ruta."
+        )
+
+    # Columna estandarizada de precio
+    gdf_valid["precio_seleccionado"] = gdf_valid[fuel_column]
+    gdf_valid = gdf_valid.sort_values("km_ruta").reset_index(drop=True)
+
+    # --- Estado inicial ---
+    km_actual: float = 0.0
+    R: float = autonomia_actual_km          # autonomía disponible en este instante
+    paradas: list[dict] = []
+    selected_indices: list[int] = []
+
+    iter_count = 0
+    MAX_ITER = 500   # protección contra bucles infinitos
+
+    print(f"\n[Greedy] Ruta: {distancia_total_ruta_km:.1f} km | "
+          f"Autonomía inicial: {autonomia_actual_km:.1f} km | "
+          f"Rango útil máx: {rango_util_maximo_km:.1f} km")
+
+    while km_actual + R < distancia_total_ruta_km:
+        iter_count += 1
+        if iter_count > MAX_ITER:
+            raise ImpossibleRouteError(
+                "El algoritmo no convergió. Comprueba los parámetros de autonomía y ruta."
+            )
+
+        limite_max = km_actual + R           # no podemos ir más lejos
+        zona_confort_inicio = km_actual + R * 0.5   # mitad del rango disponible
+
+        # --- Zona de confort: [50% R, 100% R] desde posición actual ---
+        candidatos = gdf_valid[
+            (gdf_valid["km_ruta"] >= zona_confort_inicio) &
+            (gdf_valid["km_ruta"] <= limite_max)
+        ]
+
+        # --- Backtracking progresivo si la zona de confort está vacía ---
+        if candidatos.empty:
+            print(f"[Greedy] Zona de confort vacía en km {km_actual:.1f}. "
+                  f"Buscando en rango completo [km_actual+1, {limite_max:.1f}]...")
+            candidatos = gdf_valid[
+                (gdf_valid["km_ruta"] > km_actual) &
+                (gdf_valid["km_ruta"] <= limite_max)
+            ]
+
+        if candidatos.empty:
+            raise ImpossibleRouteError(
+                f"Imposible completar la ruta: no hay gasolineras alcanzables "
+                f"desde km {km_actual:.1f} con {R:.1f} km de autonomía. "
+                f"Prueba a ampliar el radio de búsqueda o a revisar los datos del vehículo."
+            )
+
+        # --- Selección: la más barata dentro de los candidatos ---
+        mejor_idx = candidatos["precio_seleccionado"].idxmin()
+        mejor = gdf_valid.loc[mejor_idx]
+
+        km_gas = float(mejor["km_ruta"])
+        precio = float(mejor["precio_seleccionado"])
+        nombre = str(mejor.get("Rótulo", "Sin nombre"))
+        municipio = str(mejor.get("Municipio", ""))
+
+        # Litros consumidos para llegar a esta gasolinera
+        km_recorridos = km_gas - km_actual
+        litros_consumidos = km_recorridos * consumo_l100km / 100.0
+        # Llenamos el depósito (asumimos llenado completo en cada parada)
+        litros_restantes_al_llegar = (R - km_recorridos) * consumo_l100km / 100.0
+        litros_repostados = max(0.0, deposito_total_l - litros_restantes_al_llegar)
+        coste_parada = litros_repostados * precio
+
+        parada = {
+            "numero": len(paradas) + 1,
+            "nombre": nombre,
+            "municipio": municipio,
+            "km_ruta": km_gas,
+            "precio_eur_l": precio,
+            "litros_repostados": round(litros_repostados, 2),
+            "coste_parada_eur": round(coste_parada, 2),
+            "osrm_distance_km": float(mejor.get("osrm_distance_km", float("nan"))),
+            "osrm_duration_min": float(mejor.get("osrm_duration_min", float("nan"))),
+        }
+        paradas.append(parada)
+        selected_indices.append(mejor_idx)
+
+        print(
+            f"[Greedy] Parada {len(paradas)}: Km {km_gas:.1f} | "
+            f"{nombre} ({municipio}) | {precio:.3f} €/L | "
+            f"~{litros_repostados:.1f} L repostados (~{coste_parada:.2f} €)"
+        )
+
+        # Actualizar estado
+        km_actual = km_gas
+        R = rango_util_maximo_km   # depósito lleno tras cada parada
+
+    print(f"\n[Greedy] ✅ Itinerario: {len(paradas)} paradas. "
+          f"Coste total estimado: {sum(p['coste_parada_eur'] for p in paradas):.2f} €")
+
+    # GeoDataFrame de paradas para la visualización en el mapa
+    gdf_stops = gdf_valid.loc[selected_indices].copy().reset_index(drop=True)
+    return paradas, gdf_stops
+
+
+# ===========================================================================
 # 6. OUTPUT VISUAL - Mapa Folium
 # ===========================================================================
 
