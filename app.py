@@ -670,10 +670,8 @@ if "pipeline_results" in st.session_state:
         "km_ruta":            "Km en Ruta",
         "Rótulo":             "Rótulo / Marca",
         "Municipio":          "Municipio",
-        "Provincia":          "Provincia",
         "Dirección":          "Dirección",
         fuel_column:          f"Precio {combustible_elegido} (€/L)",
-        "osrm_distance_km":   "Desvío Real (km)",
         "osrm_duration_min":  "Desvío (min)",
         "Horario":            "Horario",
     }
@@ -713,11 +711,6 @@ if "pipeline_results" in st.session_state:
         "Km en Ruta": st.column_config.NumberColumn(
             "Km en Ruta",
             help="Distancia desde el inicio de la ruta hasta la gasolinera.",
-            format="%.1f km",
-        ),
-        "Desvío Real (km)": st.column_config.NumberColumn(
-            "Desvío Real (km)",
-            help="Desvío real por carretera calculado por OSRM.",
             format="%.1f km",
         ),
         "Desvío (min)": st.column_config.NumberColumn(
