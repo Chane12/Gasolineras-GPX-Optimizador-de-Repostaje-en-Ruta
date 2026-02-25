@@ -440,10 +440,31 @@ if run_btn:
         color_estado = "#16a34a" if not necesita_reposte else "#dc2626"
         label_estado = "✅ Llegas sin repostar" if not necesita_reposte else f"⛽ Necesitas reponer ~{litros_a_repostar:.1f} L"
 
+        # Pre-calcular el bloque HTML condicional ANTES del f-string principal.
+        # Anidar un f'''...''' dentro de un f"""...""" hace que Streamlit lo
+        # trate como texto plano en lugar de HTML — esto lo evita.
+        if necesita_reposte:
+            cost_breakdown_html = (
+                f'<div style="margin-top:14px;padding-top:12px;border-top:1px solid #86efac;'
+                f'display:flex;gap:2rem;flex-wrap:wrap;">'
+                f'<div><div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>'
+                f'<div class="cost-saving">{coste_barata:.2f} €</div></div>'
+                f'<div><div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>'
+                f'<div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div></div>'
+                f'<div><div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>'
+                f'<div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div></div>'
+                f'</div>'
+            )
+        else:
+            cost_breakdown_html = (
+                '<div style="margin-top:10px;font-size:0.9rem;color:#166534;">'
+                "Con el combustible actual llegas al destino. ¡No necesitas parar!</div>"
+            )
+
         st.markdown(
             f"""
             <div class="cost-box">
-                <div class="cost-box-title">� Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
+                <div class="cost-box-title">🚗 Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
                     <div>
                         <div style="font-size:0.78rem;color:#475569;font-weight:600;">DEPÓSITO AL SALIR</div>
@@ -458,22 +479,7 @@ if run_btn:
                         <div style="font-size:1.1rem;font-weight:700;color:{color_estado};">{label_estado}</div>
                     </div>
                 </div>
-                {f'''
-                <div style="margin-top:14px;padding-top:12px;border-top:1px solid #86efac;display:flex;gap:2rem;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>
-                        <div class="cost-saving">{coste_barata:.2f} €</div>
-                    </div>
-                    <div>
-                        <div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>
-                        <div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div>
-                    </div>
-                    <div>
-                        <div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>
-                        <div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div>
-                    </div>
-                </div>
-                ''' if necesita_reposte else '<div style="margin-top:10px;font-size:0.9rem;color:#166534;">Con el combustible actual llegas al destino. ¡No necesitas parar!</div>'}
+                {cost_breakdown_html}
             </div>
             """,
             unsafe_allow_html=True,
