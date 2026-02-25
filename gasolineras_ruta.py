@@ -206,6 +206,152 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
 
 
 # ===========================================================================
+# 1b. ENRUTAMIENTO POR TEXTO — Geocodificación + OSRM
+# ===========================================================================
+
+_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+_NOMINATIM_UA  = "GasolinerasEnRutaApp/1.0 (contacto@example.com)"
+
+_OSRM_ROUTE_URL = "http://router.project-osrm.org/route/v1/driving"
+
+
+class RouteTextError(ValueError):
+    """Se lanza cuando no es posible trazar la ruta entre los puntos de texto dados."""
+
+
+def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
+    """
+    Geocodifica un nombre de lugar usando la API pública de Nominatim (OSM).
+
+    Usa ``requests`` directamente para evitar añadir la dependencia de
+    ``geopy`` al proyecto. El User-Agent personalizado es obligatorio
+    según los Términos de Uso de Nominatim.
+
+    Parameters
+    ----------
+    lugar : str
+        Nombre del lugar a geocodificar (ciudad, dirección, poi...).
+    timeout : float
+        Tiempo máximo de espera en segundos.
+
+    Returns
+    -------
+    tuple[float, float]
+        (latitud, longitud) en WGS84.
+
+    Raises
+    ------
+    RouteTextError
+        Si Nominatim no devuelve resultados o la llamada falla.
+    """
+    try:
+        resp = requests.get(
+            _NOMINATIM_URL,
+            params={"q": lugar, "format": "json", "limit": 1},
+            headers={"User-Agent": _NOMINATIM_UA},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+        if not results:
+            raise RouteTextError(
+                f"No encontramos la ubicación «{lugar}». "
+                "Prueba a escribir el nombre completo de la ciudad o provincia."
+            )
+        lat = float(results[0]["lat"])
+        lon = float(results[0]["lon"])
+        print(f"[Geocode] «{lugar}» → ({lat:.5f}, {lon:.5f})")
+        return lat, lon
+    except RouteTextError:
+        raise
+    except Exception as exc:
+        raise RouteTextError(
+            f"Error al geocodificar «{lugar}»: {exc}"
+        ) from exc
+
+
+def get_route_from_text(origen: str, destino: str) -> LineString:
+    """
+    Obtiene la ruta por carretera entre dos puntos descritos en texto plano
+    y la devuelve como un ``LineString`` de Shapely en EPSG:4326.
+
+    Flujo
+    -----
+    1. Geocodificar origen  → (lat_o, lon_o)  via Nominatim
+    2. Geocodificar destino → (lat_d, lon_d)  via Nominatim
+    3. Petición OSRM con ``overview=full&geometries=geojson`` para obtener
+       la geometría completa de la ruta (todos los waypoints intermedios).
+    4. Extraer el array de coordenadas ``[lon, lat]`` del GeoJSON y
+       construir el ``LineString``.
+
+    Parameters
+    ----------
+    origen : str
+        Nombre del punto de partida (p. ej. "Madrid", "A Coruña").
+    destino : str
+        Nombre del destino (p. ej. "Barcelona", "Sevilla").
+
+    Returns
+    -------
+    LineString
+        Ruta en EPSG:4326 compatible con el resto del pipeline.
+
+    Raises
+    ------
+    RouteTextError
+        Ante cualquier fallo de geocodificación o de la API OSRM.
+    """
+    # Paso 1 & 2 — Geocodificación
+    lat_o, lon_o = _geocode(origen)
+    lat_d, lon_d = _geocode(destino)
+
+    # Paso 3 — Petición OSRM
+    url = (
+        f"{_OSRM_ROUTE_URL}"
+        f"/{lon_o},{lat_o};{lon_d},{lat_d}"
+        f"?overview=full&geometries=geojson&alternatives=false&steps=false"
+    )
+    try:
+        resp = requests.get(url, timeout=8.0)
+        if resp.status_code == 429:
+            raise RouteTextError(
+                "El servicio de enrutamiento está saturado (rate-limit). "
+                "Espera unos segundos y vuelve a intentarlo."
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except RouteTextError:
+        raise
+    except Exception as exc:
+        raise RouteTextError(
+            f"No se pudo contactar con el servicio de enrutamiento: {exc}"
+        ) from exc
+
+    # Paso 4 — Extraer geometría
+    try:
+        routes = data.get("routes", [])
+        if not routes:
+            raise RouteTextError(
+                f"OSRM no encontró ruta entre «{origen}» y «{destino}». "
+                "Comprueba que ambos puntos sean accesibles por carretera."
+            )
+        coords = routes[0]["geometry"]["coordinates"]  # lista de [lon, lat]
+        if len(coords) < 2:
+            raise RouteTextError("La ruta devuelta por OSRM es demasiado corta.")
+        track = LineString(coords)  # Shapely acepta [lon, lat] → EPSG:4326
+        dist_km = routes[0]["legs"][0]["distance"] / 1000.0
+        print(f"[OSRM] Ruta «{origen}» → «{destino}»: {dist_km:.1f} km, "
+              f"{len(coords)} puntos.")
+        return track
+    except RouteTextError:
+        raise
+    except Exception as exc:
+        raise RouteTextError(
+            f"Error al procesar la geometría de la ruta: {exc}"
+        ) from exc
+
+
+# ===========================================================================
 # 2. PROCESAMIENTO GPX
 # ===========================================================================
 

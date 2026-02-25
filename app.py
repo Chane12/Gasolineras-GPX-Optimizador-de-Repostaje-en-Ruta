@@ -17,12 +17,14 @@ from streamlit_folium import st_folium
 from gasolineras_ruta import (
     CRS_UTM30N,
     CRS_WGS84,
+    RouteTextError,
     build_route_buffer,
     build_stations_geodataframe,
     enrich_stations_with_osrm,
     fetch_gasolineras,
     filter_cheapest_stations,
     generate_map,
+    get_route_from_text,
     load_gpx_track,
     simplify_track,
     spatial_join_within_buffer,
@@ -249,23 +251,54 @@ with st.sidebar:
     st.markdown("## ⚙️ Configuración del Viaje")
     st.markdown("---")
 
-    # 1. Archivo GPX – uploader + modo demo
-    st.markdown('<p class="sidebar-title">1. Archivo de Ruta (.GPX)</p>', unsafe_allow_html=True)
-    gpx_file = st.file_uploader("Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed")
+    # 1. Entrada de ruta (tabs: Texto | GPX)
+    st.markdown('<p class="sidebar-title">1. Ruta</p>', unsafe_allow_html=True)
+    tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
 
-    # Si no hay archivo pero hay modo demo activo, indicarlo visualmente
-    if gpx_file is None and st.session_state.get("demo_mode"):
-        st.success("✅ Cargada ruta de demo (Madrid Norte ~55 km)")
-    with st.expander("¿Cómo obtengo mi archivo GPX?"):
-        st.markdown(
-            """
-            - **Wikiloc**: ruta → Descargar → *.gpx*
-            - **Komoot**: ruta → ⋯ → *Exportar como GPX*
-            - **Garmin**: actividad → *Exportar GPX*
-            - **Strava**: actividad → ⋯ → *Exportar GPX*
-            - **Google Maps**: usa mapstogpx.com
-            """
+    with tab_texto:
+        origen_txt  = st.text_input(
+            "Origen",
+            placeholder="Ej: Madrid",
+            key="origen_txt",
         )
+        destino_txt = st.text_input(
+            "Destino",
+            placeholder="Ej: Barcelona",
+            key="destino_txt",
+        )
+        if origen_txt or destino_txt:
+            _input_mode = "texto"
+            gpx_file = None
+        else:
+            _input_mode = "texto_vacio"
+            gpx_file = None
+
+    with tab_gpx:
+        gpx_file_upload = st.file_uploader(
+            "Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed"
+        )
+        if gpx_file_upload is not None:
+            _input_mode = "gpx"
+            gpx_file = gpx_file_upload
+        elif st.session_state.get("demo_mode") and _input_mode not in ("gpx",):
+            _input_mode = "demo"
+            gpx_file = None
+        elif _input_mode not in ("texto", "texto_vacio"):
+            _input_mode = "gpx_vacio"
+            gpx_file = None
+
+        if gpx_file is None and st.session_state.get("demo_mode"):
+            st.success("✅ Cargada ruta de demo (Madrid Norte ~55 km)")
+        with st.expander("¿Cómo obtengo mi archivo GPX?"):
+            st.markdown(
+                """
+                - **Wikiloc**: ruta → Descargar → *.gpx*
+                - **Komoot**: ruta → ⋯ → *Exportar como GPX*
+                - **Garmin**: actividad → *Exportar GPX*
+                - **Strava**: actividad → ⋯ → *Exportar GPX*
+                - **Google Maps**: usa mapstogpx.com
+                """
+            )
 
     # 2. Combustible
     st.markdown('<p class="sidebar-title">2. Tipo de Combustible</p>', unsafe_allow_html=True)
@@ -353,50 +386,68 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
 # ---------------------------------------------------------------------------
-# El pipeline sólo se (re)ejecuta cuando:
-#   a) El usuario pulsa "Iniciar Búsqueda" (run_btn), o
-#   b) Está en modo demo y no hay resultados guardados aún.
-# En cualquier otro rerun (p. ej. clic en tabla) se usan los resultados
-# guardados en session_state sin tocar el pipeline.
 _is_demo_first_run = st.session_state.get("demo_mode") and "pipeline_results" not in st.session_state
+_hay_ruta_texto = _input_mode == "texto" and bool(origen_txt.strip()) and bool(destino_txt.strip())
 _pipeline_active = run_btn or _is_demo_first_run
 
-# Cuando el usuario lanza una nueva búsqueda, invalida resultados anteriores
 if run_btn:
     st.session_state.pop("pipeline_results", None)
 
-# Bandera para saber si se usó el demo en este ciclo de ejecución
-_using_demo = (_pipeline_active and gpx_file is None and st.session_state.get("demo_mode"))
+_using_demo = (_pipeline_active and _input_mode in ("demo", "gpx_vacio") and st.session_state.get("demo_mode"))
 
 if _pipeline_active:
-    if gpx_file is None and not st.session_state.get("demo_mode"):
-        st.error("📂 Primero sube tu archivo GPX.")
+    # Validar que haya una fuente de ruta válida
+    if _input_mode == "texto_vacio":
+        st.error("📍 Escribe el origen y el destino, o sube un archivo GPX.")
+        st.stop()
+    if _input_mode in ("gpx_vacio",) and not st.session_state.get("demo_mode"):
+        st.error("📂 Sube tu archivo GPX o escribe origen y destino en la pestaña de texto.")
         st.stop()
 
-    if _using_demo:
-        # Cargar el GPX de demo desde disco
-        demo_gpx_path = Path(__file__).parent / "demo_route.gpx"
-        if not demo_gpx_path.exists():
-            st.error("⚠️ No se encontró el archivo de demo. Contacta con el administrador.")
-            st.stop()
-        tmp_path = demo_gpx_path
-    else:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
-            tmp.write(gpx_file.read())
-            tmp_path = Path(tmp.name)
+    tmp_path = None    # solo se usa en modo GPX
 
-    progress = st.progress(0, text="Iniciando búsqueda…")
+    if _input_mode == "texto" and _hay_ruta_texto:
+        # ---- MODO TEXTO: obtener track vía Nominatim + OSRM ----
+        progress = st.progress(0, text="Iniciando búsqueda…")
+        try:
+            progress.progress(15, text=f"🗺️ Trazando ruta {origen_txt} → {destino_txt}…")
+            track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
+        except RouteTextError as exc:
+            progress.empty()
+            st.error(
+                f"🚧 **No hemos podido trazar la ruta entre estas ciudades.**\n\n{exc}"
+            )
+            st.stop()
+        except Exception as exc:
+            progress.empty()
+            st.error(f"⚠️ Error inesperado al trazar la ruta: {exc}")
+            st.stop()
+    else:
+        progress = st.progress(0, text="Iniciando búsqueda…")
+        if _using_demo:
+            demo_gpx_path = Path(__file__).parent / "demo_route.gpx"
+            if not demo_gpx_path.exists():
+                st.error("⚠️ No se encontró el archivo de demo.")
+                st.stop()
+            tmp_path = demo_gpx_path
+        else:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
+                tmp.write(gpx_file.read())
+                tmp_path = Path(tmp.name)
+
+        progress.progress(20, text="🗺️ Leyendo tu ruta GPX…")
+        track = None   # se asigna en el bloque try más abajo
 
     try:
         progress.progress(8, text="⏬ Descargando precios en tiempo real…")
         df_gas = cached_fetch_gasolineras()
 
-        progress.progress(20, text="🗺️ Leyendo tu ruta GPX…")
-        track = load_gpx_track(tmp_path)
-
-        # T3: Validación del GPX (tamaño + bbox España)
-        progress.progress(28, text="🔎 Validando ruta…")
-        validate_gpx_track(track)
+        # --- Carga del track (solo GPX; en modo texto ya está listo) ---
+        if track is None:
+            progress.progress(20, text="🗺️ Leyendo tu ruta GPX…")
+            track = load_gpx_track(tmp_path)
+            progress.progress(28, text="🔎 Validando ruta…")
+            validate_gpx_track(track)
 
         progress.progress(40, text="✂️ Simplificando la ruta…")
         track_simp = simplify_track(track, tolerance_deg=0.0005)
@@ -465,6 +516,10 @@ if _pipeline_active:
             "using_demo":    _using_demo,
         }
 
+    except RouteTextError as exc:
+        progress.empty()
+        st.error(f"🚧 **Ruta imposible:** {exc}")
+        st.stop()
     except ValueError as exc:
         progress.empty()
         st.error(f"⚠️ {exc}")
@@ -481,8 +536,8 @@ if _pipeline_active:
         )
         st.stop()
     finally:
-        # Solo borrar si es un archivo temporal real (no la ruta de demo)
-        if not _using_demo:
+        # Solo borrar el archivo temporal en modo GPX real
+        if tmp_path is not None and not _using_demo and _input_mode == "gpx":
             tmp_path.unlink(missing_ok=True)
 
 # -----------------------------------------------------------------------
