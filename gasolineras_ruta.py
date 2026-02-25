@@ -116,38 +116,61 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
     # Intento 1 — conexión directa al MITECO
     # ----------------------------------------------------------------
     data = None
-    _err_direct: Exception | None = None  # guardado fuera del except (Python 3 borra 'as e')
+    _err_direct: Exception | None = None
     try:
         response = requests.get(MITECO_API_URL, headers=headers, timeout=timeout)
         response.raise_for_status()
         data = response.json()
         print("[MITECO] Conexión directa exitosa.")
-    except requests.exceptions.RequestException as e_direct:
-        _err_direct = e_direct  # copiar antes de que Python lo borre al salir del bloque
+    except requests.exceptions.RequestException as exc:
+        _err_direct = exc  # guardar: Python 3 borra 'as e' al salir del except
         print(f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). "
-              "Intentando proxy público...")
+              "Probando proxies públicos...")
 
     # ----------------------------------------------------------------
-    # Intento 2 — proxy de paso (allorigins.win)
-    # El MITECO bloquea IPs de centros de datos (AWS/GCP).
-    # allorigins.win re-emite la petición desde su propio servidor.
+    # Intentos 2-4 — proxies de paso en cascada
+    # El MITECO bloquea IPs de centros de datos (AWS/GCP) a nivel TCP.
+    # Probamos varios proxies públicos en orden hasta que uno funcione.
     # ----------------------------------------------------------------
     if data is None:
-        proxy_url = (
-            "https://api.allorigins.win/raw?url="
-            + urllib.parse.quote(MITECO_API_URL, safe="")
-        )
-        try:
-            response = requests.get(proxy_url, headers=headers, timeout=timeout + 20)
-            response.raise_for_status()
-            data = response.json()
-            print("[MITECO] Datos obtenidos via proxy allorigins.win.")
-        except requests.exceptions.RequestException as e_proxy:
+        encoded_url = urllib.parse.quote(MITECO_API_URL, safe="")
+        proxy_candidates = [
+            # Proxy 1: corsproxy.io — muy fiable, ampliamente usado
+            f"https://corsproxy.io/?{encoded_url}",
+            # Proxy 2: allorigins (formato get con vía raw)
+            f"https://api.allorigins.win/get?url={encoded_url}",
+            # Proxy 3: codetabs
+            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
+        ]
+
+        last_proxy_err: Exception | None = None
+        for proxy_url in proxy_candidates:
+            proxy_name = proxy_url.split("//")[1].split("/")[0]
+            try:
+                print(f"[MITECO] Intentando proxy: {proxy_name}...")
+                resp = requests.get(proxy_url, headers=headers, timeout=timeout + 30)
+                resp.raise_for_status()
+
+                # allorigins /get devuelve {"contents": "...", "status": {...}}
+                if "allorigins.win/get" in proxy_url:
+                    wrapper = resp.json()
+                    import json as _json
+                    data = _json.loads(wrapper["contents"])
+                else:
+                    data = resp.json()
+
+                print(f"[MITECO] Datos obtenidos via {proxy_name}.")
+                break
+            except Exception as exc:
+                last_proxy_err = exc
+                print(f"[MITECO] Proxy {proxy_name} falló: {exc}")
+
+        if data is None:
             raise ConnectionError(
-                "No se pudo conectar con la API del MITECO ni directamente ni "
-                f"mediante proxy. Comprueba tu conexión a Internet.\n"
+                "No se pudo conectar con la API del MITECO ni directamente "
+                "ni mediante ningún proxy. Comprueba tu conexión a Internet.\n"
                 f"Error directo: {_err_direct}\n"
-                f"Error proxy: {e_proxy}"
+                f"Último error de proxy: {last_proxy_err}"
             )
 
     records = data.get("ListaEESSPrecio", [])
