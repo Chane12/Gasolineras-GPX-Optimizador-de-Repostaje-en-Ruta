@@ -601,6 +601,16 @@ if "pipeline_results" in st.session_state:
         st.info("🧭 **Modo Demo activo** — Escapada Madrid - Valencia (~356 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
+    # --- Centro del mapa (persiste entre reruns via session_state) ---
+    _track_coords_default = list(track.coords)
+    _default_center = [
+        sum(c[1] for c in _track_coords_default) / len(_track_coords_default),
+        sum(c[0] for c in _track_coords_default) / len(_track_coords_default),
+    ]
+    _sel = st.session_state.get("map_selected_station", {})
+    map_center = _sel.get("center", _default_center)
+    map_zoom   = _sel.get("zoom", 8)
+
     # 1. KPIs principales
     precio_top_min = gdf_top[fuel_column].min()
     precio_top_max = gdf_top[fuel_column].max()
@@ -690,12 +700,49 @@ if "pipeline_results" in st.session_state:
     st.divider()
 
     # -----------------------------------------------------------------------
-    # 4. Tabla de resultados — ANTES del mapa para que la selección pueda
-    #    controlar el centro del mapa sin necesidad de un segundo rerun.
+    # 3. Mapa — aparece primero para impacto visual inmediato
+    # -----------------------------------------------------------------------
+    header_map = "🗺️ Mapa Interactivo de la Ruta"
+    if autonomia_km > 0:
+        header_map += f"  ·  ⚠️ Zonas de riesgo con {autonomia_km} km de autonomía"
+    st.subheader(header_map)
+    if _sel.get("nombre"):
+        st.caption(f"📍 Centrado en: **{_sel['nombre']}** — haz clic en otro marcador o fila de la tabla para cambiar.")
+    elif autonomia_km > 0:
+        st.caption(
+            "Los segmentos **rojos discontinuos** indican tramos donde no hay gasolinera "
+            f"dentro de tus {autonomia_km} km de autonomía."
+        )
+
+    map_active = st.checkbox(
+        "🖱️ Activar interacción con el mapa (zoom / arrastrar)",
+        value=True,
+        help=(
+            "En móvil, desáctivalo para poder hacer scroll en la página "
+            "sin que el mapa capture el gesto."
+        ),
+    )
+    map_height = 580 if map_active else 340
+
+    st_folium(
+        mapa_obj,
+        width="100%",
+        height=map_height,
+        center=map_center,
+        zoom=map_zoom,
+        returned_objects=[],
+    )
+    if not map_active:
+        st.caption("ℹ️ Activa la interacción arriba para hacer zoom y desplazarte por el mapa.")
+
+    st.divider()
+
+    # -----------------------------------------------------------------------
+    # 4. Tabla de resultados
     # -----------------------------------------------------------------------
     st.subheader("🏆 Ranking de Gasolineras")
     st.caption(
-        "Haz clic en una fila para centrar el mapa en esa gasolinera. "
+        "Haz clic en una fila para centrar el mapa en esa gasolinera (se actualiza en el próximo render). "
         "Haz clic en los marcadores del mapa para ver más detalles."
     )
 
@@ -741,7 +788,7 @@ if "pipeline_results" in st.session_state:
         for _, row in gdf_top_wgs84.iterrows()
     ]
 
-    # --- column_config: barra visual de precios + formats profesionales ---
+    # --- column_config ---
     precio_col_label = f"Precio {combustible_elegido} (€/L)"
     _precio_min = float(df_show[precio_col_label].min()) if precio_col_label in df_show.columns else 0.0
     _precio_max = float(df_show[precio_col_label].max()) if precio_col_label in df_show.columns else 2.0
@@ -790,22 +837,18 @@ if "pipeline_results" in st.session_state:
         column_config=col_config,
     )
 
-    # Determinar el centro del mapa según la selección
+    # Determinar el centro del mapa según la selección y persistir en session_state
     selected_rows = table_event.selection.get("rows", [])
     if selected_rows:
         sel_idx = selected_rows[0]
-        map_center = list(station_coords[sel_idx])
-        map_zoom = 15
         sel_nombre = df_show.iloc[sel_idx].get("Rótulo / Marca", "la gasolinera")
-        st.success(f"📍 Centrando mapa en: **{sel_nombre}**")
-    else:
-        # Centro por defecto: centroide del track
-        track_coords_list = list(track.coords)
-        map_center = [
-            sum(c[1] for c in track_coords_list) / len(track_coords_list),
-            sum(c[0] for c in track_coords_list) / len(track_coords_list),
-        ]
-        map_zoom = 10
+        st.session_state["map_selected_station"] = {
+            "center": list(station_coords[sel_idx]),
+            "zoom":   15,
+            "nombre": sel_nombre,
+        }
+        st.toast(f"📍 Recentrando mapa en **{sel_nombre}**…")
+        st.rerun()
 
     st.divider()
 
@@ -989,42 +1032,6 @@ if "pipeline_results" in st.session_state:
                 {aviso}
             </div>
             """, unsafe_allow_html=True)
-
-    st.divider()
-
-    # -----------------------------------------------------------------------
-    # 3. Mapa
-    # -----------------------------------------------------------------------
-    header_map = "🗺️ Mapa Interactivo de la Ruta"
-    if autonomia_km > 0:
-        header_map += f"  ·  ⚠️ Zonas de riesgo con {autonomia_km} km de autonomía"
-    st.subheader(header_map)
-    if autonomia_km > 0:
-        st.caption(
-            "Los segmentos **rojos discontinuos** indican tramos donde no hay gasolinera "
-            f"dentro de tus {autonomia_km} km de autonomía."
-        )
-
-    map_active = st.checkbox(
-        "🖱️ Activar interacción con el mapa (zoom / arrastrar)",
-        value=True,
-        help=(
-            "En móvil, desáctivalo para poder hacer scroll en la página "
-            "sin que el mapa capture el gesto."
-        ),
-    )
-    map_height = 580 if map_active else 340
-
-    st_folium(
-        mapa_obj,
-        width="100%",
-        height=map_height,
-        center=map_center,
-        zoom=map_zoom,
-        returned_objects=[],
-    )
-    if not map_active:
-        st.caption("ℹ️ Activa la interacción arriba para hacer zoom y desplazarte por el mapa.")
 
     st.markdown("---")
 
