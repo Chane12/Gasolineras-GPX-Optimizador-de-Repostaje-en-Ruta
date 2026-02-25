@@ -192,6 +192,8 @@ _buffer_default = max(1, min(15, _buffer_default))
 _top_default = int(qp.get("top", 5))
 _top_default = max(1, min(20, _top_default))
 _litros_default = float(qp.get("litros", 0))
+_consumo_default = float(qp.get("consumo", 7.0))
+_inicio_pct_default = int(qp.get("inicio_pct", 50))
 _autonomia_default = int(qp.get("autonomia", 0))
 
 # ---------------------------------------------------------------------------
@@ -225,17 +227,39 @@ with st.sidebar:
     )
     fuel_column = COMBUSTIBLES[combustible_elegido]
 
-    # 3. Estimador de Coste del Depósito (F1)
-    st.markdown('<p class="sidebar-title">3. Estimador de Coste</p>', unsafe_allow_html=True)
-    litros_deposito = st.number_input(
-        "Litros a repostar",
-        min_value=0.0, max_value=200.0,
-        value=_litros_default, step=1.0,
-        help="Introduce los litros que necesitas reponer. 0 = desactivado.",
-        label_visibility="collapsed",
-    )
+    # 3. Datos del vehículo (para estimador de coste y autonomía)
+    st.markdown('<p class="sidebar-title">3. Tu Vehículo</p>', unsafe_allow_html=True)
+    with st.expander("Parámetros del depósito y consumo", expanded=False):
+        deposito_total_l = st.number_input(
+            "Capacidad del depósito (litros)",
+            min_value=5.0, max_value=300.0,
+            value=max(5.0, _litros_default) if _litros_default > 0 else 50.0,
+            step=1.0,
+            help="Litros totales que cabe en el depósito de tu vehículo.",
+        )
+        consumo_l100km = st.number_input(
+            "Consumo aproximado (L/100 km)",
+            min_value=1.0, max_value=40.0,
+            value=_consumo_default,
+            step=0.5,
+            help="Consumo medio de tu vehículo. Consúltalo en el cuadro de mandos o en la ficha técnica.",
+        )
+        fuel_inicio_pct = st.slider(
+            "Combustible disponible al salir (%)",
+            min_value=0, max_value=100,
+            value=_inicio_pct_default,
+            step=5,
+            help="Nivel de combustible en el depósito al inicio de la ruta.",
+        )
+        combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
+        st.caption(
+            f"▸ Tienes **{combustible_actual_l:.1f} L** disponibles "
+            f"→ autonomía estimada de **{(combustible_actual_l / consumo_l100km * 100):.0f} km**"
+            if consumo_l100km > 0 else ""
+        )
 
-    # 4. Filtros avanzados
+    # Calcular autonomía actual a partir de los datos del vehículo
+    autonomia_km = int(combustible_actual_l / consumo_l100km * 100) if consumo_l100km > 0 else 0
     st.markdown('<p class="sidebar-title">4. Filtros Avanzados</p>', unsafe_allow_html=True)
     with st.expander("Ajustar parámetros de búsqueda", expanded=False):
         radio_km = st.slider(
@@ -254,18 +278,6 @@ with st.sidebar:
         else:
             segment_km = 0.0
 
-        st.markdown("---")
-        autonomia_km = st.slider(
-            "⚠️ Mi autonomía actual (km)",
-            min_value=0, max_value=600,
-            value=_autonomia_default, step=10,
-            help=(
-                "Si indicas tu autonomía, el mapa marcará en rojo los tramos de ruta "
-                "donde no hay gasolinera dentro de ese radio y podrías quedarte sin combustible. "
-                "Ponlo a 0 para desactivar."
-            ),
-        )
-
     buffer_m = radio_km * 1000
 
     # Botón búsqueda
@@ -277,11 +289,13 @@ with st.sidebar:
     # Botón para compartir configuración por URL (F2)
     if st.button("🔗 Copiar enlace con esta configuración", use_container_width=True):
         st.query_params.update({
-            "fuel": combustible_elegido,
-            "buffer": str(radio_km),
-            "top": str(top_n),
-            "litros": str(int(litros_deposito)),
-            "autonomia": str(autonomia_km),
+            "fuel":       combustible_elegido,
+            "buffer":     str(radio_km),
+            "top":        str(top_n),
+            "litros":     str(int(deposito_total_l)),
+            "consumo":    str(consumo_l100km),
+            "inicio_pct": str(fuel_inicio_pct),
+            "autonomia":  str(autonomia_km),
         })
         st.success("✅ URL actualizada. Copia la barra de direcciones de tu navegador para compartirla.")
 
@@ -406,29 +420,60 @@ if run_btn:
     with col4:
         st.metric(f"Total en ±{radio_km} km", f"{total_zona} Est.")
 
-    # 2. Estimador de coste del depósito (F1)
-    if litros_deposito > 0:
-        coste_barata = precio_top_min * litros_deposito
-        coste_cara   = precio_zona_max * litros_deposito
-        ahorro_total = coste_cara - coste_barata
+    # 2. Estimador de coste inteligente basado en el vehículo
+    if deposito_total_l > 0 and consumo_l100km > 0:
+        # Longitud real de la ruta en km (usando el track UTM ya proyectado)
+        ruta_km = track_utm.length / 1000.0
+
+        litros_necesarios_ruta = ruta_km * consumo_l100km / 100.0
+        litros_a_repostar = max(0.0, litros_necesarios_ruta - combustible_actual_l)
+        necesita_reposte = litros_a_repostar > 0
+
+        coste_barata = litros_a_repostar * precio_top_min if necesita_reposte else 0.0
+        coste_libre   = litros_a_repostar * precio_zona_max if necesita_reposte else 0.0
+        ahorro_total  = coste_libre - coste_barata
+
+        # Estado de la barra de combustible
+        pct_actual = min(100, int(fuel_inicio_pct))
+        pct_necesario = min(100, int((litros_necesarios_ruta / deposito_total_l) * 100)) if deposito_total_l > 0 else 0
+
+        color_estado = "#16a34a" if not necesita_reposte else "#dc2626"
+        label_estado = "✅ Llegas sin repostar" if not necesita_reposte else f"⛽ Necesitas reponer ~{litros_a_repostar:.1f} L"
+
         st.markdown(
             f"""
             <div class="cost-box">
-                <div class="cost-box-title">💶 Estimación para {litros_deposito:.0f} litros de {combustible_elegido}</div>
-                <div style="display:flex; gap:2rem; flex-wrap:wrap; margin-top:8px;">
+                <div class="cost-box-title">� Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
                     <div>
-                        <div style="font-size:0.8rem;color:#166534;">Repostando en la más barata</div>
+                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">DEPÓSITO AL SALIR</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{combustible_actual_l:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({fuel_inicio_pct}%)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">CONSUMO ESTIMADO</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{litros_necesarios_ruta:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({consumo_l100km} L/100km)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.78rem;color:{color_estado};font-weight:600;">ESTADO</div>
+                        <div style="font-size:1.1rem;font-weight:700;color:{color_estado};">{label_estado}</div>
+                    </div>
+                </div>
+                {f'''
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid #86efac;display:flex;gap:2rem;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>
                         <div class="cost-saving">{coste_barata:.2f} €</div>
                     </div>
                     <div>
-                        <div style="font-size:0.8rem;color:#991b1b;">Si repostaras en la más cara de la zona</div>
-                        <div style="font-size:1.4rem;font-weight:800;color:#dc2626;">{coste_cara:.2f} €</div>
+                        <div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div>
                     </div>
                     <div>
-                        <div style="font-size:0.8rem;color:#1e40af;">Ahorro potencial</div>
-                        <div style="font-size:1.4rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div>
+                        <div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div>
                     </div>
                 </div>
+                ''' if necesita_reposte else '<div style="margin-top:10px;font-size:0.9rem;color:#166534;">Con el combustible actual llegas al destino. ¡No necesitas parar!</div>'}
             </div>
             """,
             unsafe_allow_html=True,
