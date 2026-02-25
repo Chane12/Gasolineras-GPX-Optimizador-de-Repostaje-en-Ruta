@@ -236,8 +236,8 @@ _buffer_default = int(qp.get("buffer", 5))
 _buffer_default = max(1, min(15, _buffer_default))
 _top_default = int(qp.get("top", 5))
 _top_default = max(1, min(20, _top_default))
-_litros_default = float(qp.get("litros", 0))
-_consumo_default = float(qp.get("consumo", 5.0))
+_litros_default = float(qp.get("litros", 20.0))
+_consumo_default = float(qp.get("consumo", 4.5))
 _inicio_pct_default = int(qp.get("inicio_pct", 100))
 _autonomia_default = int(qp.get("autonomia", 0))
 
@@ -282,7 +282,7 @@ with st.sidebar:
         deposito_total_l = st.number_input(
             "Capacidad del depósito (litros)",
             min_value=5.0, max_value=300.0,
-            value=max(5.0, _litros_default) if _litros_default > 0 else 50.0,
+            value=max(5.0, _litros_default) if _litros_default > 0 else 20.0,
             step=1.0,
             help="Litros totales que cabe en el depósito de tu vehículo.",
         )
