@@ -17,10 +17,8 @@ from streamlit_folium import st_folium
 from gasolineras_ruta import (
     CRS_UTM30N,
     CRS_WGS84,
-    ImpossibleRouteError,
     build_route_buffer,
     build_stations_geodataframe,
-    calculate_optimal_stops,
     enrich_stations_with_osrm,
     fetch_gasolineras,
     filter_cheapest_stations,
@@ -412,58 +410,13 @@ if _pipeline_active:
         gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
         track_utm = gdf_track_utm.geometry.iloc[0]
 
-        # Longitud real de la ruta en km (se usa tanto en el planificador como en la UI)
-        ruta_km = track_utm.length / 1000.0
-
-        # Pre-computar km_ruta en gdf_within (necesario para el Greedy)
-        progress.progress(72, text="📍 Calculando distancias en ruta...")
-        mask_precio = gdf_within[fuel_column].notna() & (gdf_within[fuel_column] > 0)
-        gdf_within = gdf_within.copy()
-        gdf_within.loc[mask_precio, "km_ruta"] = (
-            gdf_within.loc[mask_precio, "geometry"]
-            .apply(lambda geom: track_utm.project(geom) / 1000.0)
+        gdf_top = filter_cheapest_stations(
+            gdf_within,
+            fuel_column=fuel_column,
+            top_n=top_n,
+            track_utm=track_utm,
+            segment_km=segment_km,
         )
-
-        # ----------------------------------------------------------------
-        # Parámetros de autonomía derivados del vehículo
-        # ----------------------------------------------------------------
-        tiene_datos_vehiculo = deposito_total_l > 0 and consumo_l100km > 0
-
-        if tiene_datos_vehiculo:
-            autonomia_actual_km = float(autonomia_km)   # con el combustible de salida
-            # Rango útil máximo = autonomía al 100% del depósito, con reserva del 15%
-            autonomia_max_km = (deposito_total_l / consumo_l100km) * 100.0
-            rango_util_maximo_km = autonomia_max_km * 0.85
-        else:
-            autonomia_actual_km = 0.0
-            rango_util_maximo_km = 0.0
-
-        # ----------------------------------------------------------------
-        # MODO PRESCRIPTIVO: Planificador Greedy
-        # ----------------------------------------------------------------
-        planificador_activo = tiene_datos_vehiculo and autonomia_actual_km > 0
-        itinerario: list[dict] = []
-
-        progress.progress(76, text="🧩 Calculando itinerario óptimo...")
-        if planificador_activo:
-            itinerario, gdf_top = calculate_optimal_stops(
-                gdf_within=gdf_within,
-                fuel_column=fuel_column,
-                autonomia_actual_km=autonomia_actual_km,
-                rango_util_maximo_km=rango_util_maximo_km,
-                distancia_total_ruta_km=ruta_km,
-                deposito_total_l=deposito_total_l,
-                consumo_l100km=consumo_l100km,
-            )
-        else:
-            # Fallback: modo descriptivo clásico (sin datos de vehículo)
-            gdf_top = filter_cheapest_stations(
-                gdf_within,
-                fuel_column=fuel_column,
-                top_n=top_n,
-                track_utm=track_utm,
-                segment_km=segment_km,
-            )
 
         if gdf_top.empty:
             st.warning(
@@ -492,14 +445,6 @@ if _pipeline_active:
 
         progress.progress(100, text="✅ ¡Listo!")
 
-    except ImpossibleRouteError as exc:
-        progress.empty()
-        st.error(
-            f"🚫 **Ruta imposible de completar:** {exc}\n\n"
-            "Sugerencias: amplía el radio de búsqueda, reduce el consumo estimado "
-            "o revisa que la autonomía sea mayor que la distancia hasta la primera gasolinera."
-        )
-        st.stop()
     except ValueError as exc:
         progress.empty()
         st.error(f"⚠️ {exc}")
@@ -524,168 +469,98 @@ if _pipeline_active:
     # Resultados — Dashboard
     # -----------------------------------------------------------------------
     if _using_demo:
-        st.info("🏙️ **Modo Demo activo** — Ruta Madrid Norte ~55 km. Sube tu propio GPX desde el panel lateral cuando quieras.")
+        st.info("🏍️ **Modo Demo activo** — Ruta Madrid Norte ~55 km. Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
-    # -----------------------------------------------------------------------
     # 1. KPIs principales
-    # -----------------------------------------------------------------------
     precio_top_min = gdf_top[fuel_column].min()
+    precio_top_max = gdf_top[fuel_column].max()
     precio_zona_max = gdf_within[fuel_column].max()
-    total_zona = len(gdf_within[gdf_within[fuel_column].notna() & (gdf_within[fuel_column] > 0)])
+    total_zona = len(gdf_within)
     total_mostradas = len(gdf_top)
 
-    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    with kpi1:
-        st.metric("⚽ Ruta Total", f"{ruta_km:.1f} km")
-    with kpi2:
-        st.metric("Mejor Precio en Ruta", f"{precio_top_min:.3f} €/L")
-    with kpi3:
-        coste_total_itinerario = sum(p["coste_parada_eur"] for p in itinerario)
-        if itinerario:
-            st.metric("🧳 Coste Total Estimado", f"{coste_total_itinerario:.2f} €")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Mejor Precio Encontrado", f"{precio_top_min:.3f} €/L")
+    with col2:
+        ahorro_vs_caro = precio_zona_max - precio_top_min
+        st.metric(
+            "Ahorro vs. Más Cara de la Zona",
+            f"{ahorro_vs_caro:.3f} €/L",
+            delta=None,
+        )
+    with col3:
+        st.metric("Estaciones Sugeridas", f"{total_mostradas}")
+    with col4:
+        st.metric(f"Total en ±{radio_km} km", f"{total_zona} Est.")
+
+    # 2. Estimador de coste inteligente basado en el vehículo
+    if deposito_total_l > 0 and consumo_l100km > 0:
+        # Longitud real de la ruta en km (usando el track UTM ya proyectado)
+        ruta_km = track_utm.length / 1000.0
+
+        litros_necesarios_ruta = ruta_km * consumo_l100km / 100.0
+        litros_a_repostar = max(0.0, litros_necesarios_ruta - combustible_actual_l)
+        necesita_reposte = litros_a_repostar > 0
+
+        coste_barata = litros_a_repostar * precio_top_min if necesita_reposte else 0.0
+        coste_libre   = litros_a_repostar * precio_zona_max if necesita_reposte else 0.0
+        ahorro_total  = coste_libre - coste_barata
+
+        # Estado de la barra de combustible
+        pct_actual = min(100, int(fuel_inicio_pct))
+        pct_necesario = min(100, int((litros_necesarios_ruta / deposito_total_l) * 100)) if deposito_total_l > 0 else 0
+
+        color_estado = "#16a34a" if not necesita_reposte else "#dc2626"
+        label_estado = "✅ Llegas sin repostar" if not necesita_reposte else f"⛽ Necesitas reponer ~{litros_a_repostar:.1f} L"
+
+        # Pre-calcular el bloque HTML condicional ANTES del f-string principal.
+        # Anidar un f'''...''' dentro de un f"""...""" hace que Streamlit lo
+        # trate como texto plano en lugar de HTML — esto lo evita.
+        if necesita_reposte:
+            cost_breakdown_html = (
+                '<div class="cost-breakdown">'
+                f'<div><div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>'
+                f'<div class="cost-saving">{coste_barata:.2f} €</div></div>'
+                f'<div><div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>'
+                f'<div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div></div>'
+                f'<div><div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>'
+                f'<div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div></div>'
+                '</div>'
+            )
         else:
-            ahorro_vs_caro = precio_zona_max - precio_top_min
-            st.metric("Ahorro vs. Más Cara", f"{ahorro_vs_caro:.3f} €/L")
-    with kpi4:
-        st.metric(f"Gasolineras en ±{radio_km} km", f"{total_zona}")
+            cost_breakdown_html = (
+                '<div style="margin-top:10px;font-size:0.9rem;color:#166534;">'
+                "Con el combustible actual llegas al destino. ¡No necesitas parar!</div>"
+            )
 
-    st.divider()
-
-    # =======================================================================
-    # 2. ITINERARIO DE REPOSTAJE (modo prescriptivo)
-    # =======================================================================
-    if itinerario:
-        st.subheader("🗳️ Itinerario de Repostaje Óptimo")
-        st.caption(
-            f"Ruta de **{ruta_km:.1f} km** con autonomía de salida de **{autonomia_actual_km:.0f} km**. "
-            f"Rango útil máximo (85% depósito): **{rango_util_maximo_km:.0f} km**."
-        )
-
-        # Tarjeta de salida
-        import math as _math
-        combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
         st.markdown(
             f"""
-            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;
-                        background:linear-gradient(135deg,#eff6ff,#dbeafe);
-                        border:1px solid #93c5fd;border-radius:10px;margin-bottom:8px;">
-                <span style="font-size:1.8rem;">&#127968;</span>
-                <div>
-                    <div style="font-size:0.78rem;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;">Punto de Salida</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1e3a8a;">Km 0 — {combustible_actual_l:.1f} L disponibles &nbsp;
-                        <span style="font-size:0.85rem;color:#3b82f6;">(autonoía {autonomia_actual_km:.0f} km)</span>
+            <div class="cost-box">
+                <div class="cost-box-title">🚗 Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
+                <div class="cost-grid">
+                    <div>
+                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">DEPÓSITO AL SALIR</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{combustible_actual_l:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({fuel_inicio_pct}%)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">CONSUMO ESTIMADO</div>
+                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{litros_necesarios_ruta:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({consumo_l100km} L/100km)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.78rem;color:{color_estado};font-weight:600;">ESTADO</div>
+                        <div style="font-size:1.1rem;font-weight:700;color:{color_estado};">{label_estado}</div>
                     </div>
                 </div>
-            </div>""",
+                {cost_breakdown_html}
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-        for parada in itinerario:
-            n = parada["numero"]
-            km = parada["km_ruta"]
-            nombre = parada["nombre"]
-            municipio = parada["municipio"]
-            precio = parada["precio_eur_l"]
-            litros = parada["litros_repostados"]
-            coste = parada["coste_parada_eur"]
-            osrm_dist = parada["osrm_distance_km"]
-            osrm_dur = parada["osrm_duration_min"]
-
-            desvio_html = ""
-            if not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur):
-                desvio_html = (
-                    f'<span style="font-size:0.82rem;color:#059669;margin-left:8px;">'  
-                    f'🚗 {osrm_dist:.1f} km desvío ({osrm_dur:.0f} min)</span>'
-                )
-
-            st.markdown(
-                f"""
-                <div style="display:flex;align-items:flex-start;gap:0;margin-bottom:4px;">
-                    <div style="display:flex;flex-direction:column;align-items:center;margin-right:12px;">
-                        <div style="
-                            background:#2563eb;color:white;font-weight:700;font-size:0.9rem;
-                            width:32px;height:32px;border-radius:50%;display:flex;
-                            align-items:center;justify-content:center;flex-shrink:0;
-                        ">{n}</div>
-                        <div style="width:2px;background:#bfdbfe;flex:1;min-height:20px;"></div>
-                    </div>
-                    <div style="
-                        flex:1;padding:12px 16px;margin-bottom:6px;
-                        background:white;border:1px solid #e2e8f0;border-radius:10px;
-                        box-shadow:0 1px 3px rgba(0,0,0,0.04);
-                    ">
-                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
-                            <div>
-                                <span style="font-weight:700;color:#0f172a;">{nombre}</span>
-                                <span style="color:#64748b;font-size:0.9rem;"> — {municipio}</span>
-                                {desvio_html}
-                            </div>
-                            <span style="background:#dcfce7;color:#166534;font-weight:700;
-                                         border-radius:6px;padding:2px 10px;font-size:0.92rem;">
-                                {precio:.3f} €/L
-                            </span>
-                        </div>
-                        <div style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;">
-                            <span style="font-size:0.82rem;color:#475569;">
-                                <b>📍</b> Km {km:.1f}
-                            </span>
-                            <span style="font-size:0.82rem;color:#475569;">
-                                <b>⚽</b> {litros:.1f} L repostados
-                            </span>
-                            <span style="font-size:0.82rem;color:#2563eb;font-weight:600;">
-                                <b>💶</b> {coste:.2f} €
-                            </span>
-                        </div>
-                    </div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-        # Tarjeta de llegada
-        st.markdown(
-            f"""
-            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;
-                        background:linear-gradient(135deg,#f0fdf4,#dcfce7);
-                        border:1px solid #86efac;border-radius:10px;margin-top:4px;">
-                <span style="font-size:1.8rem;">🏁</span>
-                <div>
-                    <div style="font-size:0.78rem;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;">Destino</div>
-                    <div style="font-size:1rem;font-weight:600;color:#14532d;">
-                        Km {ruta_km:.1f} — Coste total estimado:
-                        <span style="font-size:1.15rem;color:#16a34a;font-weight:800;">{coste_total_itinerario:.2f} €</span>
-                    </div>
-                </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-
-    else:
-        # Modo descriptivo (sin datos de vehículo): tabla clásica
-        st.subheader("🏆 Ranking de Gasolineras en Ruta")
-        st.caption("Configura los datos de tu vehículo para obtener el itinerario óptimo personalizado.")
-        _COLS = {
-            "km_ruta": "Km en Ruta",
-            "Rótulo": "Rótulo / Marca",
-            "Municipio": "Municipio",
-            "Provincia": "Provincia",
-            fuel_column: f"Precio {combustible_elegido} (€/L)",
-            "osrm_distance_km": "Desvío Real (km)",
-            "Horario": "Horario",
-        }
-        _col_map = {c: e for c, e in _COLS.items() if c in gdf_top.columns}
-        _df = gdf_top[list(_col_map.keys())].copy().rename(columns=_col_map)
-        if "Km en Ruta" in _df.columns:
-            _df["Km en Ruta"] = _df["Km en Ruta"].apply(lambda x: f"{x:.1f}")
-        if "Desvío Real (km)" in _df.columns:
-            _df["Desvío Real (km)"] = _df["Desvío Real (km)"].apply(
-                lambda x: f"{x:.1f}" if x == x else "—"
-            )
-        _df.index = [""] * len(_df)
-        st.dataframe(_df, use_container_width=True, hide_index=True)
-
     st.divider()
 
+    # 3. Mapa
     header_map = "🗺️ Mapa Interactivo de la Ruta"
     if autonomia_km > 0:
         header_map += f"  ·  ⚠️ Zonas de riesgo con {autonomia_km} km de autonomía"
