@@ -446,7 +446,7 @@ if _pipeline_active:
 
         progress.progress(76, text="🧩 Calculando itinerario óptimo...")
         if planificador_activo:
-            gdf_top, itinerario = calculate_optimal_stops(
+            itinerario, gdf_top = calculate_optimal_stops(
                 gdf_within=gdf_within,
                 fuel_column=fuel_column,
                 autonomia_actual_km=autonomia_actual_km,
@@ -455,8 +455,6 @@ if _pipeline_active:
                 deposito_total_l=deposito_total_l,
                 consumo_l100km=consumo_l100km,
             )
-            # Reordenar: retornar gdf_stops de calculate_optimal_stops como gdf_top
-            # (ya tiene precio_seleccionado y km_ruta)
         else:
             # Fallback: modo descriptivo clásico (sin datos de vehículo)
             gdf_top = filter_cheapest_stations(
