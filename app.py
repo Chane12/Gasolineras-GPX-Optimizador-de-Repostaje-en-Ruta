@@ -12,6 +12,8 @@ import urllib.parse
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point
 import streamlit as st
 from streamlit_folium import st_folium
 
@@ -21,7 +23,6 @@ from gasolineras_ruta import (
     RouteTextError,
     build_route_buffer,
     build_stations_geodataframe,
-    calculate_global_optimal_stops,
     enrich_gpx_with_stops,
     enrich_stations_with_osrm,
     fetch_gasolineras,
@@ -247,6 +248,9 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # Cabecera principal
 # ---------------------------------------------------------------------------
+if "mis_paradas" not in st.session_state:
+    st.session_state["mis_paradas"] = []
+
 st.title("⛽ Gasolineras en Ruta Dashboard")
 st.markdown("Encuentra las estaciones de servicio más económicas a lo largo de tu viaje.")
 
@@ -548,26 +552,7 @@ if _pipeline_active:
             except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
                 pass
 
-            # ---- Dijkstra: Plan de Repostaje con Óptimo Global ----
-            gdf_dijkstra: object | None = None
-            coste_dijkstra: float | None = None
-            dijkstra_error: str | None = None
-            if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
-                st.write("🧮 Calculando plan de repostaje óptimo (Dijkstra)…")
-                try:
-                    gdf_dijkstra, coste_dijkstra = calculate_global_optimal_stops(
-                        gdf_within=gdf_within,
-                        fuel_column=fuel_column,
-                        track_utm=track_utm,
-                        deposito_total_l=deposito_total_l,
-                        consumo_100km=consumo_l100km,
-                        combustible_actual_l=combustible_actual_l,
-                        reserva_minima_pct=10.0,
-                    )
-                except ValueError as exc:
-                    dijkstra_error = str(exc)
-                except Exception as exc:
-                    dijkstra_error = f"Error inesperado en el optimizador: {exc}"
+
 
             st.write("🖼️ Generando mapa interactivo…")
             _, mapa_obj = generate_map(
@@ -589,9 +574,6 @@ if _pipeline_active:
                 "using_demo":     _using_demo,
                 "using_gpx":      _input_mode in ("gpx", "demo"),
                 "gpx_bytes":      _gpx_bytes,
-                "gdf_dijkstra":   gdf_dijkstra,
-                "coste_dijkstra": coste_dijkstra,
-                "dijkstra_error": dijkstra_error,
             }
 
         except RouteTextError as exc:
@@ -632,9 +614,6 @@ if "pipeline_results" in st.session_state:
     _using_demo     = _r["using_demo"]
     _using_gpx      = _r.get("using_gpx", False)
     _gpx_bytes      = _r.get("gpx_bytes")
-    gdf_dijkstra    = _r.get("gdf_dijkstra")
-    coste_dijkstra  = _r.get("coste_dijkstra")
-    dijkstra_error  = _r.get("dijkstra_error")
 
     if _using_demo:
         st.info("🧭 **Modo Demo activo** — Escapada Madrid - Valencia (~356 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
@@ -737,153 +716,6 @@ if "pipeline_results" in st.session_state:
         )
 
     st.divider()
-
-    # -----------------------------------------------------------------------
-    # 2b. Plan de Repostaje Óptimo (Dijkstra) — solo si hay datos de vehículo
-    # -----------------------------------------------------------------------
-    if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
-        st.subheader("🧮 Plan de Repostaje Óptimo (Dijkstra)")
-        st.caption(
-            "Secuencia de paradas de **coste mínimo global** calculada con el algoritmo de Dijkstra "
-            "sobre un grafo dirigido acíclico. Garantiza el óptimo global frente a la heurística greedy."
-        )
-
-        if dijkstra_error:
-            st.warning(
-                f"⚠️ El optimizador no pudo calcular un plan de paradas:\n\n*{dijkstra_error}*\n\n"
-                "Prueba a aumentar el radio de búsqueda de gasolineras o a salir con más combustible."
-            )
-        elif gdf_dijkstra is not None:
-            ruta_km = track_utm.length / 1000.0
-            litros_ruta = ruta_km * consumo_l100km / 100.0
-            litros_a_repostar_total = max(0.0, litros_ruta - combustible_actual_l)
-
-            if gdf_dijkstra.empty:
-                # No hace falta repostar
-                st.success(
-                    f"✅ **No necesitas parar a repostar.** "
-                    f"Con los **{combustible_actual_l:.1f} L** que llevas llegas al destino. "
-                    f"Coste adicional de combustible: **0,00 €**"
-                )
-            else:
-                n_paradas = len(gdf_dijkstra)
-                # Precio medio de la zona para comparar
-                precio_medio_zona = float(gdf_within[fuel_column].dropna().mean()) if not gdf_within.empty else 0.0
-                coste_medio_zona = litros_a_repostar_total * precio_medio_zona if litros_a_repostar_total > 0 else 0.0
-                ahorro_dijkstra = coste_medio_zona - coste_dijkstra if coste_dijkstra is not None else 0.0
-
-                # --- Métricas resumen del plan ---
-                dk_col1, dk_col2, dk_col3 = st.columns(3)
-                with dk_col1:
-                    st.metric("Paradas Óptimas", f"{n_paradas}")
-                with dk_col2:
-                    st.metric("Coste Total Estimado", f"{coste_dijkstra:.2f} €")
-                with dk_col3:
-                    if ahorro_dijkstra > 0:
-                        st.metric("Ahorro vs. Precio Medio Zona", f"{ahorro_dijkstra:.2f} €", delta=f"-{ahorro_dijkstra:.2f} €")
-                    else:
-                        st.metric("Ahorro vs. Precio Medio Zona", "—")
-
-                st.markdown("**Secuencia de paradas:**")
-
-                # --- Tabla de paradas óptimas ---
-                _dk_cols = {
-                    "km_ruta":            "Km en Ruta",
-                    "Rótulo":             "Gasolinera",
-                    "Municipio":          "Municipio",
-                    fuel_column:          "€/L",
-                    "litros_a_repostar":  "Litros a Repostar",
-                    "coste_parada_eur":   "Coste Parada (€)",
-                }
-                _dk_col_map = {k: v for k, v in _dk_cols.items() if k in gdf_dijkstra.columns}
-                df_dk = gdf_dijkstra[list(_dk_col_map.keys())].copy()
-                df_dk = df_dk.rename(columns=_dk_col_map)
-
-                _dk_precio_min = float(df_dk["€/L"].min()) if "€/L" in df_dk.columns else 0.0
-                _dk_precio_max = float(df_dk["€/L"].max()) if "€/L" in df_dk.columns else 2.0
-
-                dk_table_event = st.dataframe(
-                    df_dk,
-                    use_container_width=True,
-                    hide_index=True,
-                    on_select="rerun",
-                    selection_mode="single-row",
-                    column_config={
-                        "Km en Ruta": st.column_config.NumberColumn(format="%.1f km"),
-                        "€/L": st.column_config.ProgressColumn(
-                            "€/L",
-                            help="Precio en €/L",
-                            format="%.3f €",
-                            min_value=_dk_precio_min * 0.98,
-                            max_value=_dk_precio_max * 1.02,
-                        ),
-                        "Litros a Repostar": st.column_config.NumberColumn(format="%.1f L"),
-                        "Coste Parada (€)": st.column_config.NumberColumn(format="%.2f €"),
-                    },
-                )
-
-                # Centrar el mapa si el usuario selecciona una parada del plan óptimo
-                dk_selected_rows = dk_table_event.selection.get("rows", [])
-                if dk_selected_rows:
-                    sel_idx = dk_selected_rows[0]
-                    # Generar una firma única para la selección de esta tabla
-                    dk_sel_id = f"dk_{sel_idx}"
-                    if st.session_state.get("last_selected_idx") != dk_sel_id:
-                        sel_nombre = df_dk.iloc[sel_idx].get("Gasolinera", "la gasolinera")
-                        
-                        # Obtener las coordenadas originales desde gdf_dijkstra
-                        # (df_dk no tiene geometría, necesitamos gdf_dijkstra en EPSG:4326)
-                        geom = gdf_dijkstra.to_crs("EPSG:4326").iloc[sel_idx].geometry
-                        
-                        st.session_state["map_selected_station"] = {
-                            "center": [geom.y, geom.x],
-                            "zoom":   15,
-                            "nombre": sel_nombre,
-                        }
-                        st.session_state["last_selected_idx"] = dk_sel_id
-                        st.toast(f"📍 Recentrando mapa en **{sel_nombre}** (Parada Óptima)…")
-                        st.rerun()
-
-                # Nota metodológica
-                st.caption(
-                    "ℹ️ Los litros indicados cubren el tramo hasta la siguiente parada (con 10% de reserva de seguridad). "
-                    "El coste total es la suma del combustible comprado en ruta, sin incluir el que ya llevas al salir."
-                )
-
-                # --- 📱 EXPORTACIÓN DE LA RUTA ---
-                st.write("")  # Espaciador
-                if not _using_gpx:
-                    # MODO TEXTO -> Google Maps URL
-                    gmaps_url, omitidas = generate_google_maps_url(track_utm, gdf_dijkstra)
-                    st.link_button(
-                        "📱 Llevarme allí (Abrir en Google Maps)",
-                        url=gmaps_url,
-                        type="primary",
-                        help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
-                    )
-                    if omitidas > 0:
-                        st.warning(
-                            f"⚠️ **Atención:** Tu ruta tiene demasiadas paradas. Google Maps solo admite un máximo "
-                            f"de {_GMAPS_MAX_WAYPOINTS} repostajes por enlace. Se han omitido los {omitidas} últimos."
-                        )
-                else:
-                    # MODO GPX -> Mismo archivo con Waypoints inyectados
-                    if _gpx_bytes:
-                        gpx_xml_con_paradas = enrich_gpx_with_stops(
-                            _gpx_bytes,
-                            gdf_dijkstra,
-                            fuel_column=fuel_column
-                        )
-                        st.download_button(
-                            label="💾 Descargar GPX Original + Paradas",
-                            data=gpx_xml_con_paradas,
-                            file_name="Ruta_Optimizada_Gasolineras.gpx",
-                            mime="application/gpx+xml",
-                            type="primary",
-                            help="Descarga tu mismo track inalterado, inyectando las gasolineras seleccionadas como Waypoints."
-                        )
-
-        st.divider()
 
     # -----------------------------------------------------------------------
     # 3. Mapa — aparece primero para impacto visual inmediato
@@ -1038,6 +870,27 @@ if "pipeline_results" in st.session_state:
             st.session_state["last_selected_idx"] = sel_idx
             st.toast(f"📍 Recentrando mapa en **{sel_nombre}**…")
             st.rerun()
+
+        st.write("")
+        sel_row = df_show.iloc[sel_idx]
+        sel_nombre_cart = sel_row.get("Rótulo / Marca", "Estación de servicio")
+        
+        ya_en_plan = any(p["Rótulo / Marca"] == sel_nombre_cart for p in st.session_state["mis_paradas"])
+        
+        if ya_en_plan:
+            st.info(f"✅ **{sel_nombre_cart}** ya está en tu Plan de Viaje.")
+        else:
+            if st.button(f"➕ Añadir **{sel_nombre_cart}** a Mi Plan de Viaje", type="primary"):
+                coords_y, coords_x = station_coords[sel_idx]
+                parada_dict = sel_row.to_dict()
+                parada_dict["_geom_y"] = coords_y
+                parada_dict["_geom_x"] = coords_x
+                # Se pueden haber modificado estas al iterar el dataframe (por ej el enlace HTMl)
+                # Omitimos la url HTML o lo limpiamos si es necesario, 
+                # en este caso guardamos to_dict tal cual más las coordenadas wgs84.
+                st.session_state["mis_paradas"].append(parada_dict)
+                st.toast(f"✅ Parada añadida: {sel_nombre_cart}")
+                st.rerun()
     else:
         # Cuando el usuario deselecciona (haciendo click fuera)
         if "last_selected_idx" in st.session_state:
@@ -1049,8 +902,90 @@ if "pipeline_results" in st.session_state:
     st.divider()
 
     # -----------------------------------------------------------------------
-    # 5. 🏍️ Radar de Autonomía Crítica
+    # 5. Mi Plan de Viaje (Carrito)
     # -----------------------------------------------------------------------
+    st.subheader("🛒 Mi Plan de Viaje")
+    st.caption("Añade gasolineras de la tabla superior para diseñar tu propia estrategia de repostaje.")
+    
+    if not st.session_state["mis_paradas"]:
+        st.info("Aún no has añadido ninguna parada. Selecciona una fila en la tabla superior y haz clic en 'Añadir a Mi Plan de Viaje'.")
+    else:
+        df_plan = pd.DataFrame(st.session_state["mis_paradas"])
+        df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
+        
+        # Calcular km desde la parada anterior
+        km_prev = 0.0
+        tramos = []
+        for km in df_plan["Km en Ruta"]:
+            tramos.append(km - km_prev)
+            km_prev = km
+        df_plan["Tramo (km)"] = tramos
+
+        col_config_plan = {
+            "Tramo (km)": st.column_config.NumberColumn(format="%.1f km"),
+            "Km en Ruta": st.column_config.NumberColumn(format="%.1f km"),
+            precio_col_label: st.column_config.NumberColumn(format="%.3f €/L"),
+        }
+        
+        st.dataframe(
+            df_plan[["Tramo (km)", "Km en Ruta", "Rótulo / Marca", "Municipio", precio_col_label]],
+            use_container_width=True,
+            hide_index=True,
+            column_config=col_config_plan
+        )
+        
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("🗑️ Vaciar Mi Plan"):
+                st.session_state["mis_paradas"] = []
+                st.rerun()
+                
+        st.write("")
+        st.markdown("**📤 Exportar Ruta**")
+        
+        # Reconstruir un GDF temporal para la exportación usando EPSG:4326
+        geometrias = [Point(row["_geom_x"], row["_geom_y"]) for row in st.session_state["mis_paradas"]]
+        # Ordenamos las coordenadas según df_plan para exportarlas en orden
+        gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
+        
+        # Aseguramos de que el GDF tenga las columnas "Rótulo" y "fuel_column" que esperan las herramientas
+        gdf_export["Rótulo"] = gdf_export["Rótulo / Marca"]
+        if precio_col_label in gdf_export.columns:
+            gdf_export[fuel_column] = gdf_export[precio_col_label]
+            
+        if not _using_gpx:
+            gmaps_url, omitidas = generate_google_maps_url(track_utm, gdf_export)
+            st.link_button(
+                "📱 Abrir Ruta en Google Maps con mis paradas",
+                url=gmaps_url,
+                type="primary",
+                help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
+            )
+            if omitidas > 0:
+                st.warning(
+                    f"⚠️ **Atención:** Tu ruta tiene demasiadas paradas. Google Maps solo admite un máximo "
+                    f"de {_GMAPS_MAX_WAYPOINTS} repostajes por enlace. Se han omitido los {omitidas} últimos."
+                )
+        else:
+            if _gpx_bytes:
+                gpx_xml_con_paradas = enrich_gpx_with_stops(
+                    _gpx_bytes,
+                    gdf_export,
+                    fuel_column=fuel_column
+                )
+                st.download_button(
+                    label="💾 Descargar GPX Original + Mis Paradas",
+                    data=gpx_xml_con_paradas,
+                    file_name="Mi_Ruta_Gasolineras.gpx",
+                    mime="application/gpx+xml",
+                    type="primary",
+                    help="Descarga tu mismo track inalterado, inyectando las gasolineras seleccionadas como Waypoints."
+                )
+
+    st.divider()
+
+    # -----------------------------------------------------------------------
+    # 6. 🏍️ Radar de Autonomía Crítica
     st.subheader("🏍️ Radar de Autonomía Crítica")
     st.caption(
         "Análisis de los tramos entre gasolineras comparado con tu autonomía. "
