@@ -703,9 +703,9 @@ def filter_cheapest_stations(
     gdf_valid["combustible"] = fuel_column
 
     if track_utm is not None:
-        _track = track_utm
-        # Calcular el punto de la ruta (en metros) al que se proyecta la gasolinera
-        gdf_valid["km_ruta"] = gdf_valid.geometry.apply(lambda geom: _track.project(geom) / 1000.0)
+        import shapely
+        # Calcular el punto de la ruta (en metros) al que se proyecta la gasolinera vectorizadamente
+        gdf_valid["km_ruta"] = shapely.line_locate_point(track_utm, gdf_valid.geometry) / 1000.0
 
     # 1. Búsqueda global estándar (Top N global)
     gdf_top_global = gdf_valid.nsmallest(top_n, fuel_column).copy()
@@ -894,24 +894,31 @@ def enrich_gpx_with_stops(
         paradas.append({"lon": lon, "lat": lat})
 
     # 2. Identificar el Punto de Fuga (Split Point) para cada parada
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    puntos_ref = []
+    indices = []
+    for t_idx, track in enumerate(gpx_obj.tracks):
+        for s_idx, segment in enumerate(track.segments):
+            for p_idx, point in enumerate(segment.points):
+                puntos_ref.append((point.longitude, point.latitude))
+                indices.append((t_idx, s_idx, p_idx, point.longitude, point.latitude))
+
+    if puntos_ref:
+        tree = cKDTree(np.array(puntos_ref))
+    else:
+        tree = None
+
     split_points = []
     for parada in paradas:
         station_lon = parada["lon"]
         station_lat = parada["lat"]
         
-        min_dist = float('inf')
-        closest_idx = None
-        
-        # O(N) naive search for the closest track point
-        for t_idx, track in enumerate(gpx_obj.tracks):
-            for s_idx, segment in enumerate(track.segments):
-                for p_idx, point in enumerate(segment.points):
-                    dist_sq = (point.longitude - station_lon)**2 + (point.latitude - station_lat)**2
-                    if dist_sq < min_dist:
-                        min_dist = dist_sq
-                        closest_idx = (t_idx, s_idx, p_idx, point.longitude, point.latitude)
-        
-        if closest_idx:
+        if tree is not None:
+            dist, idx_kdtree = tree.query([station_lon, station_lat])
+            closest_idx = indices[idx_kdtree]
+            
             split_points.append({
                 "idx": closest_idx,
                 "station_lon": station_lon,
@@ -1122,6 +1129,8 @@ def enrich_stations_with_osrm(
         El mismo GeoDataFrame con dos columnas nuevas:
         ``osrm_distance_km`` y ``osrm_duration_min`` (float, NaN si falló).
     """
+    import concurrent.futures
+
     gdf = gdf_top.copy()
     gdf["osrm_distance_km"] = float("nan")
     gdf["osrm_duration_min"] = float("nan")
@@ -1129,20 +1138,20 @@ def enrich_stations_with_osrm(
     # Reproyectar gasolineras a WGS84 para obtener lon/lat de la gasolinera
     gdf_wgs84 = gdf.to_crs("EPSG:4326")
 
-    for idx in gdf.index:
-        row_wgs84 = gdf_wgs84.loc[idx]
+    def process_station(idx, row_wgs84):
         gas_lon = row_wgs84.geometry.x
         gas_lat = row_wgs84.geometry.y
 
         # 1. Punto más cercano de la ruta GPX a esta gasolinera
-        #    ``project`` devuelve la distancia curvilínea (en grados, pero
-        #    suficiente para encontrar el índice relativo del waypoint exacto).
         dist_along = track_original.project(
             Point(gas_lon, gas_lat), normalized=False
         )
         nearest_on_route = track_original.interpolate(dist_along)
         origin_lon = nearest_on_route.x
         origin_lat = nearest_on_route.y
+
+        if delay_s > 0:
+            time.sleep(delay_s)
 
         # 2. Llamada defensiva a OSRM
         result = get_real_distance_osrm(
@@ -1151,17 +1160,20 @@ def enrich_stations_with_osrm(
             lon_destino=gas_lon,
             lat_destino=gas_lat,
         )
+        return idx, result, row_wgs84
 
-        if result is not None:
-            gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
-            gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
-            print(
-                f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
-                f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
-            )
-
-        if delay_s > 0:
-            time.sleep(delay_s)
+    # max_workers limitado para no exceder rate-limits estáticos de OSRM (1-3 rq/s libres)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf.index}
+        for future in concurrent.futures.as_completed(futures):
+            idx, result, row_wgs84 = future.result()
+            if result is not None:
+                gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
+                gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+                print(
+                    f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
+                    f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
+                )
 
     return gdf
 
@@ -1697,3 +1709,96 @@ if __name__ == "__main__":
         print(f"  - Top {TOP_N} mas baratas mostradas en el mapa.")
         if resultados["output_html"]:
             print(f"  - Mapa guardado en: {resultados['output_html']}")
+
+
+# ===========================================================================
+# FUNCIONES AUXILIARES: RADAR DE AUTONOMÍA
+# ===========================================================================
+
+def calculate_autonomy_radar(track: LineString, gdf_top: gpd.GeoDataFrame, autonomia_km: float) -> tuple[list[dict], float]:
+    """
+    Calcula los intervalos y segmentos geográficos en función de la autonomía de un vehículo,
+    desacoplando esta lógica analítica espacial (GIS) del script app.py de Streamlit.
+
+    Parameters
+    ----------
+    track : LineString
+        Ruta original completa.
+    gdf_top : gpd.GeoDataFrame
+        Gasolineras identificadas.
+    autonomia_km : float
+        Límite del depósito del usuario en km.
+
+    Returns
+    -------
+    tuple[list[dict], float]
+        Una lista de diccionarios representando los tramos del viaje, y la longitud total del track.
+    """
+    import pyproj as _pyproj
+
+    _geod_radar = _pyproj.Geod(ellps="WGS84")
+    _track_coords = list(track.coords)
+    _lons = [c[0] for c in _track_coords]
+    _lats = [c[1] for c in _track_coords]
+    _, _, _dists_m = _geod_radar.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
+    route_total_km = sum(_dists_m) / 1000.0
+
+    station_km_list: list[float] = []
+    if not gdf_top.empty and "km_ruta" in gdf_top.columns:
+        station_km_list = sorted(gdf_top["km_ruta"].dropna().tolist())
+
+    checkpoints = [0.0] + station_km_list + [route_total_km]
+    tramos: list[dict] = []
+
+    for j in range(len(checkpoints) - 1):
+        km_inicio = checkpoints[j]
+        km_fin    = checkpoints[j + 1]
+        gap_km    = km_fin - km_inicio
+
+        if autonomia_km > 0:
+            pct = gap_km / autonomia_km
+            if pct >= 1.0:
+                nivel = "critico"
+                emoji = "🔴"
+                label = "CRÍTICO"
+            elif pct >= 0.80:
+                nivel = "atencion"
+                emoji = "🟡"
+                label = "ATENCIÓN"
+            else:
+                nivel = "seguro"
+                emoji = "🟢"
+                label = "SEGURO"
+        else:
+            pct = 0.0
+            nivel = "seguro"
+            emoji = "🟢"
+            label = "—"
+
+        if j == 0 and station_km_list:
+            nombre_origen = "Inicio de ruta"
+            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j+1}")
+        elif j == len(checkpoints) - 2 and station_km_list:
+            nombre_origen = gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
+            nombre_destino = "Fin de ruta"
+        elif station_km_list and 0 < j < len(station_km_list):
+            sorted_gdf = gdf_top.sort_values("km_ruta")
+            nombre_origen  = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
+            nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j+1}")
+        else:
+            nombre_origen  = f"Km {km_inicio:.0f}"
+            nombre_destino = f"Km {km_fin:.0f}"
+
+        tramos.append({
+            "km_inicio":    km_inicio,
+            "km_fin":       km_fin,
+            "gap_km":       gap_km,
+            "nivel":        nivel,
+            "pct":          pct,
+            "emoji":        emoji,
+            "label":        label,
+            "origen":       nombre_origen,
+            "destino":      nombre_destino,
+        })
+
+    return tramos, route_total_km

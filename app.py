@@ -34,6 +34,7 @@ from gasolineras_ruta import (
     simplify_track,
     spatial_join_within_buffer,
     validate_gpx_track,
+    calculate_autonomy_radar,
     _GMAPS_MAX_WAYPOINTS,
 )
 
@@ -565,10 +566,11 @@ if _pipeline_active:
             status.update(label="✅ ¡Ruta analizada y optimizada!", state="complete", expanded=False)
 
             # --- Guardar resultados en session_state para sobrevivir reruns ---
+            # OMITIMOS guardar el mapa completo (Leaflet) para evitar Memory Leaks en Streamlit
             st.session_state["pipeline_results"] = {
                 "gdf_top":        gdf_top,
-                "gdf_within":     gdf_within,
-                "mapa_obj":       mapa_obj,
+                "gdf_within_count": len(gdf_within),
+                "precio_zona_max": float(gdf_within[fuel_column].max()) if not gdf_within.empty else 0.0,
                 "track":          track,
                 "track_utm":      track_utm,
                 "using_demo":     _using_demo,
@@ -607,8 +609,11 @@ if _pipeline_active:
 if "pipeline_results" in st.session_state:
     _r              = st.session_state["pipeline_results"]
     gdf_top         = _r["gdf_top"]
-    gdf_within      = _r["gdf_within"]
-    mapa_obj        = _r["mapa_obj"]
+    
+    # Restituimos variables derivadas ligeras en lugar del gdf_within completo
+    total_zona      = _r.get("gdf_within_count", 0)
+    precio_zona_max = _r.get("precio_zona_max", 0.0)
+    
     track           = _r["track"]
     track_utm       = _r["track_utm"]
     _using_demo     = _r["using_demo"]
@@ -630,10 +635,7 @@ if "pipeline_results" in st.session_state:
     map_zoom   = _sel.get("zoom", 8)
 
     # 1. KPIs principales
-    precio_top_min = gdf_top[fuel_column].min()
-    precio_top_max = gdf_top[fuel_column].max()
-    precio_zona_max = gdf_within[fuel_column].max()
-    total_zona = len(gdf_within)
+    precio_top_min = gdf_top[fuel_column].min() if not gdf_top.empty else 0.0
     total_mostradas = len(gdf_top)
 
     col1, col2, col3, col4 = st.columns(4)
@@ -742,8 +744,16 @@ if "pipeline_results" in st.session_state:
     )
     map_height = 580 if map_active else 340
 
+    # Regenerar mapa de forma determinista para la vista
+    _, mapa_view = generate_map(
+        track_original=track,
+        gdf_top_stations=gdf_top,
+        fuel_column=fuel_column,
+        autonomy_km=float(autonomia_km)
+    )
+
     st_folium(
-        mapa_obj,
+        mapa_view,
         width="100%",
         height=map_height,
         center=map_center,
@@ -992,77 +1002,7 @@ if "pipeline_results" in st.session_state:
         "Los tramos **rojos** en el mapa marcan zonas donde podrías quedarte sin combustible."
     )
 
-    # --- Cálculo de gaps entre gasolineras ---
-    import pyproj as _pyproj
-    _geod_radar = _pyproj.Geod(ellps="WGS84")
-    _track_coords = list(track.coords)  # (lon, lat)
-    _lons = [c[0] for c in _track_coords]
-    _lats = [c[1] for c in _track_coords]
-    _, _, _dists_m = _geod_radar.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
-    route_total_km = sum(_dists_m) / 1000.0
-
-    # Km de las gasolineras sugeridas en la ruta (ya calculados por el pipeline)
-    station_km_list: list[float] = []
-    if "km_ruta" in gdf_top.columns:
-        station_km_list = sorted(gdf_top["km_ruta"].dropna().tolist())
-
-    # Checkpoints: km 0, cada gasolinera, km final
-    checkpoints = [0.0] + station_km_list + [route_total_km]
-
-    # Calcular gap entre cada par de checkpoints
-    tramos: list[dict] = []
-    for j in range(len(checkpoints) - 1):
-        km_inicio = checkpoints[j]
-        km_fin    = checkpoints[j + 1]
-        gap_km    = km_fin - km_inicio
-
-        if autonomia_km > 0:
-            pct = gap_km / autonomia_km
-            if pct >= 1.0:
-                nivel = "critico"
-                emoji = "🔴"
-                label = "CRÍTICO"
-            elif pct >= 0.80:
-                nivel = "atencion"
-                emoji = "🟡"
-                label = "ATENCIÓN"
-            else:
-                nivel = "seguro"
-                emoji = "🟢"
-                label = "SEGURO"
-        else:
-            # Sin autonomía configurada, solo mostramos los gaps
-            pct = 0.0
-            nivel = "seguro"
-            emoji = "🟢"
-            label = "—"
-
-        # Nombre del tramo
-        if j == 0 and station_km_list:
-            nombre_origen = "Inicio de ruta"
-            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j+1}")
-        elif j == len(checkpoints) - 2 and station_km_list:
-            nombre_origen = gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
-            nombre_destino = "Fin de ruta"
-        elif station_km_list and 0 < j < len(station_km_list):
-            sorted_gdf = gdf_top.sort_values("km_ruta")
-            nombre_origen  = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
-            nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j+1}")
-        else:
-            nombre_origen  = f"Km {km_inicio:.0f}"
-            nombre_destino = f"Km {km_fin:.0f}"
-
-        tramos.append({
-            "km_inicio":    km_inicio,
-            "km_fin":       km_fin,
-            "gap_km":       gap_km,
-            "nivel":        nivel,
-            "pct":          pct,
-            "emoji":        emoji,
-            "label":        label,
-            "origen":       nombre_origen,
-            "destino":      nombre_destino,
-        })
+    tramos, route_total_km = calculate_autonomy_radar(track, gdf_top, autonomia_km)
 
     # --- Resumen general del radar ---
     n_crit = sum(1 for t in tramos if t["nivel"] == "critico")
