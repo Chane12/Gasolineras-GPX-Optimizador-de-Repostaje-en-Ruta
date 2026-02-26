@@ -226,7 +226,7 @@ _NOMINATIM_HEADERS = {
     "Accept": "application/json",
 }
 
-_OSRM_ROUTE_URL = "http://router.project-osrm.org/route/v1/driving"
+_OSRM_ROUTE_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
 
 
 class RouteTextError(ValueError):
@@ -329,13 +329,13 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
     headers = {"User-Agent": random.choice(user_agents)}
 
     # Plan de contingencia OSRM: 
-    # 1. Intentar full geometry en router principal.
-    # 2. Intentar full geometry en OSRM alemán.
-    # 3. Intentar simplified geometry (mucho más rápido para tracks inmensos > 500km).
+    # 1. Intentar full geometry en router principal (FOSSGIS).
+    # 2. Intentar simplified geometry en router principal (FOSSGIS) para evitar timeouts en >500km.
+    # 3. Fallback final simplificado al router oficial de OSRM demo.
     endpoints = [
         f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
-        f"https://routing.openstreetmap.de/routed-car/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
-        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false"
+        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false",
+        f"http://router.project-osrm.org/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false"
     ]
 
     data = None
@@ -1048,7 +1048,7 @@ def enrich_gpx_with_stops(
 # ===========================================================================
 
 # URL pública gratuita de OSRM. Se puede sustituir por una instancia propia.
-_OSRM_BASE_URL = "http://router.project-osrm.org/route/v1/driving"
+_OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
 
 
 def get_real_distance_osrm(
