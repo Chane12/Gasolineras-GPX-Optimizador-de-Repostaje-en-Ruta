@@ -283,10 +283,8 @@ _buffer_default = int(qp.get("buffer", 5))
 _buffer_default = max(1, min(15, _buffer_default))
 _top_default = int(qp.get("top", 10))
 _top_default = max(1, min(20, _top_default))
-_litros_default = float(qp.get("litros", 20.0))
-_consumo_default = float(qp.get("consumo", 4.5))
-_inicio_pct_default = int(qp.get("inicio_pct", 100))
 _autonomia_default = int(qp.get("autonomia", 0))
+_solo24h_default = qp.get("solo24h", "False").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # BARRA LATERAL — Controles de Configuración
@@ -353,45 +351,22 @@ with st.sidebar:
     )
     fuel_column = COMBUSTIBLES[combustible_elegido]
 
-    # 3. Datos del vehículo (para estimador de coste y autonomía)
+    # 3. Autonomía del vehículo
     st.markdown('<p class="sidebar-title">3. Tu Vehículo</p>', unsafe_allow_html=True)
     usar_vehiculo = st.checkbox(
-        "Introducir datos de mi vehículo",
+        "Limitar por autonomía",
         value=False,
+        help="Mostrar zonas de peligro en el mapa donde corres el riesgo de quedarte sin combustible."
     )
     if usar_vehiculo:
-        with st.expander("Parámetros del vehículo", expanded=True):
-            deposito_total_l = st.number_input(
-                "Capacidad Depósito (L)",
-                min_value=5.0, max_value=300.0,
-                value=max(5.0, _litros_default) if _litros_default > 0 else 20.0,
-                step=1.0,
-            )
-            consumo_l100km = st.number_input(
-                "Consumo (L/100 km)",
-                min_value=1.0, max_value=40.0,
-                value=_consumo_default,
-                step=0.5,
-            )
-            fuel_inicio_pct = st.slider(
-                "Depósito actual (%)",
-                min_value=0, max_value=100,
-                value=_inicio_pct_default,
-                step=5,
-            )
-            combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
-            st.caption(
-                f"▸ Tienes **{combustible_actual_l:.1f} L** disponibles "
-                f"→ autonomía estimada de **{(combustible_actual_l / consumo_l100km * 100):.0f} km**"
-                if consumo_l100km > 0 else ""
-            )
-        autonomia_km = int(combustible_actual_l / consumo_l100km * 100) if consumo_l100km > 0 else 0
+        autonomia_km = st.number_input(
+            "Tu Autonomía Restante (km)",
+            min_value=10, max_value=2000,
+            value=_autonomia_default if _autonomia_default > 0 else 250,
+            step=10,
+            help="¿Cuántos kilómetros puedes hacer con el depósito actual antes de quedarte tirado?"
+        )
     else:
-        # Valores neutros cuando el vehículo no está configurado
-        deposito_total_l = 0.0
-        consumo_l100km = 0.0
-        fuel_inicio_pct = 100
-        combustible_actual_l = 0.0
         autonomia_km = 0
     st.markdown('<p class="sidebar-title">4. Filtros Avanzados</p>', unsafe_allow_html=True)
     with st.expander("Ajustar parámetros de búsqueda", expanded=False):
@@ -402,6 +377,11 @@ with st.sidebar:
         )
         top_n = st.slider("Gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1)
         st.markdown("---")
+        solo_24h = st.checkbox(
+            "Solo estaciones abiertas 24H", 
+            value=_solo24h_default, 
+            help="Filtra estaciones para mostrar solo aquellas operativas de madrugada y fines de semana sin excepciones."
+        )
         buscar_tramos = st.checkbox(
             "Buscar gasolinera obligatoriamente cada X km",
             value=True,
@@ -426,9 +406,7 @@ with st.sidebar:
             "fuel":       combustible_elegido,
             "buffer":     str(radio_km),
             "top":        str(top_n),
-            "litros":     str(int(deposito_total_l)),
-            "consumo":    str(consumo_l100km),
-            "inicio_pct": str(fuel_inicio_pct),
+            "solo24h":    str(solo_24h),
             "autonomia":  str(autonomia_km),
         })
         st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
@@ -513,12 +491,16 @@ if _pipeline_active:
             gdf_utm = cached_build_stations_gdf(df_gas)
             gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
 
-            if fuel_column not in gdf_within.columns or gdf_within[fuel_column].isna().all():
-                status.update(label="⚠️ Sin resultados para ese combustible", state="error", expanded=True)
+            if solo_24h:
+                # Filtrar asumiendo que el MITECO pone "24H" o "24 H" en el string horario
+                gdf_within = gdf_within[gdf_within["Horario"].str.contains("24H|24 H", case=False, na=False)]
+
+            if fuel_column not in gdf_within.columns or gdf_within.empty or gdf_within[fuel_column].isna().all():
+                status.update(label="⚠️ Sin resultados para ese filtro", state="error", expanded=True)
                 st.warning(
                     f"No encontramos gasolineras con precio de **{combustible_elegido}** "
-                    f"en un radio de {radio_km} km. "
-                    "Prueba a ampliar la distancia en las opciones avanzadas."
+                    f"en un radio de {radio_km} km (abiertas 24H: {solo_24h}). "
+                    "Prueba a ampliar la distancia o relajar los filtros avanzados."
                 )
                 st.stop()
 
@@ -649,44 +631,6 @@ if "pipeline_results" in st.session_state:
         st.metric("Estaciones Sugeridas", f"{total_mostradas}")
     with col4:
         st.metric(f"Total en ±{radio_km} km", f"{total_zona} Est.")
-
-    # 2. Estimador de coste inteligente basado en el vehículo
-    if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
-        # Longitud real de la ruta en km (usando el track UTM ya proyectado)
-        ruta_km = track_utm.length / 1000.0
-
-        litros_necesarios_ruta = ruta_km * consumo_l100km / 100.0
-        litros_a_repostar = max(0.0, litros_necesarios_ruta - combustible_actual_l)
-        necesita_reposte = litros_a_repostar > 0
-
-        coste_barata = litros_a_repostar * precio_top_min if necesita_reposte else 0.0
-        coste_libre   = litros_a_repostar * precio_zona_max if necesita_reposte else 0.0
-        ahorro_total  = coste_libre - coste_barata
-
-        # Estado de la barra de combustible
-        pct_actual = min(100, int(fuel_inicio_pct))
-        pct_necesario = min(100, int((litros_necesarios_ruta / deposito_total_l) * 100)) if deposito_total_l > 0 else 0
-
-        st.subheader(f"🚗 Análisis de Combustible ({ruta_km:.1f} km)")
-        c1, c2, c3 = st.columns(3)
-        c1.metric(
-            "Depósito al salir",
-            f"{combustible_actual_l:.1f} L",
-            f"{fuel_inicio_pct}% capacidad",
-            delta_color="off"
-        )
-        c2.metric(
-            "Consumo estimado",
-            f"{litros_necesarios_ruta:.1f} L",
-            f"{consumo_l100km} L/100km",
-            delta_color="off"
-        )
-        if not necesita_reposte:
-            c3.metric("Estado", "✅ OK, sin paradas")
-            st.success("Con el combustible con el que sales vas a poder llegar directamente a tu destino. ¡No es obligatorio parar!")
-        else:
-            c3.metric("Estado", f"⚠️ Faltan {litros_a_repostar:.1f} L", delta_color="inverse")
-            st.info(f"**Ahorro Potencial:** Llenar esos litros en la gasolinera recomendada te ahorra **{ahorro_total:.2f} €** frente a la más cara de la zona (Recomendada: *{coste_barata:.2f} €* vs Cara: *{coste_libre:.2f} €*)")
 
     st.divider()
 
@@ -908,7 +852,7 @@ if "pipeline_results" in st.session_state:
         }
         
         st.dataframe(
-            df_plan[["Tramo (km)", "Km en Ruta", "Rótulo / Marca", "Municipio", precio_col_label]],
+            df_plan[["Tramo (km)", "Km en Ruta", "Marca", precio_col_label]],
             use_container_width=True,
             hide_index=True,
             column_config=col_config_plan
@@ -929,7 +873,10 @@ if "pipeline_results" in st.session_state:
         gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
         
         # Aseguramos de que el GDF tenga las columnas "Rótulo" y "fuel_column" que esperan las herramientas
-        gdf_export["Rótulo"] = gdf_export["Rótulo / Marca"]
+        if "Marca" in gdf_export.columns:
+            gdf_export["Rótulo"] = gdf_export["Marca"]
+        else:
+            gdf_export["Rótulo"] = "Gasolinera Seleccionada"
         if precio_col_label in gdf_export.columns:
             gdf_export[fuel_column] = gdf_export[precio_col_label]
             
