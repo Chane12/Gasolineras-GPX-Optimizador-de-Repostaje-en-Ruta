@@ -984,61 +984,66 @@ if "pipeline_results" in st.session_state:
     st.markdown(_chip_html, unsafe_allow_html=True)
 
     # --- Detalle de cada tramo ---
-    with st.expander("Ver detalle de todos los tramos", expanded=(n_crit > 0 or n_warn > 0)):
-        for t in tramos:
-            css_cls  = "radar-box-crit" if t["nivel"] == "critico" else (
-                       "radar-box-warn" if t["nivel"] == "atencion" else "radar-box-safe")
-            chip_cls = "radar-crit" if t["nivel"] == "critico" else (
-                       "radar-warn" if t["nivel"] == "atencion" else "radar-safe")
+    tramos_peligro = [t for t in tramos if t["nivel"] in ["critico", "atencion"] or t["gap_km"] >= 60]
+    
+    if tramos_peligro:
+        with st.expander(f"⚠️ Atención: Tienes {len(tramos_peligro)} tramos que requieren revisión", expanded=True):
+            for t in tramos_peligro:
+                css_cls  = "radar-box-crit" if t["nivel"] == "critico" else (
+                           "radar-box-warn" if t["nivel"] == "atencion" else "radar-box-safe")
+                chip_cls = "radar-crit" if t["nivel"] == "critico" else (
+                           "radar-warn" if t["nivel"] == "atencion" else "radar-safe")
 
-            pct_bar  = min(100, int(t["pct"] * 100)) if autonomia_km > 0 else 0
-            bar_color = "#ef4444" if t["nivel"] == "critico" else (
-                        "#eab308" if t["nivel"] == "atencion" else "#22c55e")
+                pct_bar  = min(100, int(t["pct"] * 100)) if autonomia_km > 0 else 0
+                bar_color = "#ef4444" if t["nivel"] == "critico" else (
+                            "#eab308" if t["nivel"] == "atencion" else "#22c55e")
 
-            aviso = ""
-            # 1. Avisos por AUTONOMÍA configurada (si el usuario la ha indicado)
-            if autonomia_km > 0 and t["nivel"] == "critico":
-                aviso += (f'<div style="margin-top:6px; font-size:0.8rem; color:#991b1b; font-weight:600;">'
-                          f'⚠️ Supera tu autonomía en {t["gap_km"] - autonomia_km:.1f} km — '
-                          'Repostar OBLIGATORIAMENTE antes de este tramo.</div>')
-            elif autonomia_km > 0 and t["nivel"] == "atencion":
-                aviso += (f'<div style="margin-top:6px; font-size:0.8rem; color:#854d0e; font-weight:600;">'
-                          '⚡ Entra en este tramo con el depósito con buena autonomía restante.</div>')
+                aviso = ""
+                # 1. Avisos por AUTONOMÍA configurada (si el usuario la ha indicado)
+                if autonomia_km > 0 and t["nivel"] == "critico":
+                    aviso += (f'<div style="margin-top:6px; font-size:0.8rem; color:#991b1b; font-weight:600;">'
+                              f'⚠️ Supera tu autonomía en {t["gap_km"] - autonomia_km:.1f} km — '
+                              'Repostar OBLIGATORIAMENTE antes de este tramo.</div>')
+                elif autonomia_km > 0 and t["nivel"] == "atencion":
+                    aviso += (f'<div style="margin-top:6px; font-size:0.8rem; color:#854d0e; font-weight:600;">'
+                              '⚡ Entra en este tramo con el depósito con buena autonomía restante.</div>')
 
-            # 2. Avisos por DISTANCIA ABSOLUTA (independientes de la autonomía)
-            if t["gap_km"] >= 100:
-                aviso += (
-                    '<div style="margin-top:6px; padding:7px 10px; background:#fef2f2; '
-                    'border-left:3px solid #dc2626; border-radius:4px; font-size:0.82rem; color:#7f1d1d;">'
-                    f'🚨 <b>Tramo muy largo ({t["gap_km"]:.0f} km sin gasolineras)</b> — '
-                    'Inicia este tramo con el depósito <b>completamente lleno</b>. '
-                    'En zonas de montaña o España vaciada can haber cortes de servicio.</div>'
-                )
-            elif t["gap_km"] >= 60:
-                aviso += (
-                    '<div style="margin-top:6px; padding:7px 10px; background:#fff7ed; '
-                    'border-left:3px solid #f97316; border-radius:4px; font-size:0.82rem; color:#7c2d12;">'
-                    f'⚠️ <b>Tramo largo ({t["gap_km"]:.0f} km sin gasolineras)</b> — '
-                    'Procura no entrar con menos de medio depósito. '
-                    'Comprueba que las gasolineras del tramo anterior estén abiertas.</div>'
-                )
+                # 2. Avisos por DISTANCIA ABSOLUTA (independientes de la autonomía)
+                if t["gap_km"] >= 100:
+                    aviso += (
+                        '<div style="margin-top:6px; padding:7px 10px; background:#fef2f2; '
+                        'border-left:3px solid #dc2626; border-radius:4px; font-size:0.82rem; color:#7f1d1d;">'
+                        f'🚨 <b>Tramo muy largo ({t["gap_km"]:.0f} km sin gasolineras)</b> — '
+                        'Inicia este tramo con el depósito <b>completamente lleno</b>. '
+                        'En zonas de montaña o España vaciada can haber cortes de servicio.</div>'
+                    )
+                elif t["gap_km"] >= 60:
+                    aviso += (
+                        '<div style="margin-top:6px; padding:7px 10px; background:#fff7ed; '
+                        'border-left:3px solid #f97316; border-radius:4px; font-size:0.82rem; color:#7c2d12;">'
+                        f'⚠️ <b>Tramo largo ({t["gap_km"]:.0f} km sin gasolineras)</b> — '
+                        'Procura no entrar con menos de medio depósito. '
+                        'Comprueba que las gasolineras del tramo anterior estén abiertas.</div>'
+                    )
 
-            st.markdown(f"""
-            <div class="radar-box {css_cls}">
-                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-                    <div>
-                        <div class="radar-km-badge">{t['gap_km']:.1f} km</div>
-                        <div class="radar-detail">Km {t['km_inicio']:.0f} → Km {t['km_fin']:.0f}</div>
-                        <div style="font-size:0.85rem; color:#334155; margin-top:4px;">
-                            <b>{t['origen']}</b> → <b>{t['destino']}</b>
+                st.markdown(f"""
+                <div class="radar-box {css_cls}">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <div class="radar-km-badge">{t['gap_km']:.1f} km</div>
+                            <div class="radar-detail">Km {t['km_inicio']:.0f} → Km {t['km_fin']:.0f}</div>
+                            <div style="font-size:0.85rem; color:#334155; margin-top:4px;">
+                                <b>{t['origen']}</b> → <b>{t['destino']}</b>
+                            </div>
                         </div>
+                        <span class="radar-chip {chip_cls}">{t['emoji']} {t['label']}</span>
                     </div>
-                    <span class="radar-chip {chip_cls}">{t['emoji']} {t['label']}</span>
+                    {f'<div style="margin-top:10px; background:#f1f5f9; border-radius:4px; height:6px; overflow:hidden;"><div style="height:6px; width:{pct_bar}%; background:{bar_color}; border-radius:4px;"></div></div>' if autonomia_km > 0 else ''}
+                    {aviso}
                 </div>
-                {f'<div style="margin-top:10px; background:#f1f5f9; border-radius:4px; height:6px; overflow:hidden;"><div style="height:6px; width:{pct_bar}%; background:{bar_color}; border-radius:4px;"></div></div>' if autonomia_km > 0 else ''}
-                {aviso}
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+    else:
+        st.info("Ningún tramo de tu ruta presenta riesgos largos ni exceden tu autonomía. 🟢")
 
     st.markdown("---")
 
