@@ -791,10 +791,12 @@ if "pipeline_results" in st.session_state:
                 _dk_precio_min = float(df_dk["€/L"].min()) if "€/L" in df_dk.columns else 0.0
                 _dk_precio_max = float(df_dk["€/L"].max()) if "€/L" in df_dk.columns else 2.0
 
-                st.dataframe(
+                dk_table_event = st.dataframe(
                     df_dk,
                     use_container_width=True,
                     hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
                     column_config={
                         "Km en Ruta": st.column_config.NumberColumn(format="%.1f km"),
                         "€/L": st.column_config.ProgressColumn(
@@ -808,6 +810,28 @@ if "pipeline_results" in st.session_state:
                         "Coste Parada (€)": st.column_config.NumberColumn(format="%.2f €"),
                     },
                 )
+
+                # Centrar el mapa si el usuario selecciona una parada del plan óptimo
+                dk_selected_rows = dk_table_event.selection.get("rows", [])
+                if dk_selected_rows:
+                    sel_idx = dk_selected_rows[0]
+                    # Generar una firma única para la selección de esta tabla
+                    dk_sel_id = f"dk_{sel_idx}"
+                    if st.session_state.get("last_selected_idx") != dk_sel_id:
+                        sel_nombre = df_dk.iloc[sel_idx].get("Gasolinera", "la gasolinera")
+                        
+                        # Obtener las coordenadas originales desde gdf_dijkstra
+                        # (df_dk no tiene geometría, necesitamos gdf_dijkstra en EPSG:4326)
+                        geom = gdf_dijkstra.to_crs("EPSG:4326").iloc[sel_idx].geometry
+                        
+                        st.session_state["map_selected_station"] = {
+                            "center": [geom.y, geom.x],
+                            "zoom":   15,
+                            "nombre": sel_nombre,
+                        }
+                        st.session_state["last_selected_idx"] = dk_sel_id
+                        st.toast(f"📍 Recentrando mapa en **{sel_nombre}** (Parada Óptima)…")
+                        st.rerun()
 
                 # Nota metodológica
                 st.caption(
@@ -959,14 +983,24 @@ if "pipeline_results" in st.session_state:
     selected_rows = table_event.selection.get("rows", [])
     if selected_rows:
         sel_idx = selected_rows[0]
-        sel_nombre = df_show.iloc[sel_idx].get("Rótulo / Marca", "la gasolinera")
-        st.session_state["map_selected_station"] = {
-            "center": list(station_coords[sel_idx]),
-            "zoom":   15,
-            "nombre": sel_nombre,
-        }
-        st.toast(f"📍 Recentrando mapa en **{sel_nombre}**…")
-        st.rerun()
+        # Evitar bucle infinito de reruns comprobando si ya lo hemos procesado
+        if st.session_state.get("last_selected_idx") != sel_idx:
+            sel_nombre = df_show.iloc[sel_idx].get("Rótulo / Marca", "la gasolinera")
+            st.session_state["map_selected_station"] = {
+                "center": list(station_coords[sel_idx]),
+                "zoom":   15,
+                "nombre": sel_nombre,
+            }
+            st.session_state["last_selected_idx"] = sel_idx
+            st.toast(f"📍 Recentrando mapa en **{sel_nombre}**…")
+            st.rerun()
+    else:
+        # Cuando el usuario deselecciona (haciendo click fuera)
+        if "last_selected_idx" in st.session_state:
+            del st.session_state["last_selected_idx"]
+            if "map_selected_station" in st.session_state:
+                del st.session_state["map_selected_station"]
+            st.rerun()
 
     st.divider()
 
