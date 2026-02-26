@@ -1,21 +1,24 @@
 ============================================================
-  OPTIMIZADOR DE GASOLINERAS EN RUTA - INSTRUCCIONES
+  GASOLINERAS EN RUTA — DASHBOARD DE REPOSTAJE
+  Guía de Uso Rápido
 ============================================================
-Versión: 2.0  |  Febrero 2026
+Versión: 3.0  |  Febrero 2026
 
 ------------------------------------------------------------
 ¿PARA QUÉ SIRVE?
 ------------------------------------------------------------
 Esta herramienta localiza las gasolineras MÁS BARATAS a lo
-largo de cualquier ruta GPX en España, con precios en tiempo
-real del Ministerio de Industria (MITECO).
+largo de cualquier viaje en España, con precios en tiempo
+real del Ministerio de Industria (MITECO). Tú eliges cuáles
+te interesan y la app genera el itinerario de repostaje listo
+para llevar a Google Maps o a tu GPS.
 
 ------------------------------------------------------------
 REQUISITOS PREVIOS
 ------------------------------------------------------------
-1. Python 3.10 o superior.
-2. Conexión a Internet.
-3. Un archivo .gpx con tu ruta de viaje.
+1. Python 3.11 o superior.
+2. Conexión a Internet (para la API de precios y el routing).
+3. (Opcional) Un archivo .gpx con tu ruta de viaje.
 
 ------------------------------------------------------------
 INSTALACIÓN
@@ -26,80 +29,118 @@ proyecto y ejecuta UNA SOLA VEZ:
   pip install -r requirements.txt
 
 Si pip falla con geopandas en Windows, usa conda:
-  conda install -c conda-forge geopandas
+  conda install -c conda-forge geopandas folium gpxpy pyproj
 
 ------------------------------------------------------------
-CÓMO USAR LA APLICACIÓN
+ARRANCAR LA APLICACIÓN
 ------------------------------------------------------------
-1. Abre una terminal en la carpeta del proyecto y escribe:
+  streamlit run app.py
 
-     python -m streamlit run app.py
+Se abrirá automáticamente el navegador en:
+  http://localhost:8501
 
-   Se abrirá automáticamente el navegador en:
-     http://localhost:8501
-
-2. Sigue los 3 PASOS de la pantalla:
-
-   PASO 1 – Sube el archivo GPX de tu ruta
-     Haz clic en "Browse files" y selecciona tu .gpx.
-     ¿No tienes uno? Despliega "¿Cómo obtengo mi GPX?"
-     dentro de la propia app para ver las instrucciones.
-
-   PASO 2 – Elige tu combustible
-     Selecciona el tipo de combustible de tu vehículo
-     en el desplegable (Gasolina 95, Diésel, GLP, etc.).
-
-   PASO 3 – Pulsa "🔍 Buscar gasolineras"
-     El cálculo tarda entre 10 y 30 segundos
-     (descarga de precios + análisis de la ruta).
-
-3. Revisa los RESULTADOS:
-   - **Tabla**: ranking de las gasolineras más baratas con
-     nombre, dirección, precio actual y horario.
-   - **Mapa interactivo**: haz clic en cada círculo de
-     color para ver todos los detalles de esa gasolinera.
-
-4. Para cerrar la aplicación, ve a la terminal y pulsa
-   Ctrl+C.
+Para cerrar: Ctrl+C en la terminal.
 
 ------------------------------------------------------------
-OPCIONES AVANZADAS (OPCIONALES)
+MODOS DE ENTRADA DE RUTA
 ------------------------------------------------------------
-Despliega "⚙️ Opciones avanzadas" para ajustar:
-  - Radio de búsqueda (1–15 km, por defecto 5 km):
-    distancia lateral máxima desde la ruta donde se buscan
-    gasolineras. Auméntalo si no aparecen resultados.
-  - Número de gasolineras a mostrar (1–15, por defecto 5).
+En el panel lateral (sidebar) encontrarás dos pestañas:
+
+  [📍 Origen / Destino]
+    Escribe la ciudad de origen y destino. La app calculará
+    la ruta real por carretera usando OSRM automáticamente.
+    Ejemplo: Origen "Madrid", Destino "Valencia".
+
+  [📁 Subir GPX]
+    Sube tu propio archivo .gpx desde wikiloc, komoot,
+    Garmin, Strava, etc. La ruta se leerá exactamente.
+
+  Sin elegir ninguno, puedes usar el MODO DEMO:
+    La app carga automáticamente una ruta de ejemplo
+    Madrid → Valencia (~356 km) para explorar la interfaz.
 
 ------------------------------------------------------------
-CÓMO OBTENER UN ARCHIVO GPX
+CONFIGURACIÓN DEL VIAJE (Sidebar)
+------------------------------------------------------------
+  Combustible   → Elige tu tipo (Gasolina 95, Diésel, GNL…)
+  Radio         → Distancia máxima lateral desde la ruta (km)
+  Top N         → Cuántas gasolineras quieres ver en el ranking
+  Tu Vehículo   → (Opcional) Depósito total/litros actuales/
+                   consumo → activa el análisis de autonomía
+
+------------------------------------------------------------
+USO DEL DASHBOARD
+------------------------------------------------------------
+Tras pulsar "🔍 Buscar gasolineras":
+
+  1. ANÁLISIS DE COMBUSTIBLE
+     Si configuraste el vehículo, verás cuánto combustible
+     necesitas y el ahorro potencial vs. la gasolinera
+     más cara de la zona.
+
+  2. MAPA INTERACTIVO
+     Muestra tu ruta y todas las gasolineras encontradas.
+     · Haz clic en una fila de la tabla → el mapa se centra.
+     · Tramos en rojo = zonas de riesgo según tu autonomía.
+
+  3. RANKING DE GASOLINERAS
+     Tabla con las N gasolineras más baratas de tu corredor.
+     · Haz clic en una fila para seleccionarla.
+     · Aparecerá el botón ➕ "Añadir a Mi Plan de Viaje".
+
+  4. MI PLAN DE VIAJE (Carrito)
+     Aquí se acumulan las gasolineras que hayas añadido.
+     La tabla muestra el tramo (km) entre paradas para
+     que controles que no superas tu autonomía.
+     · Botón 🗑️ "Vaciar Mi Plan" para reiniciar.
+
+  5. EXPORTAR LA RUTA
+     Desde la sección "Mi Plan de Viaje":
+     · Modo Texto → botón "📱 Abrir en Google Maps"
+       Genera un enlace con todas tus paradas como waypoints.
+     · Modo GPX   → botón "💾 Descargar GPX + Mis Paradas"
+       Descarga tu track original con tus gasolineras
+       inyectadas como Waypoints (importable en cualquier GPS).
+
+  6. RADAR DE AUTONOMÍA CRÍTICA
+     Si configuraste la autonomía de tu vehículo, esta sección
+     analiza los tramos entre gasolineras y te avisa de cuáles
+     superan tu autonomía con indicadores visuales (🔴🟡🟢).
+
+------------------------------------------------------------
+¿CÓMO OBTENER UN ARCHIVO GPX?
 ------------------------------------------------------------
   Wikiloc:        ruta → Descargar → .gpx
   Komoot:         ruta → ⋯ → Exportar como GPX
   Garmin Connect: Actividades → salida → Exportar GPX
   Strava:         actividad → ⋯ → Exportar GPX
-  Google Maps:    usa mapstogpx.com para convertir
+  Google Maps:    usa mapstogpx.com para convertir tu ruta
 
 ------------------------------------------------------------
 PREGUNTAS FRECUENTES
 ------------------------------------------------------------
 P: No aparecen resultados para mi combustible.
-R: Amplía el radio de búsqueda en "Opciones avanzadas"
-   o prueba con un combustible diferente.
+R: Amplía el radio de búsqueda o prueba con otro combustible.
+   El GNL/GNC tienen cobertura muy reducida en España.
 
-P: La aplicación tarda mucho.
-R: La descarga de más de 11.000 estaciones del MITECO
-   puede tardar varios segundos. Es normal.
+P: La aplicación tarda mucho al arrancar.
+R: La primera descarga de más de 11.000 estaciones del MITECO
+   tarda unos segundos. Luego se cachea 30 minutos.
 
 P: ¿Los precios son actuales?
-R: Sí. Se descargan en tiempo real cada vez que pulsas
-   "Buscar gasolineras".
+R: Sí. Se descargan del MITECO en tiempo real. La caché
+   se renueva automáticamente cada 30 minutos.
+
+P: El enlace de Google Maps no incluye todas mis paradas.
+R: Google Maps solo admite 9 waypoints intermedios por enlace.
+   Si tienes más paradas, se indican cuántas se han omitido.
 
 ------------------------------------------------------------
 ARCHIVOS DEL PROYECTO
 ------------------------------------------------------------
-  app.py                → Interfaz web (este es el que lanzas)
-  gasolineras_ruta.py   → Motor de cálculo interno
+  app.py                → Interfaz web principal (Streamlit)
+  gasolineras_ruta.py   → Motor de análisis y exportación
+  demo_route.gpx        → Ruta demo Madrid → Valencia
   requirements.txt      → Dependencias Python
   INSTRUCCIONES.txt     → Este manual
 
