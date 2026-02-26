@@ -828,43 +828,44 @@ def enrich_gpx_with_stops(
     fuel_column: str = "",
 ) -> str:
     """
-    Inyecta las paradas de repostaje calculadas por Dijkstra como Waypoints
-    (<wpt>) dentro del archivo GPX original del usuario, preservando el track
-    original con toda su información de elevación, timestamps y metadatos.
+    Inyecta las paradas de repostaje calculadas como Waypoints (<wpt>) dentro 
+    del archivo GPX original del usuario. Además, implementa "Track Splicing",
+    modificando la espina dorsal geométrica del <trk> original para que este 
+    se desvíe físicamente hasta la gasolinera y vuelva a la ruta.
 
     Parameters
     ----------
     gpx_bytes : bytes
-        Contenido binario del archivo GPX original leído del UploadedFile de
-        Streamlit (p. ej. ``gpx_file.getvalue()``).
+        Contenido binario del archivo GPX original.
     gdf_stops : gpd.GeoDataFrame
         Paradas con geometría en EPSG:25830. Se proyectan a WGS84 internamente.
     fuel_column : str
-        Nombre de la columna de combustible usado (p. ej. "Precio Gasoleo A"),
-        para incluir el precio en el nombre del waypoint.
+        Nombre de la columna de combustible usado para incluir precio.
 
     Returns
     -------
     str
-        Cadena XML en formato GPX lista para pasar a ``st.download_button``.
+        Cadena XML en formato GPX lista para guardar o descargar.
     """
     import gpxpy
     import gpxpy.gpx as _gpx
+    import time
+    import requests
 
-    # --- Parsear el GPX original para no perder ningún dato ---
+    # --- Parsear el GPX original ---
     gpx_obj = gpxpy.parse(gpx_bytes.decode("utf-8", errors="replace"))
 
-    # --- Proyectar las paradas a WGS84 ---
     if gdf_stops is None or gdf_stops.empty:
         return gpx_obj.to_xml()
 
     gdf_wgs84 = gdf_stops.to_crs("EPSG:4326")
-
+    
+    # 1. Recopilar paradas y crear los Waypoints
+    paradas = []
     for i, (_, row) in enumerate(gdf_wgs84.iterrows(), start=1):
         lat  = row.geometry.y
         lon  = row.geometry.x
 
-        # Nombre descriptivo del waypoint (visible en Garmin / Wikiloc / OsmAnd)
         rotulo   = row.get("Rótulo", f"Gasolinera #{i}")
         litros   = row.get("litros_a_repostar", 0.0)
         coste    = row.get("coste_parada_eur",  0.0)
@@ -873,19 +874,141 @@ def enrich_gpx_with_stops(
         nombre_wpt = (
             f"⛽ {i}. {rotulo} | "
             f"{litros:.1f} L @ {precio:.3f} €/L = {coste:.2f} €"
+        ) if litros > 0 else (
+            f"⛽ {i}. {rotulo} | {precio:.3f} €/L"
         )
 
         wpt = _gpx.GPXWaypoint(
             latitude=lat,
             longitude=lon,
             name=nombre_wpt,
-            symbol="Fuel",     # símbolo estándar GPX reconocido por Garmin
+            symbol="Fuel",
             description=(
-                f"Repostar {litros:.1f} L de combustible. "
-                f"Precio: {precio:.3f} €/L. Coste estimado: {coste:.2f} €."
+                f"Repostar en {rotulo}. Precio: {precio:.3f} €/L. "
+                f"Coste estimado: {coste:.2f} €." if coste > 0 else 
+                f"Gasolinera {rotulo}. Precio: {precio:.3f} €/L."
             ),
         )
         gpx_obj.waypoints.append(wpt)
+        
+        paradas.append({"lon": lon, "lat": lat})
+
+    # 2. Identificar el Punto de Fuga (Split Point) para cada parada
+    split_points = []
+    for parada in paradas:
+        station_lon = parada["lon"]
+        station_lat = parada["lat"]
+        
+        min_dist = float('inf')
+        closest_idx = None
+        
+        # O(N) naive search for the closest track point
+        for t_idx, track in enumerate(gpx_obj.tracks):
+            for s_idx, segment in enumerate(track.segments):
+                for p_idx, point in enumerate(segment.points):
+                    dist_sq = (point.longitude - station_lon)**2 + (point.latitude - station_lat)**2
+                    if dist_sq < min_dist:
+                        min_dist = dist_sq
+                        closest_idx = (t_idx, s_idx, p_idx, point.longitude, point.latitude)
+        
+        if closest_idx:
+            split_points.append({
+                "idx": closest_idx,
+                "station_lon": station_lon,
+                "station_lat": station_lat
+            })
+
+    # Ordenar de final a principio para que el splicing no desplace 
+    # los índices de los puntos anteriores que aún debemos procesar.
+    split_points.sort(key=lambda x: (x["idx"][0], x["idx"][1], x["idx"][2]), reverse=True)
+
+    # 3. Splicing: Enrutamiento del Desvío de Idas y Vueltas
+    headers = {
+        "User-Agent": "OptimizadorGasolineras/1.0",
+        "Accept": "application/json"
+    }
+
+    for sp in split_points:
+        t_idx, s_idx, p_idx, split_lon, split_lat = sp["idx"]
+        station_lon = sp["station_lon"]
+        station_lat = sp["station_lat"]
+        
+        segment = gpx_obj.tracks[t_idx].segments[s_idx]
+        
+        # Buscar "Punto de Reincorporación" aprox 30-50m adelante 
+        # (para evitar U-turns extraños del motor de ruteo)
+        reinc_idx = p_idx
+        dist_accum = 0.0
+        for i in range(p_idx, min(p_idx + 30, len(segment.points) - 1)):
+            p1 = segment.points[i]
+            p2 = segment.points[i+1]
+            # Distancia euclídea aproximada en grados a metros (~111.000m por grado)
+            d = ((p2.longitude - p1.longitude)**2 + (p2.latitude - p1.latitude)**2)**0.5 * 111000
+            dist_accum += d
+            reinc_idx = i + 1
+            if dist_accum > 35.0:
+                break
+                
+        reinc_lon = segment.points[reinc_idx].longitude
+        reinc_lat = segment.points[reinc_idx].latitude
+        
+        entrada = []
+        salida = []
+        
+        # Tramo Entrada: Punto de Fuga -> Gasolinera
+        try:
+            url_in = (
+                f"{_OSRM_BASE_URL}"
+                f"/{split_lon},{split_lat};{station_lon},{station_lat}"
+                f"?overview=full&geometries=geojson&alternatives=false&steps=false"
+            )
+            resp_in = requests.get(url_in, headers=headers, timeout=5.0)
+            if resp_in.status_code == 200:
+                data_in = resp_in.json()
+                if data_in.get("routes"):
+                    entrada = data_in["routes"][0]["geometry"]["coordinates"]
+        except Exception as e:
+            print(f"[GPX Splicing] Fallo entrada OSRM: {e}")
+            
+        time.sleep(0.3)  # Cortesía con el API pública
+        
+        # Tramo Salida: Gasolinera -> Punto de Reincorporación
+        try:
+            url_out = (
+                f"{_OSRM_BASE_URL}"
+                f"/{station_lon},{station_lat};{reinc_lon},{reinc_lat}"
+                f"?overview=full&geometries=geojson&alternatives=false&steps=false"
+            )
+            resp_out = requests.get(url_out, headers=headers, timeout=5.0)
+            if resp_out.status_code == 200:
+                data_out = resp_out.json()
+                if data_out.get("routes"):
+                    salida = data_out["routes"][0]["geometry"]["coordinates"]
+        except Exception as e:
+            print(f"[GPX Splicing] Fallo salida OSRM: {e}")
+            
+        new_points = []
+        
+        # Añadir coordenadas de entrada
+        if entrada:
+            # saltamos el [0] porque ya existe en el track original (el split point)
+            for coords in entrada[1:]: 
+                new_points.append(_gpx.GPXTrackPoint(latitude=coords[1], longitude=coords[0]))
+                
+        # Opcional: inyectar el point exacto de la gasolinera por si OSRM no llega al mismo cm
+        if not entrada and not salida:
+            new_points.append(_gpx.GPXTrackPoint(latitude=station_lat, longitude=station_lon))
+
+        # Añadir coordenadas de salida
+        if salida:
+            # En saltar [0], evitamos repetir el punto de la gasolinera
+            for coords in salida[1:]:
+                new_points.append(_gpx.GPXTrackPoint(latitude=coords[1], longitude=coords[0]))
+                
+        # 4. Inyección geométrica final
+        if new_points:
+            # Construimos la nueva lista de puntos del segmento
+            segment.points = segment.points[:p_idx+1] + new_points + segment.points[reinc_idx+1:]
 
     return gpx_obj.to_xml()
 
