@@ -358,30 +358,26 @@ with st.sidebar:
     usar_vehiculo = st.checkbox(
         "Introducir datos de mi vehículo",
         value=False,
-        help="Activa esta opción para calcular el consumo estimado y el coste del repostaje.",
     )
     if usar_vehiculo:
-        with st.expander("Parámetros del depósito y consumo", expanded=True):
+        with st.expander("Parámetros del vehículo", expanded=True):
             deposito_total_l = st.number_input(
-                "Capacidad del depósito (litros)",
+                "Capacidad Depósito (L)",
                 min_value=5.0, max_value=300.0,
                 value=max(5.0, _litros_default) if _litros_default > 0 else 20.0,
                 step=1.0,
-                help="Litros totales que cabe en el depósito de tu vehículo.",
             )
             consumo_l100km = st.number_input(
-                "Consumo aproximado (L/100 km)",
+                "Consumo (L/100 km)",
                 min_value=1.0, max_value=40.0,
                 value=_consumo_default,
                 step=0.5,
-                help="Consumo medio de tu vehículo. Consúltalo en el cuadro de mandos o en la ficha técnica.",
             )
             fuel_inicio_pct = st.slider(
-                "Combustible disponible al salir (%)",
+                "Depósito actual (%)",
                 min_value=0, max_value=100,
                 value=_inicio_pct_default,
                 step=5,
-                help="Nivel de combustible en el depósito al inicio de la ruta.",
             )
             combustible_actual_l = deposito_total_l * fuel_inicio_pct / 100.0
             st.caption(
@@ -418,14 +414,14 @@ with st.sidebar:
 
     buffer_m = radio_km * 1000
 
-    # Botón búsqueda
+    # Botón búsqueda prominente
     st.markdown("<br>", unsafe_allow_html=True)
-    run_btn = st.button("🔍 Iniciar Búsqueda", use_container_width=True)
+    run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
 
     st.markdown("---")
 
     # Botón para compartir configuración por URL (F2)
-    if st.button("🔗 Copiar enlace con esta configuración", use_container_width=True):
+    if st.button("🔗 Compartir enlace", use_container_width=True):
         st.query_params.update({
             "fuel":       combustible_elegido,
             "buffer":     str(radio_km),
@@ -497,21 +493,21 @@ if _pipeline_active:
                 tmp_path = Path(tmp.name)
         track = None   # se asigna en el bloque try más abajo
 
-    with st.status("⛽ Buscando las mejores gasolineras para tu viaje…", expanded=True) as status:
+    with st.status("⛽ Iniciando pipeline de procesamiento...", expanded=True) as status:
         try:
-            st.write("⏬ Descargando precios en tiempo real del MITECO…")
+            status.update(label="⏬ Descargando precios en tiempo real del MITECO…", state="running")
             df_gas = cached_fetch_gasolineras()
 
             # --- Carga del track (solo GPX; en modo texto ya está listo) ---
             if track is None:
-                st.write("🗺️ Leyendo y validando tu ruta GPX…")
+                status.update(label="🗺️ Leyendo y validando tu ruta GPX…", state="running")
                 track = load_gpx_track(tmp_path)
                 validate_gpx_track(track)
 
-            st.write("✂️ Simplificando y procesando la geometría de la ruta…")
+            status.update(label="✂️ Simplificando y procesando la geometría de la ruta…", state="running")
             track_simp = simplify_track(track, tolerance_deg=0.0005)
 
-            st.write("📡 Cruzando con estaciones de servicio cercanas a tu ruta…")
+            status.update(label="📡 Cruzando con estaciones de servicio cercanas a tu ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
             # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché)
             gdf_utm = cached_build_stations_gdf(df_gas)
@@ -526,7 +522,7 @@ if _pipeline_active:
                 )
                 st.stop()
 
-            st.write("💰 Calculando el ranking de las más baratas…")
+            status.update(label="💰 Calculando el ranking de las más baratas…", state="running")
             gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
             track_utm = gdf_track_utm.geometry.iloc[0]
 
@@ -556,9 +552,7 @@ if _pipeline_active:
             except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
                 pass
 
-
-
-            st.write("🖼️ Generando mapa interactivo…")
+            status.update(label="🖼️ Generando mapa interactivo…", state="running")
             _, mapa_obj = generate_map(
                 track_original=track,
                 gdf_top_stations=gdf_top,
@@ -673,52 +667,26 @@ if "pipeline_results" in st.session_state:
         pct_actual = min(100, int(fuel_inicio_pct))
         pct_necesario = min(100, int((litros_necesarios_ruta / deposito_total_l) * 100)) if deposito_total_l > 0 else 0
 
-        color_estado = "#16a34a" if not necesita_reposte else "#dc2626"
-        label_estado = "✅ Llegas sin repostar" if not necesita_reposte else f"⛽ Necesitas reponer ~{litros_a_repostar:.1f} L"
-
-        # Pre-calcular el bloque HTML condicional ANTES del f-string principal.
-        # Anidar un f'''...''' dentro de un f"""...""" hace que Streamlit lo
-        # trate como texto plano en lugar de HTML — esto lo evita.
-        if necesita_reposte:
-            cost_breakdown_html = (
-                '<div class="cost-breakdown">'
-                f'<div><div style="font-size:0.78rem;color:#166534;font-weight:600;">REPOSTANDO EN LA MÁS BARATA</div>'
-                f'<div class="cost-saving">{coste_barata:.2f} €</div></div>'
-                f'<div><div style="font-size:0.78rem;color:#991b1b;font-weight:600;">SI REPOSTARAS EN LA MÁS CARA</div>'
-                f'<div style="font-size:1.3rem;font-weight:800;color:#dc2626;">{coste_libre:.2f} €</div></div>'
-                f'<div><div style="font-size:0.78rem;color:#1e40af;font-weight:600;">AHORRO POTENCIAL</div>'
-                f'<div style="font-size:1.3rem;font-weight:800;color:#2563eb;">{ahorro_total:.2f} €</div></div>'
-                '</div>'
-            )
-        else:
-            cost_breakdown_html = (
-                '<div style="margin-top:10px;font-size:0.9rem;color:#166534;">'
-                "Con el combustible actual llegas al destino. ¡No necesitas parar!</div>"
-            )
-
-        st.markdown(
-            f"""
-            <div class="cost-box">
-                <div class="cost-box-title">🚗 Análisis de Combustible para esta Ruta ({ruta_km:.1f} km)</div>
-                <div class="cost-grid">
-                    <div>
-                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">DEPÓSITO AL SALIR</div>
-                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{combustible_actual_l:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({fuel_inicio_pct}%)</span></div>
-                    </div>
-                    <div>
-                        <div style="font-size:0.78rem;color:#475569;font-weight:600;">CONSUMO ESTIMADO</div>
-                        <div style="font-size:1.3rem;font-weight:800;color:#1e293b;">{litros_necesarios_ruta:.1f} L <span style="font-size:0.9rem;font-weight:500;color:#64748b;">({consumo_l100km} L/100km)</span></div>
-                    </div>
-                    <div>
-                        <div style="font-size:0.78rem;color:{color_estado};font-weight:600;">ESTADO</div>
-                        <div style="font-size:1.1rem;font-weight:700;color:{color_estado};">{label_estado}</div>
-                    </div>
-                </div>
-                {cost_breakdown_html}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.subheader(f"🚗 Análisis de Combustible ({ruta_km:.1f} km)")
+        c1, c2, c3 = st.columns(3)
+        c1.metric(
+            "Depósito al salir",
+            f"{combustible_actual_l:.1f} L",
+            f"{fuel_inicio_pct}% capacidad",
+            delta_color="off"
         )
+        c2.metric(
+            "Consumo estimado",
+            f"{litros_necesarios_ruta:.1f} L",
+            f"{consumo_l100km} L/100km",
+            delta_color="off"
+        )
+        if not necesita_reposte:
+            c3.metric("Estado", "✅ OK, sin paradas")
+            st.success("Con el combustible con el que sales vas a poder llegar directamente a tu destino. ¡No es obligatorio parar!")
+        else:
+            c3.metric("Estado", f"⚠️ Faltan {litros_a_repostar:.1f} L", delta_color="inverse")
+            st.info(f"**Ahorro Potencial:** Llenar esos litros en la gasolinera recomendada te ahorra **{ahorro_total:.2f} €** frente a la más cara de la zona (Recomendada: *{coste_barata:.2f} €* vs Cara: *{coste_libre:.2f} €*)")
 
     st.divider()
 
@@ -779,9 +747,7 @@ if "pipeline_results" in st.session_state:
 
     COLS = {
         "km_ruta":            "Km en Ruta",
-        "Rótulo":             "Rótulo / Marca",
-        "Municipio":          "Municipio",
-        "Dirección":          "Dirección",
+        "Rótulo":             "Marca",
         fuel_column:          f"Precio {combustible_elegido} (€/L)",
         "osrm_duration_min":  "Desvío (min)",
         "Horario":            "Horario",
@@ -842,18 +808,19 @@ if "pipeline_results" in st.session_state:
             help="Tiempo estimado de desvío ida+vuelta.",
             format="%.0f min",
         ),
-        "Rótulo / Marca": st.column_config.TextColumn(
-            "Rótulo / Marca",
+        "Marca": st.column_config.TextColumn(
+            "Marca",
             help="Nombre comercial de la gasolinera.",
         ),
         # La dirección se muestra como enlace a Google Maps
         "_maps_url": st.column_config.LinkColumn(
-            "Dirección 📍",
-            help="Clic para abrir en Google Maps (desde allí puedes copiar la dirección).",
-            display_text="📍 Ver / Copiar dirección",
+            "Ruta Google",
+            help="Abre Google Maps para navegar hasta esta estación.",
+            display_text="Ver en Maps ↗"
         ),
         # Ocultar la columna de texto plano (ya está en el enlace)
         "Dirección": None,
+        "Municipio": None,
     }
     # Eliminar del config las columnas que no existen en df_show
     # (None en column_config oculta la columna sin eliminarla del df)
@@ -874,7 +841,7 @@ if "pipeline_results" in st.session_state:
         sel_idx = selected_rows[0]
         # Evitar bucle infinito de reruns comprobando si ya lo hemos procesado
         if st.session_state.get("last_selected_idx") != sel_idx:
-            sel_nombre = df_show.iloc[sel_idx].get("Rótulo / Marca", "la gasolinera")
+            sel_nombre = df_show.iloc[sel_idx].get("Marca", "la gasolinera")
             st.session_state["map_selected_station"] = {
                 "center": list(station_coords[sel_idx]),
                 "zoom":   15,
@@ -886,9 +853,9 @@ if "pipeline_results" in st.session_state:
 
         st.write("")
         sel_row = df_show.iloc[sel_idx]
-        sel_nombre_cart = sel_row.get("Rótulo / Marca", "Estación de servicio")
+        sel_nombre_cart = sel_row.get("Marca", "Estación de servicio")
         
-        ya_en_plan = any(p["Rótulo / Marca"] == sel_nombre_cart for p in st.session_state["mis_paradas"])
+        ya_en_plan = any(p.get("Marca") == sel_nombre_cart for p in st.session_state["mis_paradas"])
         
         if ya_en_plan:
             st.info(f"✅ **{sel_nombre_cart}** ya está en tu Plan de Viaje.")
