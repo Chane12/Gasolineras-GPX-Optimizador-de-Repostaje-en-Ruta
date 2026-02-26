@@ -489,6 +489,9 @@ if _pipeline_active:
                 _gpx_bytes = f.read()
         else:
             _gpx_bytes = gpx_file.read()
+            if len(_gpx_bytes) > 5 * 1024 * 1024:
+                st.error("❌ El archivo GPX excede el límite de 5MB. Por seguridad contra degradación de memoria, ha sido bloqueado.")
+                st.stop()
             with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
                 tmp.write(_gpx_bytes)
                 tmp_path = Path(tmp.name)

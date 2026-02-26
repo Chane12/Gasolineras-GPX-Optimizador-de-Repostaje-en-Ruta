@@ -138,7 +138,7 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             proxy_name = proxy_url.split("//")[1].split("/")[0]
             try:
                 print(f"[MITECO] Intentando proxy: {proxy_name}...")
-                resp = requests.get(proxy_url, headers=headers, timeout=timeout + 30)
+                resp = requests.get(proxy_url, headers=headers, timeout=15)
                 resp.raise_for_status()
 
                 # allorigins /get devuelve {"contents": "...", "status": {...}}
@@ -320,27 +320,43 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
     lat_o, lon_o = _geocode(origen)
     lat_d, lon_d = _geocode(destino)
 
-    # Paso 3 — Petición OSRM
-    url = (
-        f"{_OSRM_ROUTE_URL}"
-        f"/{lon_o},{lat_o};{lon_d},{lat_d}"
-        f"?overview=full&geometries=geojson&alternatives=false&steps=false"
-    )
-    try:
-        resp = requests.get(url, timeout=8.0)
-        if resp.status_code == 429:
-            raise RouteTextError(
-                "El servicio de enrutamiento está saturado (rate-limit). "
-                "Espera unos segundos y vuelve a intentarlo."
-            )
-        resp.raise_for_status()
-        data = resp.json()
-    except RouteTextError:
-        raise
-    except Exception as exc:
-        raise RouteTextError(
-            f"No se pudo contactar con el servicio de enrutamiento: {exc}"
-        ) from exc
+    import random
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
+    ]
+    headers = {"User-Agent": random.choice(user_agents)}
+
+    # Plan de contingencia OSRM: 
+    # 1. Intentar full geometry en router principal.
+    # 2. Intentar full geometry en OSRM alemán.
+    # 3. Intentar simplified geometry (mucho más rápido para tracks inmensos > 500km).
+    endpoints = [
+        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
+        f"https://routing.openstreetmap.de/routed-car/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
+        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false"
+    ]
+
+    data = None
+    last_err = None
+    
+    for url in endpoints:
+        try:
+            print(f"[Ruta] Intentando OSRM endpoint...")
+            resp = requests.get(url, headers=headers, timeout=12.0)
+            if resp.status_code == 429:
+                last_err = "El servicio de enrutamiento está saturado (rate-limit)."
+                continue
+            resp.raise_for_status()
+            data = resp.json()  # Aquí se generaba el JSONDecodeError si nos daban HTML de error (5XX capturados engañosamente)
+            break
+        except Exception as exc:
+            last_err = str(exc)
+            data = None
+            
+    if data is None:
+        raise RouteTextError(f"No se pudo contactar con ningún servicio de OSRM (timeouts o respuestas corruptas). Último error: {last_err}")
 
     # Paso 4 — Extraer geometría
     try:
@@ -946,7 +962,9 @@ def enrich_gpx_with_stops(
         # (para evitar U-turns extraños del motor de ruteo)
         reinc_idx = p_idx
         dist_accum = 0.0
-        for i in range(p_idx, min(p_idx + 30, len(segment.points) - 1)):
+        max_search = min(p_idx + 30, len(segment.points) - 1)
+        
+        for i in range(p_idx, max_search):
             p1 = segment.points[i]
             p2 = segment.points[i+1]
             # Distancia euclídea aproximada en grados a metros (~111.000m por grado)
@@ -956,6 +974,11 @@ def enrich_gpx_with_stops(
             if dist_accum > 35.0:
                 break
                 
+        # Clamp: Si el bucle terminó y la distancia acumulada es bajísima o el track es ralo
+        # forzamos el reingreso al menos al punto siguiente para evitar splice circular/atascado
+        if dist_accum <= 35.0 and reinc_idx == p_idx:
+            reinc_idx = min(p_idx + 1, len(segment.points) - 1)
+            
         reinc_lon = segment.points[reinc_idx].longitude
         reinc_lat = segment.points[reinc_idx].latitude
         
@@ -1162,18 +1185,36 @@ def enrich_stations_with_osrm(
         )
         return idx, result, row_wgs84
 
+    # Circuit Breaker para OSRM
+    fallos_consecutivos = 0
+    max_fallos = 3
+
     # max_workers limitado para no exceder rate-limits estáticos de OSRM (1-3 rq/s libres)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf.index}
         for future in concurrent.futures.as_completed(futures):
-            idx, result, row_wgs84 = future.result()
-            if result is not None:
-                gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
-                gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
-                print(
-                    f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
-                    f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
-                )
+            # Abortamos de facto para no quemar tiempo en UI si la API falla contínuamente
+            if fallos_consecutivos >= max_fallos:
+                continue
+
+            try:
+                idx, result, row_wgs84 = future.result(timeout=10)
+                if result is not None:
+                    gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
+                    gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+                    fallos_consecutivos = 0
+                    print(
+                        f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
+                        f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
+                    )
+                else:
+                    fallos_consecutivos += 1
+            except Exception as e:
+                fallos_consecutivos += 1
+                print(f"[OSRM] Fallo detectado: {e}")
+
+    if fallos_consecutivos >= max_fallos:
+        print("[OSRM] Circuit Breaker Activado: Demasiados fallos, degradando a distancias de proyección rápida.")
 
     return gdf
 
