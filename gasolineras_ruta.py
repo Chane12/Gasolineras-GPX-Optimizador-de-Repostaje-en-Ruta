@@ -762,6 +762,7 @@ def calculate_global_optimal_stops(
     consumo_100km: float,
     combustible_actual_l: float,
     reserva_minima_pct: float = 10.0,
+    penalizacion_parada_eur: float = 1.0,
 ) -> tuple[gpd.GeoDataFrame, float]:
     """
     Calcula el plan de repostaje de coste mínimo usando un Grafo Dirigido
@@ -920,7 +921,7 @@ def calculate_global_optimal_stops(
         km_u     = km_nodes[u]
         precio_u = price_nodes[u]
 
-        # Explorar vecinos j (todos los nodos "hacia adelante" alcanzables)
+        # Explorar vecinos j (todos los nodos "hacia adelante" Alcanzables)
         for v in range(u + 1, total_nodes):
             km_v = km_nodes[v]
             distancia_tramo = km_v - km_u
@@ -934,6 +935,11 @@ def calculate_global_optimal_stops(
             # (El Origen tiene precio 0: el combustible ya a bordo es sunk cost)
             litros_tramo = (distancia_tramo / 100.0) * consumo_100km
             coste_arista = litros_tramo * precio_u
+
+            # F1 Fix: Penalización por hacer parada (ignora origen dest)
+            # Para desincentivar parar por céntimos
+            if v != IDX_DEST:
+                coste_arista += penalizacion_parada_eur
 
             nuevo_coste = cost_u + coste_arista
             if nuevo_coste < dist[v]:
@@ -984,7 +990,9 @@ def calculate_global_optimal_stops(
         if node_idx != IDX_ORIGIN and node_idx != IDX_DEST
     ]
 
-    coste_total_eur = dist[IDX_DEST]
+    coste_total_eur_con_penalizacion = dist[IDX_DEST]
+    # Restar las penalizaciones virtuales aplicadas para devolver el coste real en combustible
+    coste_total_eur = coste_total_eur_con_penalizacion - (len(indices_gasolineras) * penalizacion_parada_eur)
 
     if not indices_gasolineras:
         print(
