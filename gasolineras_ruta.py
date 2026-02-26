@@ -1034,6 +1034,146 @@ def calculate_global_optimal_stops(
 
 
 # ===========================================================================
+# 5d. EXPORTACIÓN DE RUTAS — Google Maps URL + GPX Enriquecido
+# ===========================================================================
+
+_GMAPS_MAX_WAYPOINTS = 9  # Límite documentado de la API de URLs de Google Maps
+
+
+def generate_google_maps_url(
+    track: "LineString",
+    gdf_stops: gpd.GeoDataFrame,
+) -> tuple[str, int]:
+    """
+    Genera una URL de Google Maps con la ruta multidestino que incluye las
+    paradas de repostaje calculadas por Dijkstra.
+
+    La función transforma las coordenadas de UTM (EPSG:25830) a WGS84
+    (EPSG:4326) y construye la URL usando la API de Directions estándar
+    de Google Maps, apta para móvil (abre la app) y escritorio (abre la web).
+
+    Parameters
+    ----------
+    track : LineString
+        Track de la ruta en CUALQUIER CRS de coordenadas geográficas (grados).
+        Se asume WGS84 si no tiene CRS. Se usan el primer y último vértice
+        del LineString como Origen y Destino respectivamente.
+    gdf_stops : gpd.GeoDataFrame
+        GeoDataFrame con las paradas de repostaje en EPSG:25830 (UTM 30N).
+        Se proyectará internamente a WGS84 para extraer coordenadas.
+
+    Returns
+    -------
+    url : str
+        URL completa lista para usar en un <a href> o st.link_button.
+    n_truncated : int
+        Número de paradas que han sido omitidas por superar el límite de
+        9 waypoints de la API. 0 si no se ha truncado ninguna.
+    """
+    import urllib.parse as _up
+
+    # --- Origen y destino a partir del track (ya está en WGS84) ---
+    coords = list(track.coords)
+    lat_o, lon_o = coords[0][1], coords[0][0]
+    lat_d, lon_d = coords[-1][1], coords[-1][0]
+
+    # --- Paradas: proyectar a WGS84 ---
+    n_truncated = 0
+    waypoints_str = ""
+    if gdf_stops is not None and not gdf_stops.empty:
+        gdf_wgs84 = gdf_stops.to_crs("EPSG:4326")
+        stops_all = [
+            f"{row.geometry.y:.6f},{row.geometry.x:.6f}"
+            for _, row in gdf_wgs84.iterrows()
+        ]
+        if len(stops_all) > _GMAPS_MAX_WAYPOINTS:
+            n_truncated = len(stops_all) - _GMAPS_MAX_WAYPOINTS
+            stops_all = stops_all[:_GMAPS_MAX_WAYPOINTS]
+        waypoints_str = "|".join(stops_all)
+
+    # --- Construir URL (API v1 — compatible con app Android/iOS/Web) ---
+    params: dict[str, str] = {
+        "api":         "1",
+        "origin":      f"{lat_o:.6f},{lon_o:.6f}",
+        "destination": f"{lat_d:.6f},{lon_d:.6f}",
+        "travelmode":  "driving",
+    }
+    if waypoints_str:
+        params["waypoints"] = waypoints_str
+
+    url = "https://www.google.com/maps/dir/?" + _up.urlencode(params)
+    return url, n_truncated
+
+
+def enrich_gpx_with_stops(
+    gpx_bytes: bytes,
+    gdf_stops: gpd.GeoDataFrame,
+    fuel_column: str = "",
+) -> str:
+    """
+    Inyecta las paradas de repostaje calculadas por Dijkstra como Waypoints
+    (<wpt>) dentro del archivo GPX original del usuario, preservando el track
+    original con toda su información de elevación, timestamps y metadatos.
+
+    Parameters
+    ----------
+    gpx_bytes : bytes
+        Contenido binario del archivo GPX original leído del UploadedFile de
+        Streamlit (p. ej. ``gpx_file.getvalue()``).
+    gdf_stops : gpd.GeoDataFrame
+        Paradas con geometría en EPSG:25830. Se proyectan a WGS84 internamente.
+    fuel_column : str
+        Nombre de la columna de combustible usado (p. ej. "Precio Gasoleo A"),
+        para incluir el precio en el nombre del waypoint.
+
+    Returns
+    -------
+    str
+        Cadena XML en formato GPX lista para pasar a ``st.download_button``.
+    """
+    import gpxpy
+    import gpxpy.gpx as _gpx
+
+    # --- Parsear el GPX original para no perder ningún dato ---
+    gpx_obj = gpxpy.parse(gpx_bytes.decode("utf-8", errors="replace"))
+
+    # --- Proyectar las paradas a WGS84 ---
+    if gdf_stops is None or gdf_stops.empty:
+        return gpx_obj.to_xml()
+
+    gdf_wgs84 = gdf_stops.to_crs("EPSG:4326")
+
+    for i, (_, row) in enumerate(gdf_wgs84.iterrows(), start=1):
+        lat  = row.geometry.y
+        lon  = row.geometry.x
+
+        # Nombre descriptivo del waypoint (visible en Garmin / Wikiloc / OsmAnd)
+        rotulo   = row.get("Rótulo", f"Gasolinera #{i}")
+        litros   = row.get("litros_a_repostar", 0.0)
+        coste    = row.get("coste_parada_eur",  0.0)
+        precio   = row.get(fuel_column, 0.0) if fuel_column else 0.0
+
+        nombre_wpt = (
+            f"⛽ {i}. {rotulo} | "
+            f"{litros:.1f} L @ {precio:.3f} €/L = {coste:.2f} €"
+        )
+
+        wpt = _gpx.GPXWaypoint(
+            latitude=lat,
+            longitude=lon,
+            name=nombre_wpt,
+            symbol="Fuel",     # símbolo estándar GPX reconocido por Garmin
+            description=(
+                f"Repostar {litros:.1f} L de combustible. "
+                f"Precio: {precio:.3f} €/L. Coste estimado: {coste:.2f} €."
+            ),
+        )
+        gpx_obj.waypoints.append(wpt)
+
+    return gpx_obj.to_xml()
+
+
+# ===========================================================================
 # 5b. FILTRO FINO — OSRM Hybrid Funnel
 # ===========================================================================
 

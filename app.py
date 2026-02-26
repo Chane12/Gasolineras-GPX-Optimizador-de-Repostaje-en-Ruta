@@ -22,15 +22,18 @@ from gasolineras_ruta import (
     build_route_buffer,
     build_stations_geodataframe,
     calculate_global_optimal_stops,
+    enrich_gpx_with_stops,
     enrich_stations_with_osrm,
     fetch_gasolineras,
     filter_cheapest_stations,
+    generate_google_maps_url,
     generate_map,
     get_route_from_text,
     load_gpx_track,
     simplify_track,
     spatial_join_within_buffer,
     validate_gpx_track,
+    _GMAPS_MAX_WAYPOINTS,
 )
 
 # ---------------------------------------------------------------------------
@@ -453,11 +456,12 @@ if _pipeline_active:
         st.stop()
 
     tmp_path = None    # solo se usa en modo GPX
+    _gpx_bytes = None  # para inyectar paradas luego
 
     if _input_mode == "texto" and _hay_ruta_texto:
         # ---- MODO TEXTO: obtener track vía Nominatim + OSRM ----
         with st.status("🗺️ Trazando tu ruta…", expanded=True) as _status_txt:
-            st.write(f"� Geocodificando **{origen_txt}** y **{destino_txt}**…")
+            st.write(f" Geocodificando **{origen_txt}** y **{destino_txt}**…")
             try:
                 track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
                 _status_txt.update(label="✅ Ruta trazada", state="complete", expanded=False)
@@ -476,9 +480,12 @@ if _pipeline_active:
                 st.error("⚠️ No se encontró el archivo de demo.")
                 st.stop()
             tmp_path = demo_gpx_path
+            with open(demo_gpx_path, "rb") as f:
+                _gpx_bytes = f.read()
         else:
+            _gpx_bytes = gpx_file.read()
             with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
-                tmp.write(gpx_file.read())
+                tmp.write(_gpx_bytes)
                 tmp_path = Path(tmp.name)
         track = None   # se asigna en el bloque try más abajo
 
@@ -580,6 +587,8 @@ if _pipeline_active:
                 "track":          track,
                 "track_utm":      track_utm,
                 "using_demo":     _using_demo,
+                "using_gpx":      _input_mode in ("gpx", "demo"),
+                "gpx_bytes":      _gpx_bytes,
                 "gdf_dijkstra":   gdf_dijkstra,
                 "coste_dijkstra": coste_dijkstra,
                 "dijkstra_error": dijkstra_error,
@@ -621,6 +630,8 @@ if "pipeline_results" in st.session_state:
     track           = _r["track"]
     track_utm       = _r["track_utm"]
     _using_demo     = _r["using_demo"]
+    _using_gpx      = _r.get("using_gpx", False)
+    _gpx_bytes      = _r.get("gpx_bytes")
     gdf_dijkstra    = _r.get("gdf_dijkstra")
     coste_dijkstra  = _r.get("coste_dijkstra")
     dijkstra_error  = _r.get("dijkstra_error")
@@ -838,6 +849,39 @@ if "pipeline_results" in st.session_state:
                     "ℹ️ Los litros indicados cubren el tramo hasta la siguiente parada (con 10% de reserva de seguridad). "
                     "El coste total es la suma del combustible comprado en ruta, sin incluir el que ya llevas al salir."
                 )
+
+                # --- 📱 EXPORTACIÓN DE LA RUTA ---
+                st.write("")  # Espaciador
+                if not _using_gpx:
+                    # MODO TEXTO -> Google Maps URL
+                    gmaps_url, omitidas = generate_google_maps_url(track_utm, gdf_dijkstra)
+                    st.link_button(
+                        "📱 Llevarme allí (Abrir en Google Maps)",
+                        url=gmaps_url,
+                        type="primary",
+                        help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
+                    )
+                    if omitidas > 0:
+                        st.warning(
+                            f"⚠️ **Atención:** Tu ruta tiene demasiadas paradas. Google Maps solo admite un máximo "
+                            f"de {_GMAPS_MAX_WAYPOINTS} repostajes por enlace. Se han omitido los {omitidas} últimos."
+                        )
+                else:
+                    # MODO GPX -> Mismo archivo con Waypoints inyectados
+                    if _gpx_bytes:
+                        gpx_xml_con_paradas = enrich_gpx_with_stops(
+                            _gpx_bytes,
+                            gdf_dijkstra,
+                            fuel_column=fuel_column
+                        )
+                        st.download_button(
+                            label="💾 Descargar GPX Original + Paradas",
+                            data=gpx_xml_con_paradas,
+                            file_name="Ruta_Optimizada_Gasolineras.gpx",
+                            mime="application/gpx+xml",
+                            type="primary",
+                            help="Descarga tu mismo track inalterado, inyectando las gasolineras seleccionadas como Waypoints."
+                        )
 
         st.divider()
 
