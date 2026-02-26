@@ -20,6 +20,7 @@ Dependencias:
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 import time
@@ -747,6 +748,289 @@ def filter_cheapest_stations(
             print(f"  #{i+1} {nombre}{km_str} ({municipio}) --> {precio:.3f} EUR/L")
 
     return gdf_top
+
+
+# ===========================================================================
+# 5c. OPTIMIZADOR GLOBAL DE REPOSTAJE — DAG + Dijkstra
+# ===========================================================================
+
+def calculate_global_optimal_stops(
+    gdf_within: gpd.GeoDataFrame,
+    fuel_column: str,
+    track_utm: LineString,
+    deposito_total_l: float,
+    consumo_100km: float,
+    combustible_actual_l: float,
+    reserva_minima_pct: float = 10.0,
+) -> tuple[gpd.GeoDataFrame, float]:
+    """
+    Calcula el plan de repostaje de coste mínimo usando un Grafo Dirigido
+    Acíclico (DAG) ponderado y el algoritmo de Dijkstra.
+
+    Supera el enfoque greedy (ventanas) al explorar TODAS las combinaciones
+    posibles de paradas y garantizar el óptimo global de coste.
+
+    Arquitectura del grafo
+    ----------------------
+    Nodos:
+      - Nodo 0  → Origen (km 0, combustible = combustible_actual_l, precio = 0)
+      - Nodos 1..N → Gasolineras filtradas con precio válido, ordenadas por km
+      - Nodo N+1 → Destino (km = longitud total de la ruta, precio = 0)
+
+    Aristas (i → j):
+      Se crea una arista de i → j si la distancia (km_j - km_i) es menor o
+      igual a la autonomía efectiva desde el nodo i:
+        - Desde Origen: autonomia_efectiva = combustible_actual_l/consumo*100 * (1 - reserva/100)
+        - Desde gasolinera: autonomia_efectiva = deposito_total_l/consumo*100 * (1 - reserva/100)
+      La reserva_minima_pct garantiza que no llegamos nunca con el depósito a cero.
+
+    Peso de la arista (coste en €):
+      coste(i→j) = ((km_j - km_i) / 100) * consumo_100km * precio_en_i
+      El Origen tiene precio 0 (el combustible que ya lleva es un sunk cost).
+
+    Parameters
+    ----------
+    gdf_within : gpd.GeoDataFrame
+        Todas las gasolineras dentro del buffer de la ruta (EPSG:25830).
+    fuel_column : str
+        Columna de precio del combustible elegido.
+    track_utm : LineString
+        Ruta en EPSG:25830 (metros).
+    deposito_total_l : float
+        Capacidad máxima del depósito en litros.
+    consumo_100km : float
+        Consumo medio en litros por 100 km.
+    combustible_actual_l : float
+        Litros disponibles al inicio de la ruta.
+    reserva_minima_pct : float
+        Porcentaje de autonomía reservado como margen de seguridad (default 10%).
+        Valores: 0 = sin margen; 10 = llegar con el 10% del depósito lleno.
+
+    Returns
+    -------
+    tuple[gpd.GeoDataFrame, float]
+        - GeoDataFrame con las gasolineras óptimas donde parar (sin Origen ni
+          Destino), con columna ``km_ruta`` y ordenadas cronológicamente.
+        - Coste total estimado del repostaje en euros.
+
+    Raises
+    ------
+    ValueError
+        Si los datos de entrada son insuficientes o si no existe ningún
+        camino posible entre Origen y Destino (autonomía insuficiente).
+    """
+    # ------------------------------------------------------------------
+    # Validaciones de entrada
+    # ------------------------------------------------------------------
+    if consumo_100km <= 0:
+        raise ValueError("El consumo debe ser mayor que 0 L/100km.")
+    if deposito_total_l <= 0:
+        raise ValueError("La capacidad del depósito debe ser mayor que 0 litros.")
+    if combustible_actual_l < 0 or combustible_actual_l > deposito_total_l:
+        raise ValueError("El combustible actual debe estar entre 0 y la capacidad del depósito.")
+    if fuel_column not in gdf_within.columns:
+        raise ValueError(f"La columna de precio '{fuel_column}' no existe en el GeoDataFrame.")
+
+    factor_reserva = 1.0 - (reserva_minima_pct / 100.0)
+    if factor_reserva <= 0:
+        raise ValueError("reserva_minima_pct debe ser menor que 100.")
+
+    # ------------------------------------------------------------------
+    # Autonomías efectivas (con margen de seguridad)
+    # ------------------------------------------------------------------
+    autonomia_inicial_km: float = (combustible_actual_l / consumo_100km * 100.0) * factor_reserva
+    autonomia_lleno_km: float   = (deposito_total_l    / consumo_100km * 100.0) * factor_reserva
+    distancia_total_km: float   = track_utm.length / 1000.0
+
+    print(
+        f"[Dijkstra] Ruta total: {distancia_total_km:.1f} km | "
+        f"Autonomía inicial efectiva: {autonomia_inicial_km:.1f} km | "
+        f"Autonomía lleno efectiva: {autonomia_lleno_km:.1f} km"
+    )
+
+    # ------------------------------------------------------------------
+    # Preparar GeoDataFrame de gasolineras válidas con km_ruta
+    # ------------------------------------------------------------------
+    gdf = gdf_within.copy()
+    gdf[fuel_column] = pd.to_numeric(gdf[fuel_column], errors="coerce")
+    mask_valid = gdf[fuel_column].notna() & (gdf[fuel_column] > 0)
+    gdf_valid = gdf[mask_valid].copy()
+
+    # Calcular km en ruta para cada gasolinera (proyección sobre el track)
+    gdf_valid["km_ruta"] = gdf_valid.geometry.apply(
+        lambda geom: track_utm.project(geom) / 1000.0
+    )
+    # Filtrar gasolineras que estén lógicamente dentro de la ruta
+    gdf_valid = gdf_valid[
+        (gdf_valid["km_ruta"] > 0) & (gdf_valid["km_ruta"] < distancia_total_km)
+    ].copy()
+
+    # Ordenar estrictamente por posición en ruta
+    gdf_valid = gdf_valid.sort_values("km_ruta").reset_index(drop=True)
+    n_stations = len(gdf_valid)
+    print(f"[Dijkstra] Gasolineras candidatas en ruta: {n_stations}")
+
+    # ------------------------------------------------------------------
+    # Construir el grafo de nodos
+    # Nodo 0 = ORIGEN | Nodos 1..N = gasolineras | Nodo N+1 = DESTINO
+    # ------------------------------------------------------------------
+    # Representación: lista de (km_ruta, precio, nombre)
+    IDX_ORIGIN  = 0
+    IDX_DEST    = n_stations + 1
+
+    # km_ruta de cada nodo (índice 0 = origen, N+1 = destino)
+    km_nodes: list[float] = (
+        [0.0]
+        + gdf_valid["km_ruta"].tolist()
+        + [distancia_total_km]
+    )
+    # Precio por litro de cada nodo (origen y destino = 0)
+    price_nodes: list[float] = (
+        [0.0]
+        + gdf_valid[fuel_column].tolist()
+        + [0.0]
+    )
+
+    total_nodes = n_stations + 2  # origen + gasolineras + destino
+
+    # ------------------------------------------------------------------
+    # Dijkstra con heapq
+    # ------------------------------------------------------------------
+    INF = float("inf")
+    dist: list[float]     = [INF] * total_nodes   # coste mínimo acumulado
+    prev: list[int]       = [-1]  * total_nodes   # nodo anterior en el camino mínimo
+    dist[IDX_ORIGIN] = 0.0
+
+    # heap: (coste_acumulado, node_idx)
+    heap: list[tuple[float, int]] = [(0.0, IDX_ORIGIN)]
+
+    while heap:
+        cost_u, u = heapq.heappop(heap)
+
+        # Descartamos entradas obsoletas del heap
+        if cost_u > dist[u]:
+            continue
+
+        # Autonomía efectiva desde el nodo u
+        if u == IDX_ORIGIN:
+            autonomia_u = autonomia_inicial_km
+        else:
+            autonomia_u = autonomia_lleno_km  # al repostar llenamos el depósito
+
+        km_u     = km_nodes[u]
+        precio_u = price_nodes[u]
+
+        # Explorar vecinos j (todos los nodos "hacia adelante" alcanzables)
+        for v in range(u + 1, total_nodes):
+            km_v = km_nodes[v]
+            distancia_tramo = km_v - km_u
+
+            # Arista solo existe si el tramo es alcanzable con la autonomía
+            if distancia_tramo > autonomia_u:
+                # Los nodos están ordenados, ninguno más allá será alcanzable
+                break
+
+            # Coste de la arista: litros necesarios × precio en u
+            # (El Origen tiene precio 0: el combustible ya a bordo es sunk cost)
+            litros_tramo = (distancia_tramo / 100.0) * consumo_100km
+            coste_arista = litros_tramo * precio_u
+
+            nuevo_coste = cost_u + coste_arista
+            if nuevo_coste < dist[v]:
+                dist[v] = nuevo_coste
+                prev[v] = u
+                heapq.heappush(heap, (nuevo_coste, v))
+
+    # ------------------------------------------------------------------
+    # Comprobar si existe camino
+    # ------------------------------------------------------------------
+    if dist[IDX_DEST] == INF:
+        # Diagnóstico: encontrar el tramo que rompe la cadena
+        km_sorted = km_nodes[1:-1]  # solo gasolineras
+        # Detectar el primer punto de fallo
+        checkpoints = [0.0] + km_sorted + [distancia_total_km]
+        for j in range(len(checkpoints) - 1):
+            gap = checkpoints[j + 1] - checkpoints[j]
+            if j == 0:
+                aut_j = autonomia_inicial_km
+            else:
+                aut_j = autonomia_lleno_km
+            if gap > aut_j:
+                raise ValueError(
+                    f"No existe camino posible desde el Origen hasta el Destino. "
+                    f"El tramo entre Km {checkpoints[j]:.1f} y Km {checkpoints[j+1]:.1f} "
+                    f"({gap:.1f} km) supera la autonomía efectiva de {aut_j:.1f} km. "
+                    f"Amplía el radio de búsqueda de gasolineras o recarga más combustible."
+                )
+        raise ValueError(
+            "No existe camino posible entre Origen y Destino. "
+            "Comprueba los parámetros de autonomía y el radio de búsqueda."
+        )
+
+    # ------------------------------------------------------------------
+    # Reconstrucción del camino (backtracking desde DESTINO)
+    # ------------------------------------------------------------------
+    camino: list[int] = []
+    actual = IDX_DEST
+    while actual != -1:
+        camino.append(actual)
+        actual = prev[actual]
+    camino.reverse()  # de ORIGEN → DESTINO
+
+    # Filtrar solo los nodos intermedios (gasolineras, sin origen ni destino)
+    indices_gasolineras = [
+        node_idx - 1  # índice en gdf_valid (nodo i corresponde a gdf_valid[i-1])
+        for node_idx in camino
+        if node_idx != IDX_ORIGIN and node_idx != IDX_DEST
+    ]
+
+    coste_total_eur = dist[IDX_DEST]
+
+    if not indices_gasolineras:
+        print(
+            f"[Dijkstra] ✅ No es necesario repostar. "
+            f"Llegas al destino con el combustible actual "
+            f"(coste: {coste_total_eur:.2f} €)."
+        )
+        return gdf_valid.iloc[[]].copy(), coste_total_eur  # GDF vacío
+
+    gdf_stops = gdf_valid.iloc[indices_gasolineras].copy()
+    gdf_stops["precio_seleccionado"] = gdf_stops[fuel_column]
+    gdf_stops["combustible"] = fuel_column
+    gdf_stops = gdf_stops.sort_values("km_ruta").reset_index(drop=True)
+
+    # Añadir columna de litros a repostar y coste parcial en cada parada
+    litros_cols: list[float] = []
+    coste_cols:  list[float] = []
+    # Recalcular los tramos del camino óptimo para detallar cada parada
+    km_stops = [0.0] + gdf_stops["km_ruta"].tolist() + [distancia_total_km]
+    precio_stops = [0.0] + gdf_stops[fuel_column].tolist() + [0.0]
+    for idx_stop in range(1, len(km_stops) - 1):
+        km_desde = km_stops[idx_stop - 1]
+        km_hasta = km_stops[idx_stop + 1]
+        tramo_km = km_hasta - km_stops[idx_stop]  # tramo SIGUIENTE (hasta el próximo punto)
+        litros = (tramo_km / 100.0) * consumo_100km
+        litros = min(litros, deposito_total_l)  # no más que el depósito
+        coste = litros * precio_stops[idx_stop]
+        litros_cols.append(round(litros, 2))
+        coste_cols.append(round(coste, 2))
+
+    gdf_stops["litros_a_repostar"] = litros_cols
+    gdf_stops["coste_parada_eur"]  = coste_cols
+
+    print(
+        f"[Dijkstra] ✅ Plan óptimo: {len(gdf_stops)} parada(s) | "
+        f"Coste total: {coste_total_eur:.2f} €"
+    )
+    for i, row in gdf_stops.iterrows():
+        nombre = row.get("Rótulo", row.get("C.P.", f"Gasolinera #{i+1}"))
+        print(
+            f"  Km {row['km_ruta']:.1f} | {nombre} | "
+            f"{row[fuel_column]:.3f} €/L | "
+            f"Repostar ~{row['litros_a_repostar']:.1f} L → {row['coste_parada_eur']:.2f} €"
+        )
+
+    return gdf_stops, coste_total_eur
 
 
 # ===========================================================================

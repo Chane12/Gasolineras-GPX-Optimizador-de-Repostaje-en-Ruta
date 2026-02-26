@@ -21,6 +21,7 @@ from gasolineras_ruta import (
     RouteTextError,
     build_route_buffer,
     build_stations_geodataframe,
+    calculate_global_optimal_stops,
     enrich_stations_with_osrm,
     fetch_gasolineras,
     filter_cheapest_stations,
@@ -540,6 +541,27 @@ if _pipeline_active:
             except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
                 pass
 
+            # ---- Dijkstra: Plan de Repostaje con Óptimo Global ----
+            gdf_dijkstra: object | None = None
+            coste_dijkstra: float | None = None
+            dijkstra_error: str | None = None
+            if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
+                st.write("🧮 Calculando plan de repostaje óptimo (Dijkstra)…")
+                try:
+                    gdf_dijkstra, coste_dijkstra = calculate_global_optimal_stops(
+                        gdf_within=gdf_within,
+                        fuel_column=fuel_column,
+                        track_utm=track_utm,
+                        deposito_total_l=deposito_total_l,
+                        consumo_100km=consumo_l100km,
+                        combustible_actual_l=combustible_actual_l,
+                        reserva_minima_pct=10.0,
+                    )
+                except ValueError as exc:
+                    dijkstra_error = str(exc)
+                except Exception as exc:
+                    dijkstra_error = f"Error inesperado en el optimizador: {exc}"
+
             st.write("🖼️ Generando mapa interactivo…")
             _, mapa_obj = generate_map(
                 track_original=track,
@@ -552,12 +574,15 @@ if _pipeline_active:
 
             # --- Guardar resultados en session_state para sobrevivir reruns ---
             st.session_state["pipeline_results"] = {
-                "gdf_top":       gdf_top,
-                "gdf_within":    gdf_within,
-                "mapa_obj":      mapa_obj,
-                "track":         track,
-                "track_utm":     track_utm,
-                "using_demo":    _using_demo,
+                "gdf_top":        gdf_top,
+                "gdf_within":     gdf_within,
+                "mapa_obj":       mapa_obj,
+                "track":          track,
+                "track_utm":      track_utm,
+                "using_demo":     _using_demo,
+                "gdf_dijkstra":   gdf_dijkstra,
+                "coste_dijkstra": coste_dijkstra,
+                "dijkstra_error": dijkstra_error,
             }
 
         except RouteTextError as exc:
@@ -589,13 +614,16 @@ if _pipeline_active:
 # (tanto tras el pipeline como en reruns por interacción con la UI)
 # -----------------------------------------------------------------------
 if "pipeline_results" in st.session_state:
-    _r          = st.session_state["pipeline_results"]
-    gdf_top     = _r["gdf_top"]
-    gdf_within  = _r["gdf_within"]
-    mapa_obj    = _r["mapa_obj"]
-    track       = _r["track"]
-    track_utm   = _r["track_utm"]
-    _using_demo = _r["using_demo"]
+    _r              = st.session_state["pipeline_results"]
+    gdf_top         = _r["gdf_top"]
+    gdf_within      = _r["gdf_within"]
+    mapa_obj        = _r["mapa_obj"]
+    track           = _r["track"]
+    track_utm       = _r["track_utm"]
+    _using_demo     = _r["using_demo"]
+    gdf_dijkstra    = _r.get("gdf_dijkstra")
+    coste_dijkstra  = _r.get("coste_dijkstra")
+    dijkstra_error  = _r.get("dijkstra_error")
 
     if _using_demo:
         st.info("🧭 **Modo Demo activo** — Escapada Madrid - Valencia (~356 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
@@ -698,6 +726,96 @@ if "pipeline_results" in st.session_state:
         )
 
     st.divider()
+
+    # -----------------------------------------------------------------------
+    # 2b. Plan de Repostaje Óptimo (Dijkstra) — solo si hay datos de vehículo
+    # -----------------------------------------------------------------------
+    if usar_vehiculo and deposito_total_l > 0 and consumo_l100km > 0:
+        st.subheader("🧮 Plan de Repostaje Óptimo (Dijkstra)")
+        st.caption(
+            "Secuencia de paradas de **coste mínimo global** calculada con el algoritmo de Dijkstra "
+            "sobre un grafo dirigido acíclico. Garantiza el óptimo global frente a la heurística greedy."
+        )
+
+        if dijkstra_error:
+            st.warning(
+                f"⚠️ El optimizador no pudo calcular un plan de paradas:\n\n*{dijkstra_error}*\n\n"
+                "Prueba a aumentar el radio de búsqueda de gasolineras o a salir con más combustible."
+            )
+        elif gdf_dijkstra is not None:
+            ruta_km = track_utm.length / 1000.0
+            litros_ruta = ruta_km * consumo_l100km / 100.0
+            litros_a_repostar_total = max(0.0, litros_ruta - combustible_actual_l)
+
+            if gdf_dijkstra.empty:
+                # No hace falta repostar
+                st.success(
+                    f"✅ **No necesitas parar a repostar.** "
+                    f"Con los **{combustible_actual_l:.1f} L** que llevas llegas al destino. "
+                    f"Coste adicional de combustible: **0,00 €**"
+                )
+            else:
+                n_paradas = len(gdf_dijkstra)
+                # Precio medio de la zona para comparar
+                precio_medio_zona = float(gdf_within[fuel_column].dropna().mean()) if not gdf_within.empty else 0.0
+                coste_medio_zona = litros_a_repostar_total * precio_medio_zona if litros_a_repostar_total > 0 else 0.0
+                ahorro_dijkstra = coste_medio_zona - coste_dijkstra if coste_dijkstra is not None else 0.0
+
+                # --- Métricas resumen del plan ---
+                dk_col1, dk_col2, dk_col3 = st.columns(3)
+                with dk_col1:
+                    st.metric("Paradas Óptimas", f"{n_paradas}")
+                with dk_col2:
+                    st.metric("Coste Total Estimado", f"{coste_dijkstra:.2f} €")
+                with dk_col3:
+                    if ahorro_dijkstra > 0:
+                        st.metric("Ahorro vs. Precio Medio Zona", f"{ahorro_dijkstra:.2f} €", delta=f"-{ahorro_dijkstra:.2f} €")
+                    else:
+                        st.metric("Ahorro vs. Precio Medio Zona", "—")
+
+                st.markdown("**Secuencia de paradas:**")
+
+                # --- Tabla de paradas óptimas ---
+                _dk_cols = {
+                    "km_ruta":            "Km en Ruta",
+                    "Rótulo":             "Gasolinera",
+                    "Municipio":          "Municipio",
+                    fuel_column:          "€/L",
+                    "litros_a_repostar":  "Litros a Repostar",
+                    "coste_parada_eur":   "Coste Parada (€)",
+                }
+                _dk_col_map = {k: v for k, v in _dk_cols.items() if k in gdf_dijkstra.columns}
+                df_dk = gdf_dijkstra[list(_dk_col_map.keys())].copy()
+                df_dk = df_dk.rename(columns=_dk_col_map)
+
+                _dk_precio_min = float(df_dk["€/L"].min()) if "€/L" in df_dk.columns else 0.0
+                _dk_precio_max = float(df_dk["€/L"].max()) if "€/L" in df_dk.columns else 2.0
+
+                st.dataframe(
+                    df_dk,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Km en Ruta": st.column_config.NumberColumn(format="%.1f km"),
+                        "€/L": st.column_config.ProgressColumn(
+                            "€/L",
+                            help="Precio en €/L",
+                            format="%.3f €",
+                            min_value=_dk_precio_min * 0.98,
+                            max_value=_dk_precio_max * 1.02,
+                        ),
+                        "Litros a Repostar": st.column_config.NumberColumn(format="%.1f L"),
+                        "Coste Parada (€)": st.column_config.NumberColumn(format="%.2f €"),
+                    },
+                )
+
+                # Nota metodológica
+                st.caption(
+                    "ℹ️ Los litros indicados cubren el tramo hasta la siguiente parada (con 10% de reserva de seguridad). "
+                    "El coste total es la suma del combustible comprado en ruta, sin incluir el que ya llevas al salir."
+                )
+
+        st.divider()
 
     # -----------------------------------------------------------------------
     # 3. Mapa — aparece primero para impacto visual inmediato
@@ -1015,7 +1133,7 @@ if "pipeline_results" in st.session_state:
                           'Repostar OBLIGATORIAMENTE antes de este tramo.</div>')
             elif autonomia_km > 0 and t["nivel"] == "atencion":
                 aviso += (f'<div style="margin-top:6px; font-size:0.8rem; color:#854d0e; font-weight:600;">'
-                          '⚡ Entra en este tramo con el depósito al menos al 80% de tu autonomía.</div>')
+                          '⚡ Entra en este tramo con el depósito con buena autonomía restante.</div>')
 
             # 2. Avisos por DISTANCIA ABSOLUTA (independientes de la autonomía)
             if t["gap_km"] >= 100:
