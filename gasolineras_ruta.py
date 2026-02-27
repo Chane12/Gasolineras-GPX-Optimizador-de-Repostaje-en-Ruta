@@ -1553,39 +1553,6 @@ def generate_map(
     .popup-text-muted { color: #94a3b8; }
     .folium-legend { background: white; color: #111827; }
 
-    /* Dark Mode Auto-Adapt */
-    @media (prefers-color-scheme: dark) {
-        /* Invert OpenStreetMap tiles but strictly exclude ESRI Satellite imagery */
-        .leaflet-tile-pane img.leaflet-tile:not([src*="arcgisonline"]) {
-            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-        }
-
-        .leaflet-container {
-            background: #0f172a !important;
-        }
-
-        /* Dark mode overrides for popups */
-        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-            background: #1e293b !important;
-            color: #f8fafc !important;
-        }
-        .popup-title { color: #f8fafc !important; }
-        .popup-price-box { background: #0f172a !important; }
-        .popup-price-subtitle { color: #94a3b8 !important; }
-        .popup-text { color: #cbd5e1 !important; }
-        .popup-text-muted { color: #64748b !important; }
-        .popup-osrm-box { background: rgba(37,99,235,0.15) !important; color: #60a5fa !important; }
-
-        /* Disable map tile inversion rule specifically if user selected ESRI Satellite */
-        /* It is tricky to isolate it dynamically, so we accept that ESRI will look high-contrast inverted */
-
-        /* Folium legend */
-        .folium-legend {
-            background: #1e293b !important;
-            color: #f8fafc !important;
-            border: 1px solid #334155;
-        }
-    }
     </style>
     """
     mapa.get_root().html.add_child(folium.Element(dark_mode_css))

@@ -15,6 +15,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
 import streamlit as st
+import streamlit_javascript as st_js
 from streamlit_folium import st_folium
 
 from gasolineras_ruta import (
@@ -273,10 +274,8 @@ _solo24h_default = qp.get("solo24h", "False").lower() == "true"
 # ---------------------------------------------------------------------------
 # BARRA LATERAL — Controles de Configuración
 # ---------------------------------------------------------------------------
-with st.sidebar:
-    st.markdown("## ⚙️ Configuración del Viaje")
-    st.markdown("---")
 
+def render_controls():
     # 1. Entrada de ruta (tabs: Texto | GPX)
     st.markdown('<p class="sidebar-title">1. Ruta</p>', unsafe_allow_html=True)
     tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
@@ -301,7 +300,7 @@ with st.sidebar:
 
     with tab_gpx:
         gpx_file_upload = st.file_uploader(
-            "Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed"
+            "Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed", key="gpx_uploader"
         )
         if gpx_file_upload is not None:
             _input_mode = "gpx"
@@ -332,6 +331,7 @@ with st.sidebar:
         "Combustible:", options=list(COMBUSTIBLES.keys()),
         index=list(COMBUSTIBLES.keys()).index(_fuel_default),
         label_visibility="collapsed",
+        key="comb_selectbox"
     )
     fuel_column = COMBUSTIBLES[combustible_elegido]
 
@@ -340,7 +340,8 @@ with st.sidebar:
     usar_vehiculo = st.checkbox(
         "Limitar por autonomía",
         value=False,
-        help="Mostrar zonas de peligro en el mapa donde corres el riesgo de quedarte sin combustible."
+        help="Mostrar zonas de peligro en el mapa donde corres el riesgo de quedarte sin combustible.",
+        key="limite_autonomia_chk"
     )
     if usar_vehiculo:
         autonomia_km = st.number_input(
@@ -348,7 +349,8 @@ with st.sidebar:
             min_value=10, max_value=2000,
             value=_autonomia_default if _autonomia_default > 0 else 250,
             step=10,
-            help="¿Cuántos kilómetros puedes hacer con el depósito actual antes de quedarte tirado?"
+            help="¿Cuántos kilómetros puedes hacer con el depósito actual antes de quedarte tirado?",
+            key="autonomia_input"
         )
     else:
         autonomia_km = 0
@@ -358,21 +360,24 @@ with st.sidebar:
             "Distancia máxima a la ruta (km)",
             min_value=1, max_value=15, value=_buffer_default, step=1,
             help="Distancia lateral máxima al track para incluir gasolineras.",
+            key="radio_slider"
         )
-        top_n = st.slider("Gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1)
+        top_n = st.slider("Gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
         st.markdown("---")
         solo_24h = st.checkbox(
             "Solo estaciones abiertas 24H", 
             value=_solo24h_default, 
-            help="Filtra estaciones para mostrar solo aquellas operativas de madrugada y fines de semana sin excepciones."
+            help="Filtra estaciones para mostrar solo aquellas operativas de madrugada y fines de semana sin excepciones.",
+            key="solo_24h_chk"
         )
         buscar_tramos = st.checkbox(
             "Buscar gasolinera obligatoriamente cada X km",
             value=True,
-            help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas o vehículos con depósitos pequeños."
+            help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas o vehículos con depósitos pequeños.",
+            key="buscar_tramos_chk"
         )
         if buscar_tramos:
-            segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10)
+            segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
         else:
             segment_km = 0.0
 
@@ -396,6 +401,63 @@ with st.sidebar:
         st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
 
     st.caption("Datos en tiempo real del MITECO · Ministerio de Transición Ecológica.")
+
+    return {
+        "origen_txt": origen_txt,
+        "destino_txt": destino_txt,
+        "_input_mode": _input_mode,
+        "gpx_file": gpx_file,
+        "combustible_elegido": combustible_elegido,
+        "fuel_column": fuel_column,
+        "autonomia_km": autonomia_km,
+        "usar_vehiculo": usar_vehiculo,
+        "radio_km": radio_km,
+        "top_n": top_n,
+        "solo_24h": solo_24h,
+        "buscar_tramos": buscar_tramos,
+        "segment_km": segment_km,
+        "buffer_m": buffer_m,
+        "run_btn": run_btn
+    }
+
+def render_desktop_view():
+    with st.sidebar:
+        st.markdown("## ⚙️ Configuración del Viaje")
+        st.markdown("---")
+        return render_controls()
+
+def render_mobile_view():
+    st.markdown("## ⚙️ Configuración del Viaje")
+    with st.expander("Mostrar Controles de Búsqueda", expanded=True):
+        return render_controls()
+
+# Detección responsiva de ancho
+viewport_width = st_js.st_javascript("window.innerWidth", key="viewport_width")
+is_mobile = False
+if viewport_width and viewport_width > 0 and viewport_width < 768:
+    is_mobile = True
+
+if is_mobile:
+    ctrl = render_mobile_view()
+else:
+    ctrl = render_desktop_view()
+
+# Extracción de variables para el pipeline
+origen_txt = ctrl["origen_txt"]
+destino_txt = ctrl["destino_txt"]
+_input_mode = ctrl["_input_mode"]
+gpx_file = ctrl["gpx_file"]
+combustible_elegido = ctrl["combustible_elegido"]
+fuel_column = ctrl["fuel_column"]
+autonomia_km = ctrl["autonomia_km"]
+usar_vehiculo = ctrl["usar_vehiculo"]
+radio_km = ctrl["radio_km"]
+top_n = ctrl["top_n"]
+solo_24h = ctrl["solo_24h"]
+buscar_tramos = ctrl["buscar_tramos"]
+segment_km = ctrl["segment_km"]
+buffer_m = ctrl["buffer_m"]
+run_btn = ctrl["run_btn"]
 
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
