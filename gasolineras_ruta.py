@@ -1278,6 +1278,7 @@ def generate_map(
         name="Satélite ESRI",
         overlay=False,
         control=True,
+        show=False,
     ).add_to(mapa)
 
     # --- Dibujar la ruta GPX ---
@@ -1424,8 +1425,7 @@ def generate_map(
             _osrm_ok = False
         if _osrm_ok:
             osrm_line = (
-                f'<div style="margin:6px 0; padding:6px 8px; background:#eff6ff; '
-                f'border-left:3px solid #2563eb; border-radius:4px; font-size:0.82em; color:#1e40af;">'
+                f'<div class="popup-osrm-box">'
                 f"&#128652; <b>Desvío real:</b> {osrm_dist:.1f} km &nbsp;·&nbsp; {osrm_dur:.0f} min</div>"
             )
         else:
@@ -1437,23 +1437,23 @@ def generate_map(
         badge_label = "⭐ Más Barata" if rank_visual == 1 else f"#{rank_visual}"
 
         popup_html = f"""
-        <div style="font-family:'Segoe UI',Arial,sans-serif; min-width:240px; max-width:280px;">
+        <div class="custom-popup" style="font-family:'Segoe UI',Arial,sans-serif; min-width:240px; max-width:280px;">
 
             <!-- Header: nombre + badge -->
             <div style="display:flex; align-items:center; justify-content:space-between;
                         margin-bottom:8px;">
-                <b style="font-size:1rem; color:#0f172a;">{nombre}</b>
+                <b style="font-size:1rem; margin-right: 4px;" class="popup-title">{nombre}</b>
                 <span style="background:{badge_color}; color:white; font-size:0.7rem;
                              font-weight:700; padding:2px 7px; border-radius:99px;
                              white-space:nowrap; margin-left:6px;">{badge_label}</span>
             </div>
 
             <!-- Precio destacado -->
-            <div style="text-align:center; background:#f8fafc; border-radius:8px;
+            <div class="popup-price-box" style="text-align:center; border-radius:8px;
                         padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color};
                             line-height:1;">{f"{precio:.3f}" if not _math.isnan(precio) else "N/A"} €/L</div>
-                <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+                <div class="popup-price-subtitle" style="font-size:0.78rem; margin-top:2px;">
                     {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp;
                     Km {row.get('km_ruta', 0):.1f} en ruta</div>
             </div>
@@ -1461,17 +1461,17 @@ def generate_map(
             {osrm_line}
 
             <!-- Dirección -->
-            <div style="font-size:0.82em; color:#475569; margin:4px 0;">
+            <div class="popup-text" style="font-size:0.82em; margin:4px 0;">
                 &#128205; {direccion}<br>{municipio}, {provincia}
             </div>
 
             <!-- Horario -->
-            <div style="font-size:0.78em; color:#94a3b8; margin:4px 0;">
+            <div class="popup-text-muted" style="font-size:0.78em; margin:4px 0;">
                 &#128336; {horario if horario else '—'}
             </div>
 
             <!-- CTA: Llévame -->
-            <a href="{maps_url}" target="_blank" style="
+            <a href="{maps_url}" target="_blank" class="popup-btn" style="
                 display:block; margin-top:10px; padding:8px;
                 background:#2563eb; color:white; text-align:center;
                 text-decoration:none; border-radius:6px;
@@ -1518,10 +1518,9 @@ def generate_map(
 
     # Leyenda con gradiente de precio
     legend_html = f"""
-    <div style="
+    <div class="folium-legend" style="
         position:fixed; bottom:30px; left:30px;
-        z-index:1000; background:white;
-        padding:14px 18px; border-radius:8px;
+        z-index:9999; padding:14px 18px; border-radius:8px;
         box-shadow:0 2px 8px rgba(0,0,0,0.2);
         font-family:sans-serif; font-size:13px;
         min-width: 200px;
@@ -1532,15 +1531,64 @@ def generate_map(
         <div style="
             background: linear-gradient(to right, #16a34a, #eab308, #dc2626);
             height: 12px; border-radius: 4px; margin: 5px 0;
-            border: 1px solid #ddd;
+            border: 1px solid rgba(128,128,128,0.3);
         "></div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; color:#555;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
             <span>&#9679; {precio_min:.3f}€ (más barato)</span>
             <span>{precio_max:.3f}€ &#9679;</span>
         </div>
     </div>
     """
     mapa.get_root().html.add_child(folium.Element(legend_html))
+
+    # --- CSS global del mapa para Light y Dark mode ---
+    dark_mode_css = """
+    <style>
+    /* Default Map Styles (Light Mode) */
+    .popup-osrm-box { margin:6px 0; padding:6px 8px; background:#eff6ff; border-left:3px solid #2563eb; border-radius:4px; font-size:0.82em; color:#1e40af; }
+    .popup-title { color: #0f172a; }
+    .popup-price-box { background: #f8fafc; }
+    .popup-price-subtitle { color: #64748b; }
+    .popup-text { color: #475569; }
+    .popup-text-muted { color: #94a3b8; }
+    .folium-legend { background: white; color: #111827; }
+
+    /* Dark Mode Auto-Adapt */
+    @media (prefers-color-scheme: dark) {
+        /* Invert OpenStreetMap tiles but strictly exclude ESRI Satellite imagery */
+        .leaflet-tile-pane img.leaflet-tile:not([src*="arcgisonline"]) {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .leaflet-container {
+            background: #0f172a !important;
+        }
+
+        /* Dark mode overrides for popups */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+        }
+        .popup-title { color: #f8fafc !important; }
+        .popup-price-box { background: #0f172a !important; }
+        .popup-price-subtitle { color: #94a3b8 !important; }
+        .popup-text { color: #cbd5e1 !important; }
+        .popup-text-muted { color: #64748b !important; }
+        .popup-osrm-box { background: rgba(37,99,235,0.15) !important; color: #60a5fa !important; }
+
+        /* Disable map tile inversion rule specifically if user selected ESRI Satellite */
+        /* It is tricky to isolate it dynamically, so we accept that ESRI will look high-contrast inverted */
+
+        /* Folium legend */
+        .folium-legend {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border: 1px solid #334155;
+        }
+    }
+    </style>
+    """
+    mapa.get_root().html.add_child(folium.Element(dark_mode_css))
 
     # --- Control de capas ---
     folium.LayerControl().add_to(mapa)

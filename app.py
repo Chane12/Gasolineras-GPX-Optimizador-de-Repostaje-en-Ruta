@@ -82,7 +82,8 @@ st.markdown(
     .sidebar-title {
         font-size: 0.85rem;
         font-weight: 600;
-        color: #475569;
+        color: var(--text-color);
+        opacity: 0.8;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-top: 1.2rem;
@@ -90,35 +91,19 @@ st.markdown(
     }
 
     div[data-testid="stMetric"] {
-        background-color: white;
-        border: 1px solid #e2e8f0;
+        background-color: var(--secondary-background-color);
+        border: 1px solid var(--faded-text05, rgba(128,128,128,0.2));
         border-radius: 8px;
         padding: 15px 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    div[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: 700; color: #0f172a; }
+    div[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: 700; color: var(--text-color); }
     div[data-testid="stMetricLabel"] {
-        font-size: 0.78rem; font-weight: 500; color: #64748b;
+        font-size: 0.78rem; font-weight: 500; color: var(--text-color); opacity: 0.8;
         text-transform: uppercase; letter-spacing: 0.025em;
     }
 
-    div.stButton > button {
-        background: #2563eb !important;
-        color: white !important;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        border-radius: 6px !important;
-        height: 2.75rem !important;
-        border: none !important;
-        box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2) !important;
-        transition: all 0.2s ease-in-out !important;
-        margin-top: 0.5rem;
-    }
-    div.stButton > button:hover {
-        background: #1d4ed8 !important;
-        transform: translateY(-1px);
-        box-shadow: 0 10px 15px -3px rgba(37,99,235,0.3) !important;
-    }
+    /* We remove the hardcoded blue stButton to let Streamlit's native primary button adapt to dark mode natively. */
 
     /* --- Welcome screen --- */
     .welcome-container {
@@ -128,25 +113,25 @@ st.markdown(
         justify-content: center;
         padding: 3rem 2rem;
         text-align: center;
-        background: white;
-        border: 1px dashed #cbd5e1;
+        background: var(--secondary-background-color);
+        border: 1px dashed var(--faded-text05, rgba(128,128,128,0.4));
         border-radius: 12px;
         margin-top: 2rem;
     }
     .welcome-icon  { font-size: 3.5rem; margin-bottom: 0.8rem; }
-    .welcome-title { font-size: 1.4rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; }
-    .welcome-text  { font-size: 0.95rem; color: #64748b; max-width: 560px; line-height: 1.6; margin-bottom: 1.5rem; }
+    .welcome-title { font-size: 1.4rem; font-weight: 700; color: var(--text-color); margin-bottom: 0.5rem; }
+    .welcome-text  { font-size: 0.95rem; color: var(--text-color); opacity: 0.8; max-width: 560px; line-height: 1.6; margin-bottom: 1.5rem; }
 
     /* --- Cost box: MOBILE-FIRST grid --- */
     .cost-box {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        border: 1px solid #86efac;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--primary-color);
         border-radius: 10px;
         padding: 18px 20px;
         margin: 12px 0;
     }
-    .cost-box-title { font-weight: 700; color: #166534; font-size: 1rem; margin-bottom: 6px; }
-    .cost-saving    { font-size: 1.4rem; font-weight: 800; color: #16a34a; }
+    .cost-box-title { font-weight: 700; color: var(--primary-color); font-size: 1rem; margin-bottom: 6px; }
+    .cost-saving    { font-size: 1.4rem; font-weight: 800; color: var(--primary-color); }
 
     /* Cost grid snaps to single column on narrow screens */
     .cost-grid {
@@ -159,7 +144,7 @@ st.markdown(
     .cost-breakdown {
         margin-top: 14px;
         padding-top: 12px;
-        border-top: 1px solid #86efac;
+        border-top: 1px solid var(--primary-color);
         display: flex;
         flex-wrap: wrap;
         gap: 1.5rem;
@@ -170,7 +155,7 @@ st.markdown(
         position: relative;
         border-radius: 10px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--faded-text05, rgba(128,128,128,0.2));
     }
     .map-guard-overlay {
         position: absolute;
@@ -184,7 +169,7 @@ st.markdown(
         pointer-events: none;
     }
 
-    .stDataFrame { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+    .stDataFrame { border-radius: 8px; overflow: hidden; border: 1px solid var(--faded-text05, rgba(128,128,128,0.2)); }
 
     /* ============================================================
        MOBILE BREAKPOINTS — target < 768px (tablets / phones)
@@ -211,7 +196,7 @@ st.markdown(
 
     /* === Radar de Autonomía Crítica === */
     .radar-header {
-        font-size: 1.1rem; font-weight: 700; color: #0f172a;
+        font-size: 1.1rem; font-weight: 700; color: var(--text-color);
         display: flex; align-items: center; gap: 0.5rem;
         margin-bottom: 12px;
     }
@@ -223,24 +208,23 @@ st.markdown(
         padding: 6px 14px; border-radius: 99px;
         font-size: 0.82rem; font-weight: 700;
     }
-    .radar-safe   { background: #dcfce7; color: #166534;  border: 1px solid #86efac; }
-    .radar-warn   { background: #fef9c3; color: #854d0e;  border: 1px solid #fde047; }
-    .radar-crit   { background: #fee2e2; color: #991b1b;  border: 1px solid #fca5a5; }
+    .radar-safe   { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .radar-warn   { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
+    .radar-crit   { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
     .radar-box {
-        background: white; border: 1px solid #e2e8f0;
+        background: var(--secondary-background-color); border: 1px solid var(--faded-text05, rgba(128,128,128,0.2));
         border-radius: 10px; padding: 16px 20px; margin-bottom: 8px;
     }
     .radar-box-crit { border-left: 4px solid #ef4444; }
     .radar-box-warn { border-left: 4px solid #eab308; }
     .radar-box-safe { border-left: 4px solid #22c55e; }
     .radar-km-badge {
-        font-size: 1.6rem; font-weight: 800; color: #0f172a;
+        font-size: 1.6rem; font-weight: 800; color: var(--text-color);
     }
-    .radar-detail { font-size: 0.82rem; color: #64748b; margin-top: 2px; }
+    .radar-detail { font-size: 0.82rem; color: var(--text-color); opacity: 0.8; margin-top: 2px; }
     @media (max-width: 768px) {
         .radar-summary { flex-direction: column; gap: 8px; }
     }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -931,41 +915,41 @@ if "pipeline_results" in st.session_state:
     # Banner de estado global
     if n_crit > 0:
         global_estado_html = (
-            '<div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:10px; '
+            '<div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:10px; '
             'padding:14px 18px; margin-bottom:14px;">'
-            f'<b style="color:#991b1b; font-size:1rem;">🔴 Ruta con {n_crit} tramo(s) CRÍTICO(S)</b><br>'
-            f'<span style="color:#7f1d1d; font-size:0.88rem;">'
+            f'<b style="color:#ef4444; font-size:1rem;">🔴 Ruta con {n_crit} tramo(s) CRÍTICO(S)</b><br>'
+            f'<span style="color:var(--text-color); opacity: 0.9; font-size:0.88rem;">'
             f'El tramo más largo sin gasolinera es de <b>{max_gap:.1f} km</b>. '
             f'Tu autonomía configurada es de <b>{autonomia_km} km</b>. '
             'Revisa los tramos marcados en rojo antes de salir.</span></div>'
         ) if autonomia_km > 0 else (
-            '<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; '
+            '<div style="background:var(--secondary-background-color); border:1px solid var(--faded-text05, rgba(128,128,128,0.3)); border-radius:10px; '
             'padding:14px 18px; margin-bottom:14px;">'
-            f'<b style="color:#334155;">ℹ️ Tramo más largo sin gasolinera: <b>{max_gap:.1f} km</b></b><br>'
-            '<span style="color:#64748b; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas críticas.</span></div>'
+            f'<b style="color:var(--text-color);">ℹ️ Tramo más largo sin gasolinera: <b>{max_gap:.1f} km</b></b><br>'
+            '<span style="color:var(--text-color); opacity: 0.8; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas críticas.</span></div>'
         )
     elif n_warn > 0:
         global_estado_html = (
-            '<div style="background:#fef9c3; border:1px solid #fde047; border-radius:10px; '
+            '<div style="background:rgba(234,179,8,0.15); border:1px solid rgba(234,179,8,0.3); border-radius:10px; '
             'padding:14px 18px; margin-bottom:14px;">'
-            f'<b style="color:#854d0e; font-size:1rem;">🟡 Ruta con {n_warn} tramo(s) de ATENCIÓN</b><br>'
-            f'<span style="color:#713f12; font-size:0.88rem;">'
+            f'<b style="color:#eab308; font-size:1rem;">🟡 Ruta con {n_warn} tramo(s) de ATENCIÓN</b><br>'
+            f'<span style="color:var(--text-color); opacity: 0.9; font-size:0.88rem;">'
             f'Ningún tramo supera tu autonomía ({autonomia_km} km), pero hay segmentos de más del 80%. '
             'Procura no llegar a esas zonas con el depósito bajo.</span></div>'
         )
     else:
         global_estado_html = (
-            '<div style="background:#dcfce7; border:1px solid #86efac; border-radius:10px; '
+            '<div style="background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); border-radius:10px; '
             'padding:14px 18px; margin-bottom:14px;">'
-            f'<b style="color:#166534; font-size:1rem;">🟢 Ruta completamente SEGURA</b><br>'
-            f'<span style="color:#14532d; font-size:0.88rem;">'
+            f'<b style="color:#22c55e; font-size:1rem;">🟢 Ruta completamente SEGURA</b><br>'
+            f'<span style="color:var(--text-color); opacity: 0.9; font-size:0.88rem;">'
             f'Todos los tramos entre gasolineras están por debajo de tu autonomía ({autonomia_km} km). '
             '¡Puedes salir tranquilo!</span></div>'
         ) if autonomia_km > 0 else (
-            '<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; '
+            '<div style="background:var(--secondary-background-color); border:1px solid var(--faded-text05, rgba(128,128,128,0.3)); border-radius:10px; '
             'padding:14px 18px; margin-bottom:14px;">'
-            f'<b style="color:#334155;">ℹ️ Tramo más largo sin gasolinera: {max_gap:.1f} km</b><br>'
-            '<span style="color:#64748b; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas.</span></div>'
+            f'<b style="color:var(--text-color);">ℹ️ Tramo más largo sin gasolinera: {max_gap:.1f} km</b><br>'
+            '<span style="color:var(--text-color); opacity: 0.8; font-size:0.88rem;">Configura tu autonomía en el sidebar para activar las alertas.</span></div>'
         )
 
     st.markdown(global_estado_html, unsafe_allow_html=True)
@@ -977,9 +961,9 @@ if "pipeline_results" in st.session_state:
         _chip_html += f'<span class="radar-chip radar-warn">🟡 {n_warn} tramo(s) de atención</span>'
     if n_crit:
         _chip_html += f'<span class="radar-chip radar-crit">🔴 {n_crit} tramo(s) críticos</span>'
-    _chip_html += f'<span class="radar-chip" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;">🛣️ Ruta total: {route_total_km:.1f} km</span>'
+    _chip_html += f'<span class="radar-chip" style="background:var(--secondary-background-color);color:var(--text-color);border:1px solid var(--faded-text05, rgba(128,128,128,0.2));">🛣️ Ruta total: {route_total_km:.1f} km</span>'
     if autonomia_km > 0:
-        _chip_html += f'<span class="radar-chip" style="background:#eff6ff;color:#1e40af;border:1px solid #93c5fd;">⛽ Autonomía: {autonomia_km} km</span>'
+        _chip_html += f'<span class="radar-chip" style="background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);">⛽ Autonomía: {autonomia_km} km</span>'
     _chip_html += '</div>'
     st.markdown(_chip_html, unsafe_allow_html=True)
 
@@ -1032,13 +1016,13 @@ if "pipeline_results" in st.session_state:
                         <div>
                             <div class="radar-km-badge">{t['gap_km']:.1f} km</div>
                             <div class="radar-detail">Km {t['km_inicio']:.0f} → Km {t['km_fin']:.0f}</div>
-                            <div style="font-size:0.85rem; color:#334155; margin-top:4px;">
+                            <div style="font-size:0.85rem; color:var(--text-color); margin-top:4px; opacity: 0.9;">
                                 <b>{t['origen']}</b> → <b>{t['destino']}</b>
                             </div>
                         </div>
                         <span class="radar-chip {chip_cls}">{t['emoji']} {t['label']}</span>
                     </div>
-                    {f'<div style="margin-top:10px; background:#f1f5f9; border-radius:4px; height:6px; overflow:hidden;"><div style="height:6px; width:{pct_bar}%; background:{bar_color}; border-radius:4px;"></div></div>' if autonomia_km > 0 else ''}
+                    {f'<div style="margin-top:10px; background:var(--faded-text05, rgba(128,128,128,0.2)); border-radius:4px; height:6px; overflow:hidden;"><div style="height:6px; width:{pct_bar}%; background:{bar_color}; border-radius:4px;"></div></div>' if autonomia_km > 0 else ''}
                     {aviso}
                 </div>
                 """, unsafe_allow_html=True)
