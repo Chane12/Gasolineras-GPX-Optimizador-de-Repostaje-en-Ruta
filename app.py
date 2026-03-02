@@ -866,7 +866,7 @@ if "pipeline_results" in st.session_state:
                 
                 
             if not _using_gpx:
-                gmaps_url, omitidas = generate_google_maps_url(track_utm, gdf_export)
+                gmaps_url, omitidas = generate_google_maps_url(track, gdf_export)
                 st.link_button(
                     "📱 Abrir Ruta en Google Maps con mis paradas",
                     url=gmaps_url,
