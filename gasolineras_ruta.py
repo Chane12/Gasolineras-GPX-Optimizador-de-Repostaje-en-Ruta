@@ -298,55 +298,72 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
         "https://api.mapy.cz/v1/geocode" # Alternative free
     ]
 
-    # Actually, the safest fallback for Nominatim without API keys is using random User-Agents or delay, and a known mirror.
-    import random
+    # Let's use reliable mirrors and alternatives
     user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
-        "GasolinerasRutaApp/1.0 (contacto@example.com)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+        "GasolinerasRutaApp/1.0"
     ]
     
     headers = _NOMINATIM_HEADERS.copy()
     
+    # Photon API (Komoot) is very reliable and has high rate limits
     endpoints = [
-        _NOMINATIM_URL,
-        "https://nominatim.kumi.systems/search" # Known public mirror
+        {"url": _NOMINATIM_URL, "type": "nominatim"},
+        {"url": "https://photon.komoot.io/api", "type": "photon"},
+        {"url": "https://geocode.maps.co/search", "type": "nominatim"}
     ]
     
     last_err = None
-    for attempt in range(len(endpoints)):
+    import random
+    import time
+    
+    for attempt, ep in enumerate(endpoints):
         headers["User-Agent"] = random.choice(user_agents)
         try:
             time.sleep(1 + attempt)  # Backoff
+            
+            if ep["type"] == "nominatim":
+                params = {"q": lugar, "format": "json", "limit": 1}
+            else: # photon
+                params = {"q": lugar, "limit": 1}
+                
             resp = requests.get(
-                endpoints[attempt],
-                params={"q": lugar, "format": "json", "limit": 1},
+                ep["url"],
+                params=params,
                 headers=headers,
                 timeout=timeout,
             )
             resp.raise_for_status()
             results = resp.json()
-            if not results:
-                raise RouteTextError(
-                    f"No encontramos la ubicación «{lugar}». "
-                    "Prueba a escribir el nombre completo de la ciudad o provincia."
-                )
-            lat = float(results[0]["lat"])
-            lon = float(results[0]["lon"])
-            print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f}) via {endpoints[attempt]}")
+            
+            lat, lon = None, None
+            if ep["type"] == "nominatim":
+                if not results:
+                    raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
+                lat = float(results[0]["lat"])
+                lon = float(results[0]["lon"])
+            elif ep["type"] == "photon":
+                if not results.get("features"):
+                    raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
+                # Photon returns GeoJSON: coordinates are [lon, lat]
+                coords = results["features"][0]["geometry"]["coordinates"]
+                lon, lat = float(coords[0]), float(coords[1])
+                
+            print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f}) via {ep['url']}")
             return lat, lon
+            
         except RouteTextError:
             raise
         except requests.exceptions.HTTPError as e:
             last_err = e
-            if resp.status_code == 429:
-                print(f"[Geocode] Rate limit en {endpoints[attempt]}, intentando alternative...")
+            if resp.status_code in (429, 403):
+                print(f"[Geocode] Rate limit/Forbidden en {ep['url']}, intentando alternative...")
                 continue
             raise RouteTextError(f"Error HTTP al geocodificar «{lugar}»: {e}") from e
         except Exception as exc:
             last_err = exc
-            print(f"[Geocode] Error en {endpoints[attempt]}: {exc}")
+            print(f"[Geocode] Error en {ep['url']}: {exc}")
             continue
             
     raise RouteTextError(f"Error al geocodificar «{lugar}» tras intentar varios servidores. Último error: {last_err}")
