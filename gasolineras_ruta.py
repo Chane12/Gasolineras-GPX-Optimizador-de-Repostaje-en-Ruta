@@ -155,6 +155,14 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
                 print(f"[MITECO] Proxy {proxy_name} falló: {exc}")
 
         if data is None:
+            fallback_file = Path("fallback_miteco.parquet")
+            if fallback_file.exists():
+                print("[MITECO] Todas las conexiones fallaron. Intentando cargar fallback parquet...")
+                try:
+                    return pd.read_parquet(fallback_file)
+                except Exception as e:
+                    print(f"[MITECO] Error leyendo el fallback local: {e}")
+
             raise ConnectionError(
                 "No se pudo conectar con la API del MITECO ni directamente "
                 "ni mediante ningún proxy. Comprueba tu conexión a Internet.\n"
@@ -164,6 +172,14 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
 
     records = data.get("ListaEESSPrecio", [])
     if not records:
+        fallback_file = Path("fallback_miteco.parquet")
+        if fallback_file.exists():
+            print("[MITECO] La API no devolvió registros. Intentando cargar fallback parquet...")
+            try:
+                return pd.read_parquet(fallback_file)
+            except Exception as e:
+                print(f"[MITECO] Error leyendo el fallback local: {e}")
+                
         raise ValueError("La API del MITECO no devolvió registros. Comprueba el endpoint.")
 
     df = pd.DataFrame(records)
@@ -209,6 +225,13 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
     )
 
     df = df.reset_index(drop=True)
+    
+    # Guardar fallback local silenciosamente en el directorio actual (o en /tmp)
+    try:
+        df.to_parquet("fallback_miteco.parquet")
+    except Exception as e:
+        print(f"[MITECO] Aviso silencioso: No se pudo guardar el fallback parquet: {e}")
+        
     return df
 
 
@@ -792,6 +815,44 @@ def filter_cheapest_stations(
 
 
 # ===========================================================================
+# 5c. PREPARACIÓN "MI PLAN DE VIAJE" (DESACOPLAMIENTO DE UI)
+# ===========================================================================
+
+def prepare_export_gdf(
+    mis_paradas: list[dict],
+    fuel_column: str,
+    precio_col_label: str
+) -> gpd.GeoDataFrame:
+    """
+    Convierte la lista de paradas en memoria (diccionarios desde Streamlit) 
+    a un GeoDataFrame en EPSG:4326 listo para ser inyectado en GPX o en 
+    URL de Google Maps.
+    """
+    from shapely.geometry import Point
+    
+    if not mis_paradas:
+        return gpd.GeoDataFrame()
+
+    df_plan = pd.DataFrame(mis_paradas)
+    if "Km en Ruta" in df_plan.columns:
+        df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
+
+    geometrias = [Point(row["_geom_x"], row["_geom_y"]) for _, row in df_plan.iterrows()]
+    gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
+
+    # Aseguramos de que el GDF tenga las columnas "Rótulo" y "fuel_column" que esperan las herramientas
+    if "Marca" in gdf_export.columns:
+        gdf_export["Rótulo"] = gdf_export["Marca"]
+    else:
+        gdf_export["Rótulo"] = "Gasolinera Seleccionada"
+        
+    if precio_col_label in gdf_export.columns:
+        gdf_export[fuel_column] = gdf_export[precio_col_label]
+        
+    return gdf_export
+
+
+# ===========================================================================
 # 5d. EXPORTACIÓN DE RUTAS — Google Maps URL + GPX Enriquecido
 # ===========================================================================
 
@@ -1173,25 +1234,27 @@ def enrich_stations_with_osrm(
     # Reproyectar gasolineras a WGS84 para obtener lon/lat de la gasolinera
     gdf_wgs84 = gdf_top.to_crs("EPSG:4326")
 
-    def process_station(idx, row_wgs84):
-        gas_lon = row_wgs84.geometry.x
-        gas_lat = row_wgs84.geometry.y
-
-        # 1. Punto más cercano de la ruta GPX a esta gasolinera
-        # Reproyectar LineString localmente si la version falla
-        import shapely
-        if hasattr(track_original, "project"):
-            # Objeto LineString de shapely
-            # Busco la coordenada de punto mas cercana a la mia a traves de nearest points -> punto proyectado -> interpolate(dist_along)
-            dist_along = track_original.project(Point(gas_lon, gas_lat))
-            nearest_on_route = track_original.interpolate(dist_along)
-            origin_lon = nearest_on_route.x
-            origin_lat = nearest_on_route.y
-        else:
-            # Fallback a simple euclidiana min-dist en caso de versionados Shapely
-            import math
-            lons = [c[0] for c in track_original.coords]
-            lats = [c[1] for c in track_original.coords]
+    # =========================================================================
+    # [FASE 4 - Vectorización del GIL]
+    # Pre-calcular el punto más cercano del track a la gasolinera (CPU-bound) 
+    # ANTES del ThreadPool (IO-bound) para evitar GIL thrashing.
+    # =========================================================================
+    rutas_origen_dict = {}
+    import shapely
+    
+    if hasattr(track_original, "project"):
+        # Operación vectorizada sobre GeoPandas (muy rápido a nivel C/Cython)
+        dist_along_array = gdf_wgs84.geometry.apply(lambda geom: track_original.project(geom))
+        nearest_points = dist_along_array.apply(lambda d: track_original.interpolate(d))
+        for idx, pt in zip(gdf_wgs84.index, nearest_points):
+            rutas_origen_dict[idx] = (pt.x, pt.y)
+    else:
+        # Fallback manual para versiones antiguas de Shapely
+        import math
+        lons = [c[0] for c in track_original.coords]
+        lats = [c[1] for c in track_original.coords]
+        for idx, row in gdf_wgs84.iterrows():
+            gas_lon, gas_lat = row.geometry.x, row.geometry.y
             min_dist = float("inf")
             best_pt = (0.0, 0.0)
             for l_lon, l_lat in zip(lons, lats):
@@ -1199,9 +1262,12 @@ def enrich_stations_with_osrm(
                 if d < min_dist:
                     min_dist = d
                     best_pt = (l_lon, l_lat)
-            origin_lat = best_pt[1]
-            origin_lon = best_pt[0]
+            rutas_origen_dict[idx] = best_pt
 
+    def process_station(idx, row_wgs84):
+        gas_lon = row_wgs84.geometry.x
+        gas_lat = row_wgs84.geometry.y
+        origin_lon, origin_lat = rutas_origen_dict[idx]
 
         # 2. Llamada defensiva a OSRM (Ida y Vuelta para contar desvio completo)
         d_ida = get_real_distance_osrm(
@@ -1228,47 +1294,35 @@ def enrich_stations_with_osrm(
         return idx, result
 
     # Circuit Breaker para OSRM
+    import random
     fallos_consecutivos = 0
-    max_fallos = 3
+    max_fallos = 6
+    current_delay = delay_s
 
-    # max_workers limitado para no exceder rate-limits estáticos de OSRM (1-3 rq/s libres)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    # max_workers reducido para no exceder rate-limits estáticos de OSRM
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf_top.index}
         for future in concurrent.futures.as_completed(futures):
-            time.sleep(delay_s)  # throttle de las query limitadas del ThreadPool
+            time.sleep(current_delay)  # throttle variable basado en el comportamiento de la red
             try:
                 idx, result = future.result()
                 if result is None:
                    fallos_consecutivos += 1
+                   # Backoff exponencial con jitter: 0.1s -> 0.3s -> 0.7s ... max 5s
+                   current_delay = min(5.0, (current_delay * 1.5) + random.uniform(0.1, 0.5))
                 else:
-                   fallos_consecutivos = 0
+                   fallos_consecutivos = max(0, fallos_consecutivos - 1)
+                   current_delay = delay_s  # reset en caso de éxito
                 yield idx, result
             except Exception as exc:
                 idx_failed = futures[future]
                 fallos_consecutivos += 1
+                current_delay = min(5.0, (current_delay * 1.5) + random.uniform(0.1, 0.5))
                 yield idx_failed, None
 
             if fallos_consecutivos >= max_fallos:
                 print("[OSRM] Circuit Breaker Activado: Demasiados fallos seguidos. Abortando llamadas OSRM.")
-                # El main absorberá el yield loop y no hará más querys
                 break
-            # Abortamos de facto si la API falla contínuamente
-            if fallos_consecutivos >= max_fallos:
-                idx = futures[future]
-                yield idx, None
-                continue
-
-            try:
-                idx, result, row_wgs84 = future.result(timeout=10)
-                if result is not None:
-                    fallos_consecutivos = 0
-                else:
-                    fallos_consecutivos += 1
-                yield idx, result
-            except Exception as e:
-                fallos_consecutivos += 1
-                idx = futures[future]
-                yield idx, None
 
 
 # ===========================================================================

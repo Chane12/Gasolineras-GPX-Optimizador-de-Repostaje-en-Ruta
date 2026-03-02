@@ -34,6 +34,7 @@ from gasolineras_ruta import (
     generate_map,
     get_route_from_text,
     load_gpx_track,
+    prepare_export_gdf,
     simplify_track,
     spatial_join_within_buffer,
     validate_gpx_track,
@@ -420,7 +421,8 @@ if _pipeline_active:
         try:
             status.update(label="⏬ Descargando precios en tiempo real del MITECO…", state="running")
             # Proteger contra Memory Leaks aislando el DataFrame de posibles mutaciones posteriores
-            df_gas = cached_fetch_gasolineras().copy(deep=True)
+            # (NOTA: Se tratan los datos cacheados como solo-lectura; los filtros subsecuentes crean copias seguras superficiales)
+            df_gas = cached_fetch_gasolineras()
 
             # --- Carga del track (solo GPX; en modo texto ya está listo) ---
             if track is None:
@@ -433,12 +435,13 @@ if _pipeline_active:
 
             status.update(label="📡 Cruzando con estaciones de servicio cercanas a tu ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
-            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché) y se clona para evitar Memory Poisoning
-            gdf_utm = cached_build_stations_gdf(df_gas).copy(deep=True)
+            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché), lo leemos en modo solo-lectura
+            gdf_utm = cached_build_stations_gdf(df_gas)
             gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
 
             if solo_24h:
                 # Filtrar asumiendo que el MITECO pone "24H" o "24 H" en el string horario
+                # (Genera copia superficial transparente)
                 gdf_within = gdf_within[gdf_within["Horario"].str.contains("24H|24 H", case=False, na=False)]
 
             if fuel_column not in gdf_within.columns or gdf_within.empty or gdf_within[fuel_column].isna().all():
@@ -845,18 +848,13 @@ if "pipeline_results" in st.session_state:
             st.write("")
             st.markdown("**📤 Exportar Ruta**")
             
-            # Reconstruir un GDF temporal para la exportación usando EPSG:4326
-            geometrias = [Point(row["_geom_x"], row["_geom_y"]) for row in st.session_state["mis_paradas"]]
-            # Ordenamos las coordenadas según df_plan para exportarlas en orden
-            gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
-            
-            # Aseguramos de que el GDF tenga las columnas "Rótulo" y "fuel_column" que esperan las herramientas
-            if "Marca" in gdf_export.columns:
-                gdf_export["Rótulo"] = gdf_export["Marca"]
-            else:
-                gdf_export["Rótulo"] = "Gasolinera Seleccionada"
-            if precio_col_label in gdf_export.columns:
-                gdf_export[fuel_column] = gdf_export[precio_col_label]
+            # Reconstruir un GDF temporal para la exportación usando EPSG:4326 a través de un módulo puro
+            gdf_export = prepare_export_gdf(
+                st.session_state["mis_paradas"],
+                fuel_column=fuel_column,
+                precio_col_label=precio_col_label
+            )
+                
                 
             if not _using_gpx:
                 gmaps_url, omitidas = generate_google_maps_url(track_utm, gdf_export)
