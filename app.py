@@ -221,6 +221,9 @@ def render_controls():
             else:
                 auto_val = _autonomia_default if _autonomia_default > 0 else 500
                 
+            if perfil != "Manual":
+                st.session_state["autonomia_input"] = auto_val
+                
             autonomia_km = st.number_input(
                 "Autonomía del Vehículo (km)",
                 min_value=10, max_value=2000,
