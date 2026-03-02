@@ -74,16 +74,20 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
                     
                     if autonomia_km > 0:
                         pct_bar = min(1.0, t["gap_km"] / autonomia_km)
-                        st.progress(pct_bar, text=f"Consumo de autonomía: {pct_bar*100:.0f}%")
-                    
-                    if autonomia_km > 0 and t["nivel"] == "critico":
-                        st.error(f"⚠️ Supera tu autonomía en {t['gap_km'] - autonomia_km:.1f} km — Repostar OBLIGATORIAMENTE antes de este tramo.")
-                    elif autonomia_km > 0 and t["nivel"] == "atencion":
-                        st.warning("⚡ Asegúrate de entrar a este tramo con suficiente combustible.")
-
-                    if t["gap_km"] >= 100:
-                        st.error(f"🚨 **Tramo muy largo ({t['gap_km']:.0f} km sin gasolineras)** — Inicia este tramo con el depósito completamente lleno.")
-                    elif t["gap_km"] >= 60:
-                        st.warning(f"⚠️ **Tramo largo ({t['gap_km']:.0f} km sin gasolineras)** — Procura no entrar con menos de medio depósito.")
+                        pct_real = (t["gap_km"] / autonomia_km) * 100
+                        st.progress(pct_bar, text=f"Consumo de autonomía: {pct_real:.0f}%")
+                        
+                        if t["nivel"] == "critico":
+                            st.error(f"⚠️ Supera tu autonomía en {t['gap_km'] - autonomia_km:.1f} km — Repostar OBLIGATORIAMENTE antes de este tramo.")
+                        elif t["nivel"] == "atencion":
+                            st.warning(f"⚡ Este tramo de {t['gap_km']:.0f} km consumirá el {pct_real:.0f}% de tu tanque. Entra con suficiente combustible.")
+                        else:
+                            if t["gap_km"] >= 60:
+                                st.info(f"ℹ️ **Tramo de {t['gap_km']:.0f} km sin gasolineras.** Para tu vehículo solo supone un {pct_real:.0f}% de la autonomía total. Tienes margen seguro.")
+                    else:
+                        if t["gap_km"] >= 100:
+                            st.error(f"🚨 **Tramo muy largo ({t['gap_km']:.0f} km sin gasolineras)** — Asegúrate de llevar un nivel alto de combustible antes de entrar.")
+                        elif t["gap_km"] >= 60:
+                            st.warning(f"⚠️ **Tramo largo ({t['gap_km']:.0f} km sin gasolineras)** — Revisa tu nivel de combustible con antelación.")
     else:
         st.info("Ningún tramo de tu ruta presenta riesgos largos ni exceden tu autonomía. 🟢")

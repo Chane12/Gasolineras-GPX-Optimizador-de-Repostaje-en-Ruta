@@ -267,16 +267,25 @@ def render_controls():
 
         st.markdown("---")
 
-        # Botón para compartir configuración por URL
-        if st.button("🔗 Compartir enlace", use_container_width=True):
-            st.query_params.update({
-                "fuel":       combustible_elegido,
-                "buffer":     str(radio_km),
-                "top":        str(top_n),
-                "solo24h":    str(solo_24h),
-                "autonomia":  str(autonomia_km),
-            })
-            st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
+        # Acciones Extra
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            if st.button("🔗 Compartir ajustes", use_container_width=True):
+                st.query_params.update({
+                    "fuel":       combustible_elegido,
+                    "buffer":     str(radio_km),
+                    "top":        str(top_n),
+                    "solo24h":    str(solo_24h),
+                    "autonomia":  str(autonomia_km),
+                })
+                st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
+                
+        with rc2:
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+                st.query_params.clear()
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
 
         st.caption("Datos en tiempo real del MITECO · Ministerio de Transición Ecológica.")
 
