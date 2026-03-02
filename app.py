@@ -785,14 +785,17 @@ if "pipeline_results" in st.session_state:
             st.write("")
             sel_row = df_show.iloc[sel_idx]
             sel_nombre_cart = sel_row.get("Marca", "Estación de servicio")
+            coords_y, coords_x = station_coords[sel_idx]
             
-            ya_en_plan = any(p.get("Marca") == sel_nombre_cart for p in st.session_state["mis_paradas"])
+            ya_en_plan = any(
+                p.get("_geom_x") == coords_x and p.get("_geom_y") == coords_y
+                for p in st.session_state["mis_paradas"]
+            )
             
             if ya_en_plan:
-                st.info(f"✅ **{sel_nombre_cart}** ya está en tu Plan de Viaje.")
+                st.info(f"✅ Esta estación **{sel_nombre_cart}** ya está en tu Plan de Viaje.")
             else:
                 if st.button(f"➕ Añadir **{sel_nombre_cart}** a Mi Plan de Viaje", type="primary"):
-                    coords_y, coords_x = station_coords[sel_idx]
                     parada_dict = sel_row.to_dict()
                     parada_dict["_geom_y"] = coords_y
                     parada_dict["_geom_x"] = coords_x
