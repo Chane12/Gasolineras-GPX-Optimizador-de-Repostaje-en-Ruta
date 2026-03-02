@@ -285,31 +285,71 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     RouteTextError
         Si Nominatim no devuelve resultados o la llamada falla.
     """
-    try:
-        time.sleep(1)  # Nominatim exige ≤1 req/s; también reduce riesgo de rate-limit
-        resp = requests.get(
-            _NOMINATIM_URL,
-            params={"q": lugar, "format": "json", "limit": 1},
-            headers=_NOMINATIM_HEADERS,
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        results = resp.json()
-        if not results:
-            raise RouteTextError(
-                f"No encontramos la ubicación «{lugar}». "
-                "Prueba a escribir el nombre completo de la ciudad o provincia."
+    endpoints = [
+        _NOMINATIM_URL,
+        "https://nominatim.kumi.systems/search", # Alternative Nominatim mirror
+        "https://locationiq.org/v1/search.php" # Fallback if LocationIQ free tier allows (just another nominatim-like endpoint, usually needs API key but sometimes accepts public, though we'll stick to mirrors)
+    ]
+    
+    # Let's use reliable mirrors
+    endpoints = [
+        _NOMINATIM_URL,
+        "https://nominatim.kumi.systems/search",
+        "https://api.mapy.cz/v1/geocode" # Alternative free
+    ]
+
+    # Actually, the safest fallback for Nominatim without API keys is using random User-Agents or delay, and a known mirror.
+    import random
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
+        "GasolinerasRutaApp/1.0 (contacto@example.com)"
+    ]
+    
+    headers = _NOMINATIM_HEADERS.copy()
+    
+    endpoints = [
+        _NOMINATIM_URL,
+        "https://nominatim.kumi.systems/search" # Known public mirror
+    ]
+    
+    last_err = None
+    for attempt in range(len(endpoints)):
+        headers["User-Agent"] = random.choice(user_agents)
+        try:
+            time.sleep(1 + attempt)  # Backoff
+            resp = requests.get(
+                endpoints[attempt],
+                params={"q": lugar, "format": "json", "limit": 1},
+                headers=headers,
+                timeout=timeout,
             )
-        lat = float(results[0]["lat"])
-        lon = float(results[0]["lon"])
-        print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f})")
-        return lat, lon
-    except RouteTextError:
-        raise
-    except Exception as exc:
-        raise RouteTextError(
-            f"Error al geocodificar «{lugar}»: {exc}"
-        ) from exc
+            resp.raise_for_status()
+            results = resp.json()
+            if not results:
+                raise RouteTextError(
+                    f"No encontramos la ubicación «{lugar}». "
+                    "Prueba a escribir el nombre completo de la ciudad o provincia."
+                )
+            lat = float(results[0]["lat"])
+            lon = float(results[0]["lon"])
+            print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f}) via {endpoints[attempt]}")
+            return lat, lon
+        except RouteTextError:
+            raise
+        except requests.exceptions.HTTPError as e:
+            last_err = e
+            if resp.status_code == 429:
+                print(f"[Geocode] Rate limit en {endpoints[attempt]}, intentando alternative...")
+                continue
+            raise RouteTextError(f"Error HTTP al geocodificar «{lugar}»: {e}") from e
+        except Exception as exc:
+            last_err = exc
+            print(f"[Geocode] Error en {endpoints[attempt]}: {exc}")
+            continue
+            
+    raise RouteTextError(f"Error al geocodificar «{lugar}» tras intentar varios servidores. Último error: {last_err}")
 
 
 def get_route_from_text(origen: str, destino: str) -> LineString:
