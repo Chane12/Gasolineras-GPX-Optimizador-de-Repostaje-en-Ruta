@@ -181,6 +181,10 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             )
             # Cadenas vacías o no numéricas → NaN
             df[col] = pd.to_numeric(df[col], errors="coerce")
+            
+            # Filtro estricto contención para precios "Fantasma" o typos de la API (ej: 0.15€ o 15.0€)
+            # Solo aplicamos el clip al set si no es NaN.
+            df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.80) & (df[col] < 2.50)), pd.NA)
 
     for col in COORD_COLUMNS:
         if col in df.columns:
@@ -564,9 +568,9 @@ def build_route_buffer(
     # Esto permite usar unidades métricas reales en España peninsular.
     gdf_track_utm = gdf_track.to_crs(CRS_UTM30N)
 
-    # Aplicar buffer paramétrico en metros
+    # Aplicar buffer paramétrico en metros con resolución baja para evitar saturar sjoin
     gdf_buffer = gdf_track_utm.copy()
-    gdf_buffer["geometry"] = gdf_track_utm.buffer(buffer_meters)
+    gdf_buffer["geometry"] = gdf_track_utm.buffer(buffer_meters, resolution=3)
     print(
         f"[Buffer] Buffer de {buffer_meters:.0f}m aplicado sobre el track "
         f"(Area aprox: {gdf_buffer.geometry.area.iloc[0]/1e6:.1f} km2)"
@@ -718,27 +722,43 @@ def filter_cheapest_stations(
     gdf_valid["precio_seleccionado"] = gdf_valid[fuel_column]
     gdf_valid["combustible"] = fuel_column
 
-    if track_utm is not None:
-        import shapely
-        # Calcular el punto de la ruta (en metros) al que se proyecta la gasolinera vectorizadamente
-        gdf_valid["km_ruta"] = shapely.line_locate_point(track_utm, gdf_valid.geometry) / 1000.0
-
     # 1. Búsqueda global estándar (Top N global)
     gdf_top_global = gdf_valid.nsmallest(top_n, fuel_column).copy()
 
     if track_utm is not None and segment_km > 0:
-        # Búsqueda segmentada: 1 gasolinera más barata por cada tramo de segment_km
-        gdf_valid["tramo"] = (gdf_valid["km_ruta"] // segment_km).astype(int)
+        import shapely
+        import shapely.ops
+        # Calculamos num_tramos
+        dist_total_km = track_utm.length / 1000.0
+        num_tramos = max(1, math.ceil(dist_total_km / segment_km))
         
-        # Agrupamos por tramo y obtenemos el índice de la más barata
-        idx_top_per_segment = gdf_valid.groupby("tramo")[fuel_column].idxmin()
-        gdf_top_segment = gdf_valid.loc[idx_top_per_segment].copy()
+        # En vez de calcular km_ruta para TODAS, partimos el track y buscamos con R-Tree la más barata cercana
+        top_segment_indices = []
+        for i in range(num_tramos):
+            start_dist = i * segment_km * 1000.0
+            end_dist = min((i + 1) * segment_km * 1000.0, track_utm.length)
+            
+            # Sub-segmento de la ruta
+            segment_line = shapely.ops.substring(track_utm, start_dist, end_dist)
+            
+            # Usar r-tree (sindex.query) para encontrar estaciones que intersectan el bounding box del segmento
+            # (El buffer original ya nos garantiza cercanía general, pero sindex recorta la búsqueda al sub-segmento)
+            possible_matches_index = list(gdf_valid.sindex.intersection(segment_line.bounds))
+            
+            if possible_matches_index:
+                # Extraemos el subset de estaciones de este bounding box
+                subset = gdf_valid.iloc[possible_matches_index]
+                # Encontramos la más barata
+                idx_cheapest = subset[fuel_column].idxmin()
+                if pd.notna(idx_cheapest):
+                    top_segment_indices.append(idx_cheapest)
+                    
+        # Para las elegidas (globales + segmentadas), sí calculamos el km exacto en ruta (solo son Top_N + tramos)
+        all_indices = list(set(gdf_top_global.index.tolist() + top_segment_indices))
+        gdf_top = gdf_valid.loc[all_indices].copy()
         
-        # Unimos el Top N global con las obligatorias por tramo
-        gdf_top = pd.concat([gdf_top_global, gdf_top_segment])
-        
-        # Eliminamos duplicados (aquellas que ya estaban en el Top N global)
-        gdf_top = gdf_top.drop_duplicates(subset=["geometry"])
+        # Calcular proyección (distance) sobre la ruta (solo para las elegidas, muy rápido)
+        gdf_top["km_ruta"] = shapely.line_locate_point(track_utm, gdf_top.geometry) / 1000.0
         
         # Ordenamos cronológicamente según la ruta para la visualización
         gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
@@ -753,7 +773,12 @@ def filter_cheapest_stations(
 
     else:
         # Solo Búsqueda global estándar
-        gdf_top = gdf_top_global.reset_index(drop=True)
+        gdf_top = gdf_top_global.copy()
+        if track_utm is not None:
+             import shapely
+             gdf_top["km_ruta"] = shapely.line_locate_point(track_utm, gdf_top.geometry) / 1000.0
+             
+        gdf_top = gdf_top.reset_index(drop=True)
 
         print(f"\n[Filtrado] Top {top_n} más baratas para '{fuel_column}':")
         for i, row in gdf_top.iterrows():
@@ -1141,6 +1166,9 @@ def enrich_stations_with_osrm(
     """
     import concurrent.futures
     import time
+    
+    if gdf_top.empty:
+        return
 
     # Reproyectar gasolineras a WGS84 para obtener lon/lat de la gasolinera
     gdf_wgs84 = gdf_top.to_crs("EPSG:4326")
@@ -1150,33 +1178,80 @@ def enrich_stations_with_osrm(
         gas_lat = row_wgs84.geometry.y
 
         # 1. Punto más cercano de la ruta GPX a esta gasolinera
-        dist_along = track_original.project(
-            Point(gas_lon, gas_lat), normalized=False
-        )
-        nearest_on_route = track_original.interpolate(dist_along)
-        origin_lon = nearest_on_route.x
-        origin_lat = nearest_on_route.y
+        # Reproyectar LineString localmente si la version falla
+        import shapely
+        if hasattr(track_original, "project"):
+            # Objeto LineString de shapely
+            # Busco la coordenada de punto mas cercana a la mia a traves de nearest points -> punto proyectado -> interpolate(dist_along)
+            dist_along = track_original.project(Point(gas_lon, gas_lat))
+            nearest_on_route = track_original.interpolate(dist_along)
+            origin_lon = nearest_on_route.x
+            origin_lat = nearest_on_route.y
+        else:
+            # Fallback a simple euclidiana min-dist en caso de versionados Shapely
+            import math
+            lons = [c[0] for c in track_original.coords]
+            lats = [c[1] for c in track_original.coords]
+            min_dist = float("inf")
+            best_pt = (0.0, 0.0)
+            for l_lon, l_lat in zip(lons, lats):
+                d = math.hypot(l_lon - gas_lon, l_lat - gas_lat)
+                if d < min_dist:
+                    min_dist = d
+                    best_pt = (l_lon, l_lat)
+            origin_lat = best_pt[1]
+            origin_lon = best_pt[0]
 
-        if delay_s > 0:
-            time.sleep(delay_s)
 
-        # 2. Llamada defensiva a OSRM
-        result = get_real_distance_osrm(
+        # 2. Llamada defensiva a OSRM (Ida y Vuelta para contar desvio completo)
+        d_ida = get_real_distance_osrm(
             lon_origen=origin_lon,
             lat_origen=origin_lat,
             lon_destino=gas_lon,
             lat_destino=gas_lat,
         )
-        return idx, result, row_wgs84
+        d_vuelta = get_real_distance_osrm(
+            lon_origen=gas_lon,
+            lat_origen=gas_lat,
+            lon_destino=origin_lon,
+            lat_destino=origin_lat,
+        )
+        
+        if d_ida is None or d_vuelta is None:
+             return idx, None
+        
+        result = {
+            "distance_km": d_ida["distance_km"] + d_vuelta["distance_km"],
+            "duration_min": d_ida["duration_min"] + d_vuelta["duration_min"],
+        }
+        
+        return idx, result
 
     # Circuit Breaker para OSRM
     fallos_consecutivos = 0
     max_fallos = 3
 
     # max_workers limitado para no exceder rate-limits estáticos de OSRM (1-3 rq/s libres)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf_top.index}
         for future in concurrent.futures.as_completed(futures):
+            time.sleep(delay_s)  # throttle de las query limitadas del ThreadPool
+            try:
+                idx, result = future.result()
+                if result is None:
+                   fallos_consecutivos += 1
+                else:
+                   fallos_consecutivos = 0
+                yield idx, result
+            except Exception as exc:
+                idx_failed = futures[future]
+                fallos_consecutivos += 1
+                yield idx_failed, None
+
+            if fallos_consecutivos >= max_fallos:
+                print("[OSRM] Circuit Breaker Activado: Demasiados fallos seguidos. Abortando llamadas OSRM.")
+                # El main absorberá el yield loop y no hará más querys
+                break
             # Abortamos de facto si la API falla contínuamente
             if fallos_consecutivos >= max_fallos:
                 idx = futures[future]
@@ -1783,6 +1858,13 @@ def calculate_autonomy_radar(track: LineString, gdf_top: gpd.GeoDataFrame, auton
     checkpoints = [0.0] + station_km_list + [route_total_km]
     tramos: list[dict] = []
 
+    # Buscamos el "Hueco Máximo" (Max Gap) real
+    max_gap_km = 0.0
+    for j in range(len(checkpoints) - 1):
+        g = checkpoints[j + 1] - checkpoints[j]
+        if g > max_gap_km:
+            max_gap_km = g
+
     for j in range(len(checkpoints) - 1):
         km_inicio = checkpoints[j]
         km_fin    = checkpoints[j + 1]
@@ -1790,14 +1872,14 @@ def calculate_autonomy_radar(track: LineString, gdf_top: gpd.GeoDataFrame, auton
 
         if autonomia_km > 0:
             pct = gap_km / autonomia_km
-            if pct >= 1.0:
+            if gap_km > autonomia_km:  # Condición estricta de supervivencia (Gap > Depósito)
                 nivel = "critico"
                 emoji = "🔴"
-                label = "CRÍTICO"
-            elif pct >= 0.80:
+                label = "CRÍTICO (Imposible)"
+            elif gap_km > (autonomia_km * 0.8): # Gap cercano al límite del depósito
                 nivel = "atencion"
                 emoji = "🟡"
-                label = "ATENCIÓN"
+                label = "ATENCIÓN (Riesgo alto)"
             else:
                 nivel = "seguro"
                 emoji = "🟢"

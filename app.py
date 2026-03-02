@@ -176,16 +176,7 @@ def render_controls():
             if gpx_file is None and st.session_state.get("demo_mode"):
                 st.success("✅ Cargada ruta de demo (Madrid - Valencia ~356 km)")
                 
-            with st.popover("❔ ¿Cómo obtengo mi archivo GPX?"):
-                st.markdown(
-                    """
-                    - **Wikiloc**: ruta → Descargar → *.gpx*
-                    - **Komoot**: ruta → ⋯ → *Exportar como GPX*
-                    - **Garmin**: actividad → *Exportar GPX*
-                    - **Strava**: actividad → ⋯ → *Exportar GPX*
-                    - **Google Maps**: usa mapstogpx.com
-                    """
-                )
+
 
         st.divider()
 
@@ -428,7 +419,8 @@ if _pipeline_active:
     with st.status("⛽ Iniciando pipeline de procesamiento...", expanded=True) as status:
         try:
             status.update(label="⏬ Descargando precios en tiempo real del MITECO…", state="running")
-            df_gas = cached_fetch_gasolineras()
+            # Proteger contra Memory Leaks aislando el DataFrame de posibles mutaciones posteriores
+            df_gas = cached_fetch_gasolineras().copy(deep=True)
 
             # --- Carga del track (solo GPX; en modo texto ya está listo) ---
             if track is None:
@@ -441,8 +433,8 @@ if _pipeline_active:
 
             status.update(label="📡 Cruzando con estaciones de servicio cercanas a tu ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
-            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché)
-            gdf_utm = cached_build_stations_gdf(df_gas)
+            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché) y se clona para evitar Memory Poisoning
+            gdf_utm = cached_build_stations_gdf(df_gas).copy(deep=True)
             gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
 
             if solo_24h:
