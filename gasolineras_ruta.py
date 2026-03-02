@@ -1120,46 +1120,30 @@ def enrich_stations_with_osrm(
     gdf_top: gpd.GeoDataFrame,
     track_original: LineString,
     delay_s: float = 0.12,
-) -> gpd.GeoDataFrame:
+):
     """
     Enriquece el GeoDataFrame de gasolineras Top-N con datos reales de
-    distancia y tiempo de desvío obtenidos de la API OSRM.
-
-    Para cada gasolinera:
-    1. Localiza el punto exacto de la ruta GPX más cercano (usando
-       ``LineString.project`` + ``LineString.interpolate`` sobre el track
-       original en WGS84 — suficientemente preciso para calcular el punto
-       de origen del desvío).
-    2. Llama a ``get_real_distance_osrm`` entre ese punto y la gasolinera.
-    3. Si falla, deja ``osrm_distance_km`` y ``osrm_duration_min`` como NaN
-       para que el caller use el fallback euclidiano de forma transparente.
-
-    Parámetro ``delay_s`` añade una pequeña pausa entre llamadas para no
-    saturar el servidor público (cortesía / evitar rate-limit).
+    distancia y tiempo de desvío obtenidos de la API OSRM mediante un generador.
 
     Parameters
     ----------
     gdf_top : gpd.GeoDataFrame
-        Gasolineras en EPSG:25830 (salida de filter_cheapest_stations).
+        Gasolineras en EPSG:25830.
     track_original : LineString
         Ruta GPX completa en EPSG:4326 (WGS84).
     delay_s : float
         Pausa en segundos entre llamadas a OSRM. Por defecto 0.12 s.
 
-    Returns
-    -------
-    gpd.GeoDataFrame
-        El mismo GeoDataFrame con dos columnas nuevas:
-        ``osrm_distance_km`` y ``osrm_duration_min`` (float, NaN si falló).
+    Yields
+    ------
+    Tuple[idx, dict | None]
+        El índice de la gasolinera y el resultado de OSRM (o None si falla).
     """
     import concurrent.futures
-
-    gdf = gdf_top.copy()
-    gdf["osrm_distance_km"] = float("nan")
-    gdf["osrm_duration_min"] = float("nan")
+    import time
 
     # Reproyectar gasolineras a WGS84 para obtener lon/lat de la gasolinera
-    gdf_wgs84 = gdf.to_crs("EPSG:4326")
+    gdf_wgs84 = gdf_top.to_crs("EPSG:4326")
 
     def process_station(idx, row_wgs84):
         gas_lon = row_wgs84.geometry.x
@@ -1191,32 +1175,25 @@ def enrich_stations_with_osrm(
 
     # max_workers limitado para no exceder rate-limits estáticos de OSRM (1-3 rq/s libres)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf.index}
+        futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf_top.index}
         for future in concurrent.futures.as_completed(futures):
-            # Abortamos de facto para no quemar tiempo en UI si la API falla contínuamente
+            # Abortamos de facto si la API falla contínuamente
             if fallos_consecutivos >= max_fallos:
+                idx = futures[future]
+                yield idx, None
                 continue
 
             try:
                 idx, result, row_wgs84 = future.result(timeout=10)
                 if result is not None:
-                    gdf.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
-                    gdf.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
                     fallos_consecutivos = 0
-                    print(
-                        f"[OSRM] {row_wgs84.get('Rótulo', idx)}: "
-                        f"{result['distance_km']:.2f} km / {result['duration_min']:.1f} min"
-                    )
                 else:
                     fallos_consecutivos += 1
+                yield idx, result
             except Exception as e:
                 fallos_consecutivos += 1
-                print(f"[OSRM] Fallo detectado: {e}")
-
-    if fallos_consecutivos >= max_fallos:
-        print("[OSRM] Circuit Breaker Activado: Demasiados fallos, degradando a distancias de proyección rápida.")
-
-    return gdf
+                idx = futures[future]
+                yield idx, None
 
 
 # ===========================================================================
