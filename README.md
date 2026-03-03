@@ -4,6 +4,8 @@
 
 > **Executive Summary**  
 > Una solución analítica integral que resuelve el problema del enrutamiento óptimo de combustible. Mediante la paralelización de ingesta de datos en tiempo real (API REST MITECO), indexación espacial (R-Tree) e inferencia geoespacial avanzada, la plataforma identifica puntos de repostaje asimétricos (alto ahorro, mínimo desvío) a lo largo de cualquier corredor de transporte en España continental. Diseñado con foco en eficiencia de memoria y escalabilidad sin servidor.
+>
+> 🚀 **Prueba la herramienta ahora mismo aquí:** [https://gasolineras-gpx-optimizador-de-repostaje-en-ruta-8kktqr5lfcts9.streamlit.app/](https://gasolineras-gpx-optimizador-de-repostaje-en-ruta-8kktqr5lfcts9.streamlit.app/)
 
 ---
 
