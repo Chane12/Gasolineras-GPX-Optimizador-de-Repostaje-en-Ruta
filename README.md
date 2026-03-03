@@ -2,116 +2,111 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/) [![GeoPandas](https://img.shields.io/badge/GeoPandas-0.14%2B-139C5A)](https://geopandas.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Live Demo](https://img.shields.io/badge/Demo-Streamlit%20Cloud-FF4B4B?style=flat&logo=streamlit)](https://gasolineras-gpx-optimizador-de-repostaje-en-ruta-8kktqr5lfcts9.streamlit.app/)
 
-> **Executive Summary**  
-> Una solución analítica integral que resuelve el problema del enrutamiento óptimo de combustible. Mediante la paralelización de ingesta de datos en tiempo real (API REST MITECO), indexación espacial (R-Tree) e inferencia geoespacial avanzada, la plataforma identifica puntos de repostaje asimétricos (alto ahorro, mínimo desvío) a lo largo de cualquier corredor de transporte en España continental. Diseñado con foco en eficiencia de memoria y escalabilidad sin servidor.
+> **Resumen Ejecutivo**  
+> Esta herramienta resuelve el problema de organizar las paradas de repostaje de manera óptima durante tu viaje. Conectándose en tiempo real a los datos del Ministerio para la Transición Ecológica (MITECO), el sistema cruza tu ruta con las más de 12.000 gasolineras de España para identificar aquellas que ofrecen el mayor ahorro con el menor desvío posible. Todo ello procesado a alta velocidad gracias a técnicas avanzadas de indexación espacial, diseño eficiente y con bajo consumo de memoria.
 >
 > 🚀 **Prueba la herramienta ahora mismo aquí:** [https://gasolineras-gpx-optimizador-de-repostaje-en-ruta-8kktqr5lfcts9.streamlit.app/](https://gasolineras-gpx-optimizador-de-repostaje-en-ruta-8kktqr5lfcts9.streamlit.app/)
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ Arquitectura del Sistema
 
-El sistema está diseñado bajo un paradigma de **ETL Geoespacial On-the-Fly** y arquitectura modular por capas, separando el motor de inferencia de la capa de presentación interactiva.
+El sistema funciona de manera escalonada, donde un potente motor interno realiza los cálculos geoespaciales y le pasa los datos limpios a la interfaz de usuario interactiva (Streamlit).
 
 ```mermaid
 graph TD
-    subgraph Data Layer
-        MITECO[MITECO REST API<br/>Real-Time Prices] --> |JSON / HTTP| Ingestion
-        OSRM[OSRM Engine<br/>Routing] --> |Polyline| RouteParser
-        GPX[User GPX File] --> |XML| RouteParser
+    subgraph Capa de Datos
+        MITECO["API REST MITECO (Precios en directo)"] --> |JSON / HTTP| Ingestion
+        OSRM["Motor OSRM (Trazado de rutas)"] --> |Ruta| RouteParser
+        GPX["Archivo GPX del Usuario"] --> |XML| RouteParser
     end
 
-    subgraph Core Geospatial Engine
-        Ingestion --> |Pandas DF| Cache[In-Memory Cache<br/>TTL: 30m]
-        Cache --> |Vectorized| SpatialIndex[R-Tree Spatial Index<br/>EPSG:25830 UTM]
+    subgraph Motor Geoespacial Central
+        Ingestion --> |Pandas DF| Cache["Caché en Memoria (Refresco: 30m)"]
+        Cache --> |Vectorizado| SpatialIndex["Índice Espacial R-Tree (UTM)"]
         
-        RouteParser --> |Shapely LineString| TSP[Ramer-Douglas-Peucker<br/>Simplification]
-        TSP --> |Buffer| SpatialJoin[Spatial Join<br/>Intersects]
+        RouteParser --> |Geometría| TSP["Simplificación de Líneas (Douglas-Peucker)"]
+        TSP --> |Buffer| SpatialJoin["Análisis de Intersección (Cruce con ruta)"]
         
         SpatialIndex --> SpatialJoin
     end
 
-    subgraph Business Logic
-        SpatialJoin --> Filter[Price Matrix Filtering]
-        Filter --> Radar[Autonomy Radar Engine]
+    subgraph Lógica de Negocio
+        SpatialJoin --> Filter["Filtrado Avanzado de Precios"]
+        Filter --> Radar["Motor Radar de Autonomía"]
     end
 
-    subgraph Presentation Layer
-        Filter --> Map[Folium Map Engine]
-        Radar --> UI[Streamlit UI<br/>State Management]
+    subgraph Interfaz Frontend
+        Filter --> Map["Mapa Interactivo Folium"]
+        Radar --> UI["Gestor Interfaz Streamlit"]
         Map --> UI
     end
 ```
 
-### 🧠 Core Engineering Principles
+### 🧠 Principios Técnicos Clave
 
-1. **Eficiencia Computacional y Vectorización**: En lugar de calcular distancias iterativas, el sistema proyecta las geometrías globales (WGS84 EPSG:4326) a un sistema de coordenadas métrico europeo (UTM 30N EPSG:25830). Esto habilita el uso de operaciones de álgebra matricial puras a través de `GeoPandas` y `Shapely`.
-2. **Indexación Espacial (R-Tree)**: La evaluación de más de 12,000 estaciones de servicio frente a polígonos irregulares complejos se resuelve en tiempo sub-lineal $\mathcal{O}(\log n)$ aprovechando el índice R-Tree de la librería GEOS subyacente.
-3. **Convexidad en el Ciclo de Vida del Dato**: Mitigación agresiva del coste computacional. Aplicación del algoritmo *Ramer-Douglas-Peucker* para reducir la complejidad topológica del track de entrada en un 90% (de decenas de miles de nodos a cientos) sin pérdida de precisión de corredor.
-4. **Memory-Safe State Management**: Diseñado específicamente para entornos de recursos constreñidos (ej. Streamlit Cloud limit = 1GB RAM). Gestión delérrima de las instancias de Geometría en caché nativa, previniendo los memory leaks típicos del marshalling Pickle.
+1. **Eficiencia Vectorial**: En lugar de medir distancias de gasolinera en gasolinera tradicionalmente, proyectamos todo el mapa a coordenadas métricas (UTM). Esto permite calcular las distancias en milisegundos usando álgebra matricial con librerías `GeoPandas` y `Shapely`.
+2. **Índice Espacial (R-Tree)**: Para encontrar rápido qué estaciones están cerca de tu corredor sin bloquear el servidor, la herramienta indexa inteligentemente el territorio (buscando solo en las "cajas" geográficas por las que pasa la ruta).
+3. **Simplificación Inteligente**: Procesar un track GPX con miles de puntos colapsaría el sistema. Usamos un algoritmo matemático que comprime y recorta la trayectoria hasta en un 90% (dejando los vértices elementales) sin que pierda fidelidad con la carretera real.
+4. **Protección de Memoria Sensible**: Diseñado a medida para entornos de despliegue ligeros (como Streamlit Cloud con límite real de ~1GB RAM). Se controla rigurosamente la gestión del estado para evitar sobrecargas u "fugas de memoria" habituales (memory leaks).
 
 ---
 
 ## 📊 Propuesta de Valor y Funcionalidades CORE
 
-- **Routing Agóstico Multi-Modal**: Soporte nativo de tracks crudos GPS (`.gpx`) abriendo el pipeline asíncrono, o resolución *Text-to-Route* usando Geocoding en cascada inversa (`Nominatim` OSM) y resolución de grafos (`OSRM`).
-- **Planificación Manual Interactiva**: Creación de planes de viaje personalizados que te permite elegir con precisión en qué gasolineras parar interactuando directamente con el ranking y el mapa dinámico.
-- **Inteyección y Track Splicing Automático**: El motor re-traza tu `.gpx` crudo. Usando OSRM calcula los caminos exactos de desvío e incorporación a las estaciones, cosiéndolos geométricamente sobre el track principal, produciendo un GPX enriquecido y listo para dispositivos de navegación GPS.
-- **Responsive Viewport Routing**: La UI detecta iterativamente el ancho del cliente usando inyecciones JS y monta arquitecturas visuales diferenciadas para entornos Desktop y Mobile de forma fluida.
-- **Autonomy Radar (Risk Engine)**: Cálculo determinista de *gaps* continuos de servicio sobre la proyección vectorial de la ruta. Clasifica los clústers espaciales en zonas seguras, de atención o críticas en base a un threshold paramétrico definido por el usuario (autonomía del vehículo).
-- **Ruta Demo On-Board (Sierra de Gredos)**: Prueba la herramienta al vuelo pulsando un botón. Carga dinámicamente una compleja ruta circular por la Sierra de Gredos con 6 puertos de montaña para validar el comportamiento geoespacial bajo condiciones complicadas.
+- **Construcción de Rutas Flexibles**: Puedes subir el `.gpx` en bruto de tu navegador, o simplemente indicarle una ruta con texto (ej: "Madrid a Barcelona") usando nuestro motor integrado que geolocaliza el texto y traza los polígonos viarios pertinentes (`Nominatim` + `OSRM`).
+- **Planificación Manual Interactiva**: Creación de planes de viaje personalizados. La app no impone una parada; te permite elegir con precisión en base al ranking de precios y los mapas dinámicos.
+- **Inserción Automática en el Track (Track Splicing)**: Internamente, el motor "cose" las gasolineras elegidas a tu `.gpx` crudo. Usando OSRM calcula los caminos exactos de desvío e incorporación a las estaciones elegidas. Como resultado generamos e inyectamos un GPX enriquecido listo para tu GPS de navegación.
+- **Radar de Autonomía (Prevención Riesgos)**: Le puedes indicar qué autonomía real máxima tiene tu vehículo. El sistema validará todo tu trayecto analíticamente; si hay vacíos demasiados largos, **la app marcará en rojo en el mapa los tramos donde corres el riesgo de quedarte tirado sin gasolineras cerca. (Especialmente pensado para motoristas con poca autonomía).**
+- **Vistas Inteligentes (Responsive Viewport)**: La interfaz inyecta Javascript iterativamente para medir tu pantalla al vuelo, con el fin de cargar un diseño de uso distinto para móviles y para ordenadores de sobremesa.
+- **Modo Demo 'One-Click' (Sierra de Gredos)**: Integra un botón que procesa al vuelo una exigente ruta circular cargada de forma local; atravesando 6 cordilleras de la Sierra de Gredos. Te permite auditar las capacidades geométricas del programa sin necesidad ni de teclado.
 
 ---
 
-## 💻 Tech Stack & Dependencies
+## 💻 Stack Tecnológico & Dependencias
 
-El ecosistema tecnológico ha sido auditado para minimizar la superficie de vulnerabilidad y mantener un tiempo de orquestación local < 3 segundos.
+El ecosistema tecnológico ha sido orquestado para mantener los tiempos de procesamiento local por debajo de los 3 segundos.
 
-| Componente | Stack Principal | Racional Técnico |
+| Componente | Stack Principal | Razón Técnica |
 | :--- | :--- | :--- |
-| **GIS Foundation** | `geopandas`, `shapely`, `pyproj` | Análisis vectorial C-bound (GEOS/PROJ) para máxima velocidad de ejecución. |
-| **Frontend & UX** | `streamlit`, `streamlit-folium`, `altair` | Interfaz declarativa orientada a componentes. Reactividad SSR nativa sin overhead de JavaScript. |
-| **Data Orchestration** | `pandas`, `requests` | Manejo de dataframes in-memory y llamadas HTTP con gestión de retries / timeouts empíricos. |
-| **Parsing** | `gpxpy` | Deserialización determinista nativa para XML Topológico. |
-
-> Se incluyen configuraciones estrictas en el archivo `requirements.txt` (`>=`) garantizando que el entorno de despliegue resuelva el dependency graph de manera estable.
+| **Bases GIS** | `geopandas`, `shapely`, `pyproj` | Análisis vectorial de alto rendimiento unido al lenguaje C (basados en GEOS/PROJ). |
+| **Frontend & UX** | `streamlit`, `streamlit-folium` | Interfaz declarativa en Python muy reactiva y sin necesidad de escribir JavaScript. |
+| **Datos e I/O** | `pandas`, `requests` | Manejo de matrices numéricas (DataFrames en memoria) y llamadas HTTP robustas. |
+| **Lector GPX** | `gpxpy` | Deserialización nativa determinista para leer archivos XML Topológicos con precisión. |
 
 ---
 
-## 🛠️ Despliegue en Entorno de Desarrollo Local
+## 🛠️ Cómo Probarlo en Local
 
-El repositorio adopta estándares POSIX para una inicialización robusta y sin complicaciones.
+Para replicar esto en tu propia máquina (Entorno de Desarrollo Local), puedes correr tu propio servidor Python de este modo:
 
-**1. Clonar el repositorio y acceder al entorno**
+**1. Clonar el repositorio y acceder a él**
 
 ```bash
 git clone https://github.com/Chane12/Gasolineras-GPX-Optimizador-de-Repostaje-en-Ruta.git
 cd Gasolineras-GPX-Optimizador-de-Repostaje-en-Ruta
 ```
 
-**2. Aprovisionar el Entorno Virtual Aislado**
+**2. Aprovisionar un Entorno Virtual (Aislado)**
 
 ```bash
 python -m venv venv
-# Linux / macOS
+
+# Activación en Linux / macOS:
 source venv/bin/activate
-# Windows
+# Activación en Windows:
 .\venv\Scripts\Activate.ps1
 ```
 
-**3. Instalar Dependencias del Core**
+**3. Instalar Dependencias del Núcleo**
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-*(Nota sobre Windows: Si el compilador C++ advierte sobre binarios de `fiona`/`gdal`, se recomienda inyectar Wheel binaries compaginados desde ecosistema Conda).*
-
-**4. Inicializar Aplicación**
+**4. Arrancar Aplicación**
 
 ```bash
 streamlit run app.py
 ```
-
----
