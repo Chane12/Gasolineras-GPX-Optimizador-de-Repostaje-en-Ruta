@@ -140,7 +140,7 @@ ARCHIVOS DEL PROYECTO
 ------------------------------------------------------------
   app.py                → Interfaz web principal (Streamlit)
   gasolineras_ruta.py   → Motor de análisis y exportación
-  demo_route.gpx        → Ruta demo Madrid → Valencia
+  sierra_gredos.gpx        → Ruta demo Circular Sierra de Gredos (6 Puertos)
   requirements.txt      → Dependencias Python
   INSTRUCCIONES.txt     → Este manual
 

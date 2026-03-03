@@ -53,8 +53,11 @@ graph TD
 ## 📊 Propuesta de Valor y Funcionalidades CORE
 
 - **Routing Agóstico Multi-Modal**: Soporte nativo de tracks crudos GPS (`.gpx`) abriendo el pipeline asíncrono, o resolución *Text-to-Route* usando Geocoding en cascada inversa (`Nominatim` OSM) y resolución de grafos (`OSRM`).
+- **Planificación Manual Interactiva**: Creación de planes de viaje personalizados que te permite elegir con precisión en qué gasolineras parar interactuando directamente con el ranking y el mapa dinámico.
+- **Inteyección y Track Splicing Automático**: El motor re-traza tu `.gpx` crudo. Usando OSRM calcula los caminos exactos de desvío e incorporación a las estaciones, cosiéndolos geométricamente sobre el track principal, produciendo un GPX enriquecido y listo para dispositivos de navegación GPS.
+- **Responsive Viewport Routing**: La UI detecta iterativamente el ancho del cliente usando inyecciones JS y monta arquitecturas visuales diferenciadas para entornos Desktop y Mobile de forma fluida.
 - **Autonomy Radar (Risk Engine)**: Cálculo determinista de *gaps* continuos de servicio sobre la proyección vectorial de la ruta. Clasifica los clústers espaciales en zonas seguras, de atención o críticas en base a un threshold paramétrico definido por el usuario (autonomía del vehículo).
-- **Exportación Enriquecida e Interoperabilidad**: Inyección de los *waypoints* óptimos calculados directamente de vuelta al formato XML (`.gpx`) o empaquetado como un Multi-Waypoint Deep Link para Google Maps. Todo garantizando *Zero Friction* para el usuario en movilidad.
+- **Ruta Demo On-Board (Sierra de Gredos)**: Prueba la herramienta al vuelo pulsando un botón. Carga dinámicamente una compleja ruta circular por la Sierra de Gredos con 6 puertos de montaña para validar el comportamiento geoespacial bajo condiciones complicadas.
 
 ---
 
@@ -110,12 +113,3 @@ streamlit run app.py
 ```
 
 ---
-
-## 📈 Roadmap Arquitectónico Futuro
-
-- **Micro-Batching**: Desacoplamiento del demonio de ingesta MITECO hacia una Cloud Function asíncrona (Event-Driven Architecture) con sink en base de datos en memoria (Redis / DuckDB espacial).
-- **Telemetry & Tracing**: Inserción de instrumentación `OpenTelemetry` a lo largo de las fases de Spatial Joint para métricas granulares de profilado en la cloud.
-- **Machine Learning Integration**: Forecast predictivo de series de precios (SARIMA/Prophet) montado sobre datos históricos del MITECO.
-
----
-*Hecho con precisión analítica y pasión por el código estructurado.*

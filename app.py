@@ -175,7 +175,7 @@ def render_controls():
                 gpx_file = None
 
             if gpx_file is None and st.session_state.get("demo_mode"):
-                st.success("✅ Cargada ruta de demo (Madrid - Valencia ~356 km)")
+                st.success("✅ Cargada ruta de demo (Sierra de Gredos - 6 Puertos)")
                 
 
 
@@ -399,7 +399,7 @@ if _pipeline_active:
                 st.stop()
     else:
         if _using_demo:
-            demo_gpx_path = Path(__file__).parent / "demo_route.gpx"
+            demo_gpx_path = Path(__file__).parent / "sierra_gredos.gpx"
             if not demo_gpx_path.exists():
                 st.error("⚠️ No se encontró el archivo de demo.")
                 st.stop()
@@ -576,7 +576,7 @@ if "pipeline_results" in st.session_state:
     _gpx_bytes      = _r.get("gpx_bytes")
 
     if _using_demo:
-        st.info("🧭 **Modo Demo activo** — Escapada Madrid - Valencia (~356 km). Sube tu propio GPX desde el panel lateral cuando quieras.")
+        st.info("🧭 **Modo Demo activo** — Ruta Circular Sierra de Gredos (6 Puertos). Sube tu propio GPX desde el panel lateral cuando quieras.")
     st.success("✅ Ruta analizada con éxito")
 
     # --- Centro del mapa (persiste entre reruns via session_state) ---
@@ -924,9 +924,9 @@ else:
     _demo_col, _ = st.columns([2, 3])
     with _demo_col:
         if st.button(
-            "🚗  Probar herramienta con ruta de Escapada (Madrid - Valencia)",
+            "🚗  Probar herramienta con ruta Circular Sierra de Gredos",
             use_container_width=True,
-            help="Carga automáticamente una ruta real de ~356 km para que veas la app en funcionamiento sin necesidad de subir un GPX.",
+            help="Carga automáticamente una ruta real circular de 6 puertos para que veas la app en funcionamiento sin necesidad de subir un GPX.",
         ):
             # Activar modo demo y relanzar la app para que el pipeline lo detecte
             st.session_state["demo_mode"] = True
