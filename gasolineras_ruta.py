@@ -1262,7 +1262,7 @@ def get_real_distance_osrm(
 def enrich_stations_with_osrm(
     gdf_top: gpd.GeoDataFrame,
     track_original: LineString,
-    delay_s: float = 0.12,
+    delay_s: float = 0.8,
 ):
     """
     Enriquece el GeoDataFrame de gasolineras Top-N con datos reales de
@@ -1356,17 +1356,17 @@ def enrich_stations_with_osrm(
     max_fallos = 6
     current_delay = delay_s
 
-    # max_workers reducido para no exceder rate-limits estáticos de OSRM
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    # Reducimos max_workers a 1 para forzar procesamiento en serie y evitar saturar OSRM
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf_top.index}
         for future in concurrent.futures.as_completed(futures):
-            time.sleep(current_delay)  # throttle variable basado en el comportamiento de la red
+            time.sleep(current_delay)  # throttle de la red
             try:
                 idx, result = future.result()
                 if result is None:
                    fallos_consecutivos += 1
-                   # Backoff exponencial con jitter: 0.1s -> 0.3s -> 0.7s ... max 5s
-                   current_delay = min(5.0, (current_delay * 1.5) + random.uniform(0.1, 0.5))
+                   # Backoff exponencial suave
+                   current_delay = min(5.0, current_delay + 0.5 + random.uniform(0.1, 0.3))
                 else:
                    fallos_consecutivos = max(0, fallos_consecutivos - 1)
                    current_delay = delay_s  # reset en caso de éxito
@@ -1374,7 +1374,7 @@ def enrich_stations_with_osrm(
             except Exception as exc:
                 idx_failed = futures[future]
                 fallos_consecutivos += 1
-                current_delay = min(5.0, (current_delay * 1.5) + random.uniform(0.1, 0.5))
+                current_delay = min(5.0, current_delay + 0.5 + random.uniform(0.1, 0.3))
                 yield idx_failed, None
 
             if fallos_consecutivos >= max_fallos:
