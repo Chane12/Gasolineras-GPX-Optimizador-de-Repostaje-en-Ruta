@@ -461,10 +461,21 @@ def render_mobile_wizard():
     # PASO 1: DEFINICIÓN DE RUTA
     # ══════════════════════════════════════════
     if step == 1:
+        # Callbacks on_change: guardan el valor inmediatamente al perder el foco
+        # En móvil, al tocar "Siguiente", el campo pierde foco primero y
+        # el on_change se dispara antes de procesar el botón. Sin Enter.
+        def _save_origen():
+            st.session_state["_w_origen"] = st.session_state.get("origen_txt", "")
+        def _save_destino():
+            st.session_state["_w_destino"] = st.session_state.get("destino_txt", "")
+
         st.markdown("### 🗺️ Paso 1 — Tu Ruta")
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
         with tab_texto:
-            origen_txt = st.text_input("Origen", placeholder="Ej: Madrid", key="origen_txt")
+            origen_txt = st.text_input(
+                "Origen", placeholder="Ej: Madrid",
+                key="origen_txt", on_change=_save_origen
+            )
             # Geolocalización — patrón correcto con session_state flag
             if st.button("📍 Usar mi ubicación actual", key="geo_btn_mobile", use_container_width=True,
                          help="Detecta tu posición GPS y la usa como origen."):
@@ -492,6 +503,7 @@ def render_mobile_wizard():
                                       or _nom.get("address", {}).get("village")
                                       or _nom.get("display_name", "").split(",")[0])
                         st.session_state["origen_txt"] = _localidad
+                        st.session_state["_w_origen"]  = _localidad
                         st.toast(f"📍 Origen detectado: {_localidad}")
                         st.rerun()
                     except Exception:
@@ -499,7 +511,10 @@ def render_mobile_wizard():
                 elif isinstance(geo_result, dict) and "error" in geo_result:
                     st.session_state["geo_pending"] = None
                     st.warning(f"🚫 GPS no disponible: {geo_result['error']}")
-            destino_txt = st.text_input("Destino", placeholder="Ej: Barcelona", key="destino_txt")
+            destino_txt = st.text_input(
+                "Destino", placeholder="Ej: Barcelona",
+                key="destino_txt", on_change=_save_destino
+            )
             if origen_txt or destino_txt:
                 _input_mode = "texto"
                 gpx_file = None
@@ -522,9 +537,9 @@ def render_mobile_wizard():
 
         st.markdown("")
         if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True):
-            # Guardar explícitamente a claves no-widget antes de navegar
-            st.session_state["_w_origen"]  = origen_txt
-            st.session_state["_w_destino"] = destino_txt
+            # Guardar explícitamente (doble seguro, on_change ya debería haberlo hecho)
+            st.session_state["_w_origen"]  = st.session_state.get("origen_txt", "") or origen_txt
+            st.session_state["_w_destino"] = st.session_state.get("destino_txt", "") or destino_txt
             st.session_state["wizard_step"] = 2
             st.rerun()
 
