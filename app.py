@@ -29,6 +29,7 @@ from gasolineras_ruta import (
     enrich_gpx_with_stops,
     enrich_stations_with_osrm,
     fetch_gasolineras,
+    filter_all_stations_on_route,
     filter_cheapest_stations,
     generate_google_maps_url,
     generate_map,
@@ -259,6 +260,19 @@ def render_controls():
             else:
                 segment_km = 0.0
 
+            st.markdown("---")
+            espana_vaciada = st.checkbox(
+                "🏜️ Modo España Vaciada",
+                value=False,
+                key="espana_vaciada_chk",
+                help=(
+                    "Muestra TODAS las gasolineras que están estrictamente sobre la ruta "
+                    "(corredor de 500 m a cada lado), ordenadas por kilómetro en ruta. "
+                    "No filtra por precio ni por top-N. "
+                    "Ideal para rutas por zonas despobladas donde no puedes permitirte ignorar ninguna estación."
+                ),
+            )
+
         buffer_m = radio_km * 1000
 
         # Botón búsqueda prominente
@@ -304,7 +318,8 @@ def render_controls():
         "buscar_tramos": buscar_tramos,
         "segment_km": segment_km,
         "buffer_m": buffer_m,
-        "run_btn": run_btn
+        "run_btn": run_btn,
+        "espana_vaciada": espana_vaciada,
     }
 
 def render_desktop_view():
@@ -344,6 +359,7 @@ buscar_tramos = ctrl["buscar_tramos"]
 segment_km = ctrl["segment_km"]
 buffer_m = ctrl["buffer_m"]
 run_btn = ctrl["run_btn"]
+espana_vaciada = ctrl["espana_vaciada"]
 
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
@@ -442,6 +458,9 @@ if _pipeline_active:
             status.update(label="✂️ Simplificando y procesando la geometría de la ruta…", state="running")
             track_simp = simplify_track(track, tolerance_deg=0.0005)
 
+            # --- Buffer normal — siempre se calcula ---
+            _ESPANA_VACIADA_BUFFER_M = 500
+
             status.update(label="📡 Cruzando con estaciones de servicio cercanas a tu ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
             # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché), lo leemos en modo solo-lectura
@@ -453,7 +472,7 @@ if _pipeline_active:
                 # (Genera copia superficial transparente)
                 gdf_within = gdf_within[gdf_within["Horario"].str.contains("24H|24 H", case=False, na=False)]
 
-            if fuel_column not in gdf_within.columns or gdf_within.empty or gdf_within[fuel_column].isna().all():
+            if gdf_within.empty and not espana_vaciada:
                 status.update(label="⚠️ Sin resultados para ese filtro", state="error", expanded=True)
                 st.warning(
                     f"No encontramos gasolineras con precio de **{combustible_elegido}** "
@@ -462,17 +481,41 @@ if _pipeline_active:
                 )
                 st.stop()
 
-            status.update(label="💰 Calculando el ranking de las más baratas…", state="running")
             gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
             track_utm = gdf_track_utm.geometry.iloc[0]
 
-            gdf_top = filter_cheapest_stations(
-                gdf_within,
-                fuel_column=fuel_column,
-                top_n=top_n,
-                track_utm=track_utm,
-                segment_km=segment_km,
-            )
+            # --- Búsqueda normal (top-N más baratas) ---
+            if not gdf_within.empty and fuel_column in gdf_within.columns and not gdf_within[fuel_column].isna().all():
+                status.update(label="💰 Calculando el ranking de las más baratas…", state="running")
+                gdf_top = filter_cheapest_stations(
+                    gdf_within,
+                    fuel_column=fuel_column,
+                    top_n=top_n,
+                    track_utm=track_utm,
+                    segment_km=segment_km,
+                )
+            else:
+                gdf_top = gdf_within.iloc[0:0].copy()  # GeoDataFrame vacío con las mismas columnas
+
+            # --- España Vaciada: añadir las gasolineras del corredor estricto ---
+            if espana_vaciada:
+                status.update(label="🏜️ Añadiendo gasolineras de emergencia del corredor estricto…", state="running")
+                gdf_buffer_narrow = build_route_buffer(track_simp, buffer_meters=_ESPANA_VACIADA_BUFFER_M)
+                gdf_narrow = spatial_join_within_buffer(gdf_utm, gdf_buffer_narrow)
+                if solo_24h:
+                    gdf_narrow = gdf_narrow[gdf_narrow["Horario"].str.contains("24H|24 H", case=False, na=False)]
+                if not gdf_narrow.empty:
+                    gdf_narrow_all = filter_all_stations_on_route(
+                        gdf_narrow, fuel_column=fuel_column, track_utm=track_utm
+                    )
+                    # Unir ambos conjuntos, eliminar duplicados por geometría y reordenar por km en ruta
+                    gdf_top = gpd.GeoDataFrame(
+                        pd.concat([gdf_top, gdf_narrow_all], ignore_index=True),
+                        crs=gdf_top.crs if not gdf_top.empty else gdf_narrow_all.crs,
+                    ).drop_duplicates(subset=["geometry"])
+                    if "km_ruta" in gdf_top.columns:
+                        gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
+
 
             if gdf_top.empty:
                 status.update(label="⚠️ Sin resultados", state="error", expanded=True)
@@ -514,15 +557,21 @@ if _pipeline_active:
 
             # --- Guardar resultados en session_state para sobrevivir reruns ---
             # OMITIMOS guardar el mapa completo (Leaflet) para evitar Memory Leaks en Streamlit
+            _precio_max_zona = (
+                float(gdf_within[fuel_column].max())
+                if not gdf_within.empty and fuel_column in gdf_within.columns
+                else 0.0
+            )
             st.session_state["pipeline_results"] = {
-                "gdf_top":        gdf_top,
+                "gdf_top":          gdf_top,
                 "gdf_within_count": len(gdf_within),
-                "precio_zona_max": float(gdf_within[fuel_column].max()) if not gdf_within.empty else 0.0,
-                "track":          track,
-                "track_utm":      track_utm,
-                "using_demo":     _using_demo,
-                "using_gpx":      _input_mode in ("gpx", "demo"),
-                "gpx_bytes":      _gpx_bytes,
+                "precio_zona_max":  _precio_max_zona,
+                "track":            track,
+                "track_utm":        track_utm,
+                "using_demo":       _using_demo,
+                "using_gpx":        _input_mode in ("gpx", "demo"),
+                "gpx_bytes":        _gpx_bytes,
+                "espana_vaciada":   espana_vaciada,
             }
 
         except RouteTextError as exc:
@@ -566,9 +615,15 @@ if "pipeline_results" in st.session_state:
     _using_demo     = _r["using_demo"]
     _using_gpx      = _r.get("using_gpx", False)
     _gpx_bytes      = _r.get("gpx_bytes")
+    espana_vaciada  = _r.get("espana_vaciada", False)
 
     if _using_demo:
         st.info("🧭 **Modo Demo activo** — Ruta Circular Sierra de Gredos (6 Puertos). Sube tu propio GPX desde el panel lateral cuando quieras.")
+    if espana_vaciada:
+        st.info(
+            "🏜️ **Modo España Vaciada activo** — Mostrando **todas** las gasolineras en un corredor de 500 m a "
+            "cada lado de tu ruta, ordenadas por kilómetro. No se aplica ningún filtro de precio ni límite de cantidad."
+        )
     st.success("✅ Ruta analizada con éxito")
 
     # --- Centro del mapa (persiste entre reruns via session_state) ---

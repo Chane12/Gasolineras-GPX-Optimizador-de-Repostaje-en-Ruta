@@ -866,6 +866,64 @@ def filter_cheapest_stations(
 
 
 # ===========================================================================
+# 5b. MODO ESPAÑA VACIADA — Todas las gasolineras en corredor estricto
+# ===========================================================================
+
+def filter_all_stations_on_route(
+    gdf: gpd.GeoDataFrame,
+    fuel_column: str,
+    track_utm: Optional[LineString] = None,
+) -> gpd.GeoDataFrame:
+    """
+    Modo España Vaciada: devuelve TODAS las gasolineras dentro del corredor
+    de la ruta (sin filtrar por precio ni por top-N), ordenadas geográficamente
+    por su posición en la ruta.
+
+    En rutas por zonas despobladas lo que importa es saber DÓNDE están las
+    gasolineras disponibles, no cuál es la más barata. Esta función garantiza
+    que no se omite ninguna estación que esté prácticamente sobre la carretera.
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        Gasolineras dentro del buffer estrecho (EPSG:25830).
+    fuel_column : str
+        Columna de precio para coerción numérica. No se filtra por valor mínimo;
+        se incluyen también gasolineras sin precio para ese combustible.
+    track_utm : Optional[LineString]
+        Track en EPSG:25830 para calcular el km en ruta y ordenar las estaciones.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Todas las gasolineras del corredor, ordenadas por km_ruta ascendente.
+    """
+    gdf = gdf.copy()
+
+    # Coerción numérica del precio (sin filtrar por NaN ni por cero)
+    if fuel_column in gdf.columns:
+        gdf[fuel_column] = pd.to_numeric(gdf[fuel_column], errors="coerce")
+        gdf["precio_seleccionado"] = gdf[fuel_column]
+    else:
+        gdf["precio_seleccionado"] = float("nan")
+
+    gdf["combustible"] = fuel_column
+
+    # Calcular posición en ruta y ordenar geográficamente
+    if track_utm is not None:
+        gdf["km_ruta"] = shapely.line_locate_point(track_utm, gdf.geometry) / 1000.0
+        gdf = gdf.sort_values("km_ruta").reset_index(drop=True)
+    else:
+        gdf = gdf.reset_index(drop=True)
+
+    print(
+        f"[España Vaciada] {len(gdf)} gasolineras en corredor estricto "
+        f"para '{fuel_column}'."
+    )
+    return gdf
+
+
+# ===========================================================================
 # 5c. PREPARACIÓN "MI PLAN DE VIAJE" (DESACOPLAMIENTO DE UI)
 # ===========================================================================
 
