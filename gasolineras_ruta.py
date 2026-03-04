@@ -1462,8 +1462,16 @@ def generate_map(
 
     mapa = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=12,
+        zoom_start=8,
         tiles="OpenStreetMap",
+    )
+
+    # Ajustar el zoom al bounding box del track (Fix 1)
+    lats_all = [c[1] for c in track_coords]
+    lons_all = [c[0] for c in track_coords]
+    mapa.fit_bounds(
+        [[min(lats_all), min(lons_all)], [max(lats_all), max(lons_all)]],
+        padding=(30, 30),
     )
 
     # --- Capa de teselas adicional (satélite ESRI) ---
@@ -1751,6 +1759,18 @@ def generate_map(
     .popup-text-muted { color: #94a3b8; }
     .folium-legend { background: white; color: #111827; }
 
+    /* Fix 5: Leyenda compacta en pantallas pequeñas (móvil) */
+    @media (max-width: 600px) {
+        .folium-legend {
+            font-size: 10px !important;
+            padding: 6px 8px !important;
+            min-width: 0 !important;
+            max-width: 130px !important;
+            bottom: 10px !important;
+            left: 8px !important;
+        }
+        .folium-legend b { font-size: 10px !important; }
+    }
     </style>
     """
     mapa.get_root().html.add_child(folium.Element(dark_mode_css))

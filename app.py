@@ -84,6 +84,16 @@ st.markdown(
     @media (max-width: 768px) {
         iframe { touch-action: pan-y !important; }
     }
+    /* Sticky search button on mobile */
+    @media (max-width: 768px) {
+        div[data-testid="stButton"].sticky-cta {
+            position: sticky;
+            bottom: 0;
+            z-index: 999;
+            padding: 0.5rem 0;
+            background: transparent;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -149,6 +159,30 @@ def render_controls():
                 placeholder="Ej: Madrid",
                 key="origen_txt",
             )
+            # Geolocalización (disponible en PC y móvil)
+            if st.button("📍 Usar mi ubicación actual", use_container_width=True, help="Detecta tu posición GPS y la usa como origen. Requiere HTTPS en producción."):
+                geo_result = st_js.st_javascript(
+                    "new Promise(resolve => navigator.geolocation.getCurrentPosition("
+                    "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
+                    "err => resolve({error: err.message}), {timeout: 8000}))",
+                    key="geo_js_pc"
+                )
+                if geo_result and isinstance(geo_result, dict) and "lat" in geo_result:
+                    import requests as _req
+                    try:
+                        _nom = _req.get(
+                            f"https://nominatim.openstreetmap.org/reverse?lat={geo_result['lat']}&lon={geo_result['lng']}&format=json",
+                            headers={"User-Agent": "GasolinerasEnRuta/1.0"},
+                            timeout=5
+                        ).json()
+                        _localidad = _nom.get("address", {}).get("city") or _nom.get("address", {}).get("town") or _nom.get("address", {}).get("village") or _nom.get("display_name", "").split(",")[0]
+                        st.session_state["origen_txt"] = _localidad
+                        st.toast(f"📍 Origen detectado: {_localidad}")
+                        st.rerun()
+                    except Exception:
+                        st.warning("⚠️ No se pudo obtener la dirección. Escribe el origen manualmente.")
+                elif geo_result and isinstance(geo_result, dict) and "error" in geo_result:
+                    st.warning(f"🚫 GPS no disponible: {geo_result['error']}. Escribe el origen manualmente.")
             destino_txt = st.text_input(
                 "Destino",
                 placeholder="Ej: Barcelona",
@@ -275,11 +309,36 @@ def render_controls():
 
         buffer_m = radio_km * 1000
 
-        # Botón búsqueda prominente
         st.markdown("<br>", unsafe_allow_html=True)
-        run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
-
-        st.markdown("---")
+        if is_mobile:
+            # Sticky CTA on mobile: wrapped in a div with class
+            st.markdown(
+                """
+                <style>
+                .sticky-search-btn button {
+                    position: sticky !important;
+                    bottom: 0.5rem;
+                    left: 0;
+                    right: 0;
+                    width: 100%;
+                    z-index: 9999;
+                    font-size: 1.1rem !important;
+                    padding: 0.75rem !important;
+                    background: linear-gradient(90deg, #FF7F00, #FF5500) !important;
+                    border: none !important;
+                    box-shadow: 0 -4px 16px rgba(255,127,0,0.4) !important;
+                    border-radius: 12px !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            with st.container():
+                st.markdown('<div class="sticky-search-btn">', unsafe_allow_html=True)
+                run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
 
         # Acciones Extra
         rc1, rc2 = st.columns(2)
@@ -325,12 +384,228 @@ def render_controls():
 def render_desktop_view():
     with st.sidebar:
         st.markdown("## 🧭 Planificador de Ruta")
+        # Fix D2: show active config summary if pipeline has already run
+        if "pipeline_results" in st.session_state:
+            _r = st.session_state["pipeline_results"]
+            ui_components.render_config_summary(
+                pipeline_results=_r,
+                combustible=st.session_state.get("comb_selectbox", "Gasolina 95"),
+                radio_km=st.session_state.get("radio_slider", 5),
+                top_n=st.session_state.get("top_slider", 10),
+                origen_txt=st.session_state.get("origen_txt", ""),
+                destino_txt=st.session_state.get("destino_txt", ""),
+                using_gpx=_r.get("using_gpx", False),
+                using_demo=_r.get("using_demo", False),
+            )
         return render_controls()
+
+
+def render_mobile_wizard():
+    """
+    Mejora 1: Wizard de 3 pasos para móvil.
+    Gestiona la navegación entre pasos con session_state["wizard_step"].
+    Devuelve el mismo dict que render_controls() al completar.
+    """
+    # Inicializar paso
+    if "wizard_step" not in st.session_state:
+        st.session_state["wizard_step"] = 1
+
+    step = st.session_state["wizard_step"]
+    TOTAL_STEPS = 3
+
+    # --- Barra de progreso del wizard ---
+    st.progress(step / TOTAL_STEPS, text=f"Paso {step} de {TOTAL_STEPS}")
+
+    # ── VARIABLES con valores por defecto para pasos no visitados ──
+    # Se inicializan desde session_state o defaults para que el dict de retorno siempre sea completo.
+    origen_txt   = st.session_state.get("origen_txt", "")
+    destino_txt  = st.session_state.get("destino_txt", "")
+    gpx_file     = None  # El file_uploader guarda el objeto en session_state["gpx_uploader"]
+
+    # Fix 4: calcular _input_mode desde session_state, no hardcodear texto_vacio
+    # Así, cuando el usuario avanza al paso 2 o 3, el modo sigue siendo válido.
+    _gpx_upload = st.session_state.get("gpx_uploader")
+    if _gpx_upload is not None:
+        _input_mode = "gpx"
+        gpx_file    = _gpx_upload
+    elif st.session_state.get("demo_mode"):
+        _input_mode = "demo"
+    elif origen_txt or destino_txt:
+        _input_mode = "texto"
+    else:
+        _input_mode = "texto_vacio"
+
+    combustible_elegido = st.session_state.get("comb_selectbox", _fuel_default)
+    fuel_column  = COMBUSTIBLES.get(combustible_elegido, COMBUSTIBLES["Gasolina 95"])
+    usar_vehiculo = st.session_state.get("limite_autonomia_chk", False)
+    autonomia_km  = st.session_state.get("autonomia_input", 0) if usar_vehiculo else 0
+    radio_km      = st.session_state.get("radio_slider", _buffer_default)
+    top_n         = st.session_state.get("top_slider", _top_default)
+    solo_24h      = st.session_state.get("solo_24h_chk", _solo24h_default)
+    buscar_tramos = st.session_state.get("buscar_tramos_chk", True)
+    segment_km    = st.session_state.get("segment_slider", 50) if buscar_tramos else 0.0
+    espana_vaciada = st.session_state.get("espana_vaciada_chk", False)
+    buffer_m      = radio_km * 1000
+    run_btn       = False
+
+    # ══════════════════════════════════════════
+    # PASO 1: DEFINICIÓN DE RUTA
+    # ══════════════════════════════════════════
+    if step == 1:
+        st.markdown("### 🗺️ Paso 1 — Tu Ruta")
+        tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
+        with tab_texto:
+            origen_txt = st.text_input("Origen", placeholder="Ej: Madrid", key="origen_txt")
+            destino_txt = st.text_input("Destino", placeholder="Ej: Barcelona", key="destino_txt")
+            if origen_txt or destino_txt:
+                _input_mode = "texto"
+                gpx_file = None
+            else:
+                _input_mode = "texto_vacio"
+                gpx_file = None
+        with tab_gpx:
+            gpx_file_upload = st.file_uploader("Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed", key="gpx_uploader")
+            if gpx_file_upload is not None:
+                _input_mode = "gpx"
+                gpx_file = gpx_file_upload
+            elif st.session_state.get("demo_mode") and _input_mode not in ("gpx",):
+                _input_mode = "demo"
+                gpx_file = None
+            elif _input_mode not in ("texto", "texto_vacio"):
+                _input_mode = "gpx_vacio"
+                gpx_file = None
+            if gpx_file is None and st.session_state.get("demo_mode"):
+                st.success("✅ Cargada ruta de demo (Sierra de Gredos - 6 Puertos)")
+
+        st.markdown("")
+        if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True):
+            st.session_state["wizard_step"] = 2
+            st.rerun()
+
+    # ══════════════════════════════════════════
+    # PASO 2: VEHÍCULO Y COMBUSTIBLE
+    # ══════════════════════════════════════════
+    elif step == 2:
+        st.markdown("### ⛽ Paso 2 — Tu Vehículo")
+        combustible_elegido = st.selectbox(
+            "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
+            index=list(COMBUSTIBLES.keys()).index(_fuel_default),
+            key="comb_selectbox"
+        )
+        fuel_column = COMBUSTIBLES[combustible_elegido]
+
+        usar_vehiculo = st.checkbox(
+            "Activar Radar de Autonomía",
+            value=st.session_state.get("usar_vehiculo", False),
+            help="Mostrar zonas de peligro en el mapa.",
+            key="limite_autonomia_chk"
+        )
+        if usar_vehiculo:
+            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Standard (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
+            if "Moto" in perfil:
+                auto_val = 250
+            elif "Standard" in perfil:
+                auto_val = 600
+            elif "Gran" in perfil:
+                auto_val = 900
+            else:
+                auto_val = _autonomia_default if _autonomia_default > 0 else 500
+            if perfil != "Manual":
+                st.session_state["autonomia_input"] = auto_val
+            autonomia_km = st.number_input(
+                "Autonomía del Vehículo (km)", min_value=10, max_value=2000,
+                value=auto_val, step=10, disabled=(perfil != "Manual"), key="autonomia_input"
+            )
+        else:
+            autonomia_km = 0
+
+        st.markdown("")
+        col_prev, col_next = st.columns(2)
+        with col_prev:
+            if st.button("‹ Ruta", use_container_width=True):
+                st.session_state["wizard_step"] = 1
+                st.rerun()
+        with col_next:
+            if st.button("Siguiente: Filtros ›", type="primary", use_container_width=True):
+                st.session_state["wizard_step"] = 3
+                st.rerun()
+
+    # ══════════════════════════════════════════
+    # PASO 3: FILTROS + BÚSQUEDA
+    # ══════════════════════════════════════════
+    elif step == 3:
+        st.markdown("### 🛠️ Paso 3 — Filtros")
+        radio_km = st.slider("Desvío máximo (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
+        top_n = st.slider("Gasolineras a mostrar max.", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
+        solo_24h = st.checkbox("Solo estaciones abiertas 24H", value=_solo24h_default, key="solo_24h_chk")
+        buscar_tramos = st.checkbox(
+            "Añadir 1 por sub-tramo", value=True,
+            help="Asegura cobertura en tramos largos.",
+            key="buscar_tramos_chk"
+        )
+        if buscar_tramos:
+            segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
+        else:
+            segment_km = 0.0
+        espana_vaciada = st.checkbox("🏜️ Modo España Vaciada", value=False, key="espana_vaciada_chk")
+        buffer_m = radio_km * 1000
+
+        st.markdown("")
+        col_prev2, col_search = st.columns([1, 2])
+        with col_prev2:
+            if st.button("‹ Vehículo", use_container_width=True):
+                st.session_state["wizard_step"] = 2
+                st.rerun()
+        with col_search:
+            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
+
+        # Acciones Extra (al final del paso 3)
+        st.markdown("---")
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            if st.button("🔗 Compartir ajustes", use_container_width=True):
+                st.query_params.update({
+                    "fuel": combustible_elegido, "buffer": str(radio_km),
+                    "top": str(top_n), "solo24h": str(solo_24h), "autonomia": str(autonomia_km),
+                })
+                st.toast("✅ URL actualizada. ¡Copia la barra de direcciones! 📌", icon="🔗")
+        with rc2:
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+                st.query_params.clear()
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+
+        st.caption("Datos en tiempo real del MITECO.")
+
+    # Si el pipeline ya tuvo resultados y el usuario vuelve, resetear wizard al paso 1
+    if run_btn and "wizard_step" in st.session_state:
+        st.session_state["wizard_step"] = 1
+
+    return {
+        "origen_txt": origen_txt,
+        "destino_txt": destino_txt,
+        "_input_mode": _input_mode,
+        "gpx_file": gpx_file,
+        "combustible_elegido": combustible_elegido,
+        "fuel_column": fuel_column,
+        "autonomia_km": autonomia_km,
+        "usar_vehiculo": usar_vehiculo,
+        "radio_km": radio_km,
+        "top_n": top_n,
+        "solo_24h": solo_24h,
+        "buscar_tramos": buscar_tramos,
+        "segment_km": segment_km,
+        "buffer_m": buffer_m,
+        "run_btn": run_btn,
+        "espana_vaciada": espana_vaciada,
+    }
+
 
 def render_mobile_view():
     st.markdown("## 🧭 Planificador de Ruta")
-    # En móvil eliminamos el "Mostrar Controles de Búsqueda" previo extra, el render_controls ya tiene un expander colapsable
-    return render_controls()
+    return render_mobile_wizard()
+
 
 # Detección responsiva de ancho
 viewport_width = st_js.st_javascript("window.innerWidth", key="viewport_width")
@@ -667,15 +942,27 @@ if "pipeline_results" in st.session_state:
                 f"dentro de tus {autonomia_km} km de autonomía."
             )
 
-        map_active = st.checkbox(
+        # Fix M1: toggle visible, desactivado por defecto en móvil
+        if is_mobile:
+            st.info(
+                "👆 **El mapa está en modo lectura.** "
+                "Activa el interruptor de abajo para poder hacer zoom y arrastrar.",
+            )
+        map_active = st.toggle(
             "🖱️ Activar interacción con el mapa (zoom / arrastrar)",
-            value=True,
+            value=not is_mobile,
             help=(
-                "En móvil, desáctivalo para poder hacer scroll en la página "
-                "sin que el mapa capture el gesto."
+                "En móvil está desactivado por defecto para que puedas hacer scroll "
+                "sin que el mapa capture el gesto. Activa el interruptor cuando quieras "
+                "explorar el mapa o hacer zoom."
             ),
         )
-        map_height = 580 if map_active else 340
+        map_height = 700 if map_active else 380
+        if not is_mobile:
+            # En PC siempre mostramos el mapa alto
+            map_height = 700 if map_active else 420
+        else:
+            map_height = 480 if map_active else 300
 
         # Regenerar mapa de forma determinista para la vista
         _, mapa_view = generate_map(
@@ -689,12 +976,10 @@ if "pipeline_results" in st.session_state:
             mapa_view,
             width="100%",
             height=map_height,
-            center=map_center,
-            zoom=map_zoom,
             returned_objects=[],
         )
         if not map_active:
-            st.caption("ℹ️ Activa la interacción arriba para hacer zoom y desplazarte por el mapa.")
+            st.caption("👆 Activa el interruptor de arriba para hacer zoom y desplazarte por el mapa.")
 
     render_map_view()
 
@@ -766,11 +1051,30 @@ if "pipeline_results" in st.session_state:
 
     @st.fragment
     def render_ranking_table():
-        st.subheader("🏆 Ranking de Gasolineras")
-        st.caption(
-            "Haz clic en una fila para centrar el mapa en esa gasolinera (se actualiza en el próximo render). "
-            "Haz clic en los marcadores del mapa para ver más detalles."
-        )
+        if is_mobile:
+            # Mejora 2: Vista de tarjetas táctiles en móvil
+            st.subheader("🏆 Gasolineras Más Baratas")
+            st.caption("Pulsa ‘Añadir’ para incluir la parada en tu plan de repostaje.")
+            parada_result = ui_components.render_station_cards(
+                df_show,
+                precio_col_label=precio_col_label,
+                station_coords=station_coords,
+                mis_paradas=st.session_state["mis_paradas"],
+            )
+            if parada_result is not None:
+                _idx, _cx, _cy, _row = parada_result
+                parada_dict = _row.to_dict()
+                parada_dict["_geom_x"] = _cx
+                parada_dict["_geom_y"] = _cy
+                st.session_state["mis_paradas"].append(parada_dict)
+                st.toast(f"✅ {_row.get('Marca', 'Estación')} añadida al plan")
+                st.rerun()
+        else:
+            st.subheader("🏆 Ranking de Gasolineras")
+            st.caption(
+                "Haz clic en una fila para centrar el mapa en esa gasolinera (se actualiza en el próximo render). "
+                "Haz clic en los marcadores del mapa para ver más detalles."
+            )
         # --- column_config ---
         _precio_min = float(df_show[precio_col_label].min()) if precio_col_label in df_show.columns else 0.0
         _precio_max = float(df_show[precio_col_label].max()) if precio_col_label in df_show.columns else 2.0
@@ -888,38 +1192,66 @@ if "pipeline_results" in st.session_state:
         else:
             df_plan = pd.DataFrame(st.session_state["mis_paradas"])
             df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
-            
+
             # Calcular km desde la parada anterior
             km_prev = 0.0
-            tramos = []
+            tramos_km = []
             for km in df_plan["Km en Ruta"]:
-                tramos.append(km - km_prev)
+                tramos_km.append(km - km_prev)
                 km_prev = km
-            df_plan["Tramo (km)"] = tramos
+            df_plan["Tramo (km)"] = tramos_km
 
-            col_config_plan = {
-                "Tramo (km)": st.column_config.NumberColumn(format="%.1f km"),
-                "Km en Ruta": st.column_config.NumberColumn(format="%.1f km"),
-                precio_col_label: st.column_config.NumberColumn(format="%.3f €/L"),
-            }
-            
-            st.dataframe(
-                df_plan[["Tramo (km)", "Km en Ruta", "Marca", precio_col_label]],
-                use_container_width=True,
-                hide_index=True,
-                column_config=col_config_plan
-            )
-            
+            # --- Renderizar filas manualmente con botón borrar por parada (Fix D6) ---
+            st.markdown("**Tus paradas de repostaje:**")
+            for i, row in df_plan.iterrows():
+                marca = row.get("Marca", "Estación")
+                precio_val = row.get(precio_col_label, None)
+                tramo_val = row.get("Tramo (km)", 0)
+                km_val = row.get("Km en Ruta", 0)
+                precio_str = f"{precio_val:.3f} €/L" if precio_val is not None else "—"
+                with st.container(border=True):
+                    c_info, c_del = st.columns([5, 1])
+                    with c_info:
+                        st.markdown(f"**⛽ {marca}** &nbsp;&nbsp; `{precio_str}`")
+                        st.caption(f"Km {km_val:.1f} en ruta · Tramo desde anterior: {tramo_val:.1f} km")
+                    with c_del:
+                        if st.button("🗑️", key=f"del_parada_{i}", help=f"Eliminar {marca} del plan"):
+                            # Eliminar por índice en la lista original (ordenada igual)
+                            parada_a_borrar = st.session_state["mis_paradas"]
+                            geom_x = row.get("_geom_x")
+                            geom_y = row.get("_geom_y")
+                            st.session_state["mis_paradas"] = [
+                                p for p in parada_a_borrar
+                                if not (p.get("_geom_x") == geom_x and p.get("_geom_y") == geom_y)
+                            ]
+                            st.toast(f"🗑️ {marca} eliminada del plan")
+                            st.rerun()
+
+            # --- Ahorro total estimado (Mejora 3) ---
+            if precio_zona_max > 0 and precio_col_label in df_plan.columns:
+                _precios_validos = pd.to_numeric(df_plan[precio_col_label], errors="coerce").dropna()
+                if not _precios_validos.empty:
+                    _precio_medio_plan = float(_precios_validos.mean())
+                    # Estimación: depósito de 50L como referencia estándar
+                    _litros_ref = 50
+                    _ahorro_total = (_precio_zona_max := precio_zona_max) - _precio_medio_plan
+                    _ahorro_total_eur = max(0.0, _ahorro_total * _litros_ref)
+                    st.metric(
+                        label=f"💰 Ahorro estimado vs. la más cara de la zona (depósito {_litros_ref}L)",
+                        value=f"{_ahorro_total_eur:.2f} €",
+                        delta=f"{_ahorro_total:.3f} €/L más barato",
+                        help="Estimación basada en un depósito de referencia de 50L. El ahorro real depende del tamaño real de tu depósito."
+                    )
+
             c1, c2 = st.columns([1, 1])
             with c1:
-                # Si borramos el plan, forzamos un rerun del scope de la base principal o del fragmento
-                if st.button("🗑️ Vaciar Mi Plan"):
+                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
-                    
+
             st.write("")
             st.markdown("**📤 Exportar Ruta**")
-            
+
             # Reconstruir un GDF temporal para la exportación usando EPSG:4326 a través de un módulo puro
             gdf_export = prepare_export_gdf(
                 st.session_state["mis_paradas"],
@@ -975,7 +1307,7 @@ else:
     # -----------------------------------------------------------------------
     # PANTALLA INICIAL — Estado vacío con CTA activo (Zero-Friction Onboarding)
     # -----------------------------------------------------------------------
-    ui_components.render_welcome_screen()
+    ui_components.render_welcome_screen(is_mobile=is_mobile)
 
     # ----- Demo CTA -------------------------------------------------------
     # Psicología: reducir la barrera de entrada («¿Y si no tengo un GPX ahora?»)
