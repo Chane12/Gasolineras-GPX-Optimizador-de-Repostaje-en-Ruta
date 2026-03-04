@@ -400,13 +400,13 @@ if _pipeline_active:
 
     if _input_mode == "texto" and _hay_ruta_texto:
         # ---- MODO TEXTO: obtener track vía Nominatim + OSRM ----
-        with st.status("🗺️ Trazando tu ruta…", expanded=True) as _status_txt:
+        with st.status("🗺️ Calculando la ruta por carretera…", expanded=True) as _status_txt:
             st.write(f" Geocodificando **{origen_txt}** y **{destino_txt}**…")
             try:
                 track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
-                _status_txt.update(label="✅ Ruta trazada", state="complete", expanded=False)
+                _status_txt.update(label="✅ Ruta calculada", state="complete", expanded=True)
             except RouteTextError as exc:
-                _status_txt.update(label="❌ Error al trazar la ruta", state="error", expanded=True)
+                _status_txt.update(label="❌ No se pudo calcular la ruta", state="error", expanded=True)
                 st.error(f"🚧 **No hemos podido trazar la ruta entre estas ciudades.**\n\n{exc}")
                 st.stop()
             except Exception as exc:
@@ -442,26 +442,26 @@ if _pipeline_active:
                 tmp_path = Path(tmp.name)
         track = None   # se asigna en el bloque try más abajo
 
-    with st.status("⛽ Iniciando pipeline de procesamiento...", expanded=True) as status:
+    with st.status("⛽ Analizando tu ruta…", expanded=True) as status:
         try:
-            status.update(label="⏬ Descargando precios en tiempo real del MITECO…", state="running")
+            status.update(label="⛽ Obteniendo precios en tiempo real del MITECO…", state="running")
             # Proteger contra Memory Leaks aislando el DataFrame de posibles mutaciones posteriores
             # (NOTA: Se tratan los datos cacheados como solo-lectura; los filtros subsecuentes crean copias seguras superficiales)
             df_gas = cached_fetch_gasolineras()
 
             # --- Carga del track (solo GPX; en modo texto ya está listo) ---
             if track is None:
-                status.update(label="🗺️ Leyendo y validando tu ruta GPX…", state="running")
+                status.update(label="📍 Leyendo y validando el archivo GPX…", state="running")
                 track = load_gpx_track(tmp_path)
                 validate_gpx_track(track)
 
-            status.update(label="✂️ Simplificando y procesando la geometría de la ruta…", state="running")
+            status.update(label="📐 Procesando la geometría de la ruta…", state="running")
             track_simp = simplify_track(track, tolerance_deg=0.0005)
 
             # --- Buffer normal — siempre se calcula ---
             _ESPANA_VACIADA_BUFFER_M = 500
 
-            status.update(label="📡 Cruzando con estaciones de servicio cercanas a tu ruta…", state="running")
+            status.update(label="🔍 Buscando gasolineras en tu corredor de ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
             # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché), lo leemos en modo solo-lectura
             gdf_utm = cached_build_stations_gdf(df_gas)
@@ -486,7 +486,7 @@ if _pipeline_active:
 
             # --- Búsqueda normal (top-N más baratas) ---
             if not gdf_within.empty and fuel_column in gdf_within.columns and not gdf_within[fuel_column].isna().all():
-                status.update(label="💰 Calculando el ranking de las más baratas…", state="running")
+                status.update(label="🏆 Ordenando por precio · buscando las mejores opciones…", state="running")
                 gdf_top = filter_cheapest_stations(
                     gdf_within,
                     fuel_column=fuel_column,
@@ -499,7 +499,7 @@ if _pipeline_active:
 
             # --- España Vaciada: añadir las gasolineras del corredor estricto ---
             if espana_vaciada:
-                status.update(label="🏜️ Añadiendo gasolineras de emergencia del corredor estricto…", state="running")
+                status.update(label="🏜️ Modo España Vaciada · localizando gasolineras en ruta…", state="running")
                 gdf_buffer_narrow = build_route_buffer(track_simp, buffer_meters=_ESPANA_VACIADA_BUFFER_M)
                 gdf_narrow = spatial_join_within_buffer(gdf_utm, gdf_buffer_narrow)
                 if solo_24h:
@@ -526,12 +526,12 @@ if _pipeline_active:
                 st.stop()
 
             # ---- OSRM: Filtro Fino — Distancia real por carretera ----
-            st.write("�️ Calculando desvíos reales por carretera (Puede tardar un poco)…")
+            st.write("🛣️ Calculando tiempos de desvío reales · esto puede tardar unos segundos…")
             gdf_top["osrm_distance_km"] = float("nan")
             gdf_top["osrm_duration_min"] = float("nan")
             
             try:
-                osrm_progress = st.progress(0.0, text="Llamando a OSRM para filtros finos...")
+                osrm_progress = st.progress(0.0, text="Calculando desvíos reales por carretera…")
                 total_osrm = len(gdf_top)
                 completed_osrm = 0
                 
@@ -553,7 +553,7 @@ if _pipeline_active:
             except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
                 pass
 
-            status.update(label="✅ ¡Ruta analizada y optimizada!", state="complete", expanded=False)
+            status.update(label="✅ ¡Listo! Tu ruta ha sido analizada", state="complete", expanded=True)
 
             # --- Guardar resultados en session_state para sobrevivir reruns ---
             # OMITIMOS guardar el mapa completo (Leaflet) para evitar Memory Leaks en Streamlit
