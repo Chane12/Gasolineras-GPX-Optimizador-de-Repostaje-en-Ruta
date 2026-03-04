@@ -510,14 +510,6 @@ if _pipeline_active:
             except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
                 pass
 
-            status.update(label="🖼️ Generando mapa interactivo…", state="running")
-            _, mapa_obj = generate_map(
-                track_original=track,
-                gdf_top_stations=gdf_top,
-                fuel_column=fuel_column,
-                autonomy_km=float(autonomia_km),  # F3: Zonas de peligro por autonomía
-            )
-
             status.update(label="✅ ¡Ruta analizada y optimizada!", state="complete", expanded=False)
 
             # --- Guardar resultados en session_state para sobrevivir reruns ---
@@ -656,13 +648,6 @@ if "pipeline_results" in st.session_state:
     # -----------------------------------------------------------------------
     # 4. Tabla de resultados
     # -----------------------------------------------------------------------
-    @st.fragment
-    def render_ranking_and_plan_view():
-        st.subheader("🏆 Ranking de Gasolineras")
-        st.caption(
-            "Haz clic en una fila para centrar el mapa en esa gasolinera (se actualiza en el próximo render). "
-            "Haz clic en los marcadores del mapa para ver más detalles."
-        )
 
     COLS = {
         "km_ruta":            "Km en Ruta",
@@ -679,7 +664,25 @@ if "pipeline_results" in st.session_state:
 
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
-    
+
+    # --- Fix: pre-formatear la columna Desvío como texto -----------------------
+    # NumberColumn con format="%.0f min" no sabe renderizar NaN y muestra "None".
+    # La solución correcta es convertir los valores a cadenas antes de entregar
+    # el DataFrame a Streamlit: valores reales → "X min", sin dato → "—".
+    _desvio_col = col_map.get("osrm_duration_min")
+    if _desvio_col and _desvio_col in df_show.columns:
+        _raw = pd.to_numeric(df_show[_desvio_col], errors="coerce")
+        if _raw.isna().all():
+            # OSRM falló completamente → ocultar la columna
+            df_show = df_show.drop(columns=[_desvio_col])
+            col_map.pop("osrm_duration_min", None)
+        else:
+            # Formatear: número → "X min", NaN → "—"
+            df_show[_desvio_col] = _raw.apply(
+                lambda x: f"{int(round(x))} min" if pd.notna(x) else "—"
+            )
+
+
     precio_col_label = f"Precio {combustible_elegido} (€/L)"
 
     # Add relative savings
@@ -703,13 +706,16 @@ if "pipeline_results" in st.session_state:
 
     # Coordenadas WGS84 de cada gasolinera (para el zoom del mapa)
     gdf_top_wgs84 = gdf_top.to_crs("EPSG:4326")
-    station_coords = [
-        (row.geometry.y, row.geometry.x)
-        for _, row in gdf_top_wgs84.iterrows()
-    ]
+    # Vectorizar coordenadas con operaciones de serie (más rápido que iterrows)
+    station_coords = list(zip(gdf_top_wgs84.geometry.y, gdf_top_wgs84.geometry.x))
 
     @st.fragment
     def render_ranking_table():
+        st.subheader("🏆 Ranking de Gasolineras")
+        st.caption(
+            "Haz clic en una fila para centrar el mapa en esa gasolinera (se actualiza en el próximo render). "
+            "Haz clic en los marcadores del mapa para ver más detalles."
+        )
         # --- column_config ---
         _precio_min = float(df_show[precio_col_label].min()) if precio_col_label in df_show.columns else 0.0
         _precio_max = float(df_show[precio_col_label].max()) if precio_col_label in df_show.columns else 2.0
@@ -732,10 +738,9 @@ if "pipeline_results" in st.session_state:
                 help="Distancia desde el inicio de la ruta hasta la gasolinera.",
                 format="%.1f km",
             ),
-            "Desvío (min)": st.column_config.NumberColumn(
+            "Desvío (min)": st.column_config.TextColumn(
                 "Desvío (min)",
-                help="Tiempo estimado de desvío ida+vuelta.",
-                format="%.0f min",
+                help="Tiempo estimado de desvío ida+vuelta (vacío si el servicio de routing no estuvo disponible).",
             ),
             "Marca": st.column_config.TextColumn(
                 "Marca",

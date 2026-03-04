@@ -20,25 +20,31 @@ Dependencias:
 
 from __future__ import annotations
 
+import concurrent.futures
 import heapq
 import json
 import math
+import random
 import time
+import urllib.parse
 import warnings
 from pathlib import Path
 from typing import Optional
 
 import folium
 import gpxpy
-import gpxpy.gpx
+import gpxpy.gpx as _gpx
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+import pyproj
 import requests
+import shapely
+import shapely.ops
+from pyproj import Geod
+from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point
 from shapely.ops import transform
-from pyproj import Geod
-import math as _math
-import pyproj
 
 # Silencia advertencias de GeoPandas sobre índices espaciales (dependiendo de versión)
 warnings.filterwarnings("ignore", category=UserWarning, module="geopandas")
@@ -198,9 +204,15 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             # Cadenas vacías o no numéricas → NaN
             df[col] = pd.to_numeric(df[col], errors="coerce")
             
-            # Filtro estricto contención para precios "Fantasma" o typos de la API (ej: 0.15€ o 15.0€)
-            # Solo aplicamos el clip al set si no es NaN.
-            df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.80) & (df[col] < 2.50)), pd.NA)
+            # Filtro anti-fantasma para precios erróneos. Combustibles alternativos (H₂, GNL, GNC)
+            # cotizan muy por encima del rango de carburantes líquidos convencionales.
+            _FUELS_SPECIAL = {"Precio Hidrogeno", "Precio Gas Natural Comprimido", "Precio Gas Natural Licuado"}
+            if col in _FUELS_SPECIAL:
+                # Solo eliminar valores claramente imposibles (negativos o cero)
+                df[col] = df[col].where((df[col].isna()) | (df[col] > 0.10), pd.NA)
+            else:
+                # Rango razonable para carburantes líquidos en España (€/L)
+                df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.80) & (df[col] < 2.50)), pd.NA)
 
     for col in COORD_COLUMNS:
         if col in df.columns:
@@ -253,7 +265,8 @@ _NOMINATIM_HEADERS = {
     "Accept": "application/json",
 }
 
-_OSRM_ROUTE_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
+# URL pública de OSRM (FOSSGIS). Única constante para todo el módulo.
+_OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
 
 
 class RouteTextError(ValueError):
@@ -285,20 +298,7 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     RouteTextError
         Si Nominatim no devuelve resultados o la llamada falla.
     """
-    endpoints = [
-        _NOMINATIM_URL,
-        "https://nominatim.kumi.systems/search", # Alternative Nominatim mirror
-        "https://locationiq.org/v1/search.php" # Fallback if LocationIQ free tier allows (just another nominatim-like endpoint, usually needs API key but sometimes accepts public, though we'll stick to mirrors)
-    ]
-    
-    # Let's use reliable mirrors
-    endpoints = [
-        _NOMINATIM_URL,
-        "https://nominatim.kumi.systems/search",
-        "https://api.mapy.cz/v1/geocode" # Alternative free
-    ]
-
-    # Let's use reliable mirrors and alternatives
+    # Endpoints en orden de preferencia: Nominatim oficial → Photon (Komoot) → geocode.maps.co
     user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
@@ -315,9 +315,7 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     ]
     
     last_err = None
-    import random
-    import time
-    
+
     for attempt, ep in enumerate(endpoints):
         headers["User-Agent"] = random.choice(user_agents)
         try:
@@ -404,7 +402,6 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
     lat_o, lon_o = _geocode(origen)
     lat_d, lon_d = _geocode(destino)
 
-    import random
     user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
@@ -417,8 +414,8 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
     # 2. Intentar simplified geometry en router principal (FOSSGIS) para evitar timeouts en >500km.
     # 3. Fallback final simplificado al router oficial de OSRM demo.
     endpoints = [
-        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
-        f"{_OSRM_ROUTE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false",
+        f"{_OSRM_BASE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
+        f"{_OSRM_BASE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false",
         f"http://router.project-osrm.org/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false"
     ]
 
@@ -806,8 +803,6 @@ def filter_cheapest_stations(
     gdf_top_global = gdf_valid.nsmallest(top_n, fuel_column).copy()
 
     if track_utm is not None and segment_km > 0:
-        import shapely
-        import shapely.ops
         # Calculamos num_tramos
         dist_total_km = track_utm.length / 1000.0
         num_tramos = max(1, math.ceil(dist_total_km / segment_km))
@@ -855,7 +850,6 @@ def filter_cheapest_stations(
         # Solo Búsqueda global estándar
         gdf_top = gdf_top_global.copy()
         if track_utm is not None:
-             import shapely
              gdf_top["km_ruta"] = shapely.line_locate_point(track_utm, gdf_top.geometry) / 1000.0
              
         gdf_top = gdf_top.reset_index(drop=True)
@@ -1006,11 +1000,6 @@ def enrich_gpx_with_stops(
     str
         Cadena XML en formato GPX lista para guardar o descargar.
     """
-    import gpxpy
-    import gpxpy.gpx as _gpx
-    import time
-    import requests
-
     # --- Parsear el GPX original ---
     gpx_obj = gpxpy.parse(gpx_bytes.decode("utf-8", errors="replace"))
 
@@ -1053,9 +1042,6 @@ def enrich_gpx_with_stops(
         paradas.append({"lon": lon, "lat": lat})
 
     # 2. Identificar el Punto de Fuga (Split Point) para cada parada
-    import numpy as np
-    from scipy.spatial import cKDTree
-
     puntos_ref = []
     indices = []
     for t_idx, track in enumerate(gpx_obj.tracks):
@@ -1190,9 +1176,6 @@ def enrich_gpx_with_stops(
 # 5b. FILTRO FINO — OSRM Hybrid Funnel
 # ===========================================================================
 
-# URL pública gratuita de OSRM. Se puede sustituir por una instancia propia.
-_OSRM_BASE_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
-
 
 def get_real_distance_osrm(
     lon_origen: float,
@@ -1282,9 +1265,6 @@ def enrich_stations_with_osrm(
     Tuple[idx, dict | None]
         El índice de la gasolinera y el resultado de OSRM (o None si falla).
     """
-    import concurrent.futures
-    import time
-    
     if gdf_top.empty:
         return
 
@@ -1297,8 +1277,6 @@ def enrich_stations_with_osrm(
     # ANTES del ThreadPool (IO-bound) para evitar GIL thrashing.
     # =========================================================================
     rutas_origen_dict = {}
-    import shapely
-    
     if hasattr(track_original, "project"):
         # Operación vectorizada sobre GeoPandas (muy rápido a nivel C/Cython)
         dist_along_array = gdf_wgs84.geometry.apply(lambda geom: track_original.project(geom))
@@ -1351,7 +1329,6 @@ def enrich_stations_with_osrm(
         return idx, result
 
     # Circuit Breaker para OSRM
-    import random
     fallos_consecutivos = 0
     max_fallos = 6
     current_delay = delay_s
@@ -1583,7 +1560,7 @@ def generate_map(
         osrm_dur  = row.get("osrm_duration_min", float("nan"))
         # Proteger contra None: math.isnan(None) lanza TypeError
         try:
-            _osrm_ok = not _math.isnan(osrm_dist) and not _math.isnan(osrm_dur)
+            _osrm_ok = not math.isnan(osrm_dist) and not math.isnan(osrm_dur)
         except TypeError:
             _osrm_ok = False
         if _osrm_ok:
@@ -1615,7 +1592,7 @@ def generate_map(
             <div class="popup-price-box" style="text-align:center; border-radius:8px;
                         padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color};
-                            line-height:1;">{f"{precio:.3f}" if not _math.isnan(precio) else "N/A"} €/L</div>
+                            line-height:1;">{f"{precio:.3f}" if not math.isnan(precio) else "N/A"} €/L</div>
                 <div class="popup-price-subtitle" style="font-size:0.78rem; margin-top:2px;">
                     {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp;
                     Km {row.get('km_ruta', 0):.1f} en ruta</div>
@@ -1659,7 +1636,7 @@ def generate_map(
         ).add_to(mapa)
 
         # El DivIcon muestra el PRECIO encima del círculo (visible sin hacer clic)
-        precio_str = f"{precio:.2f}€" if not _math.isnan(precio) else "–"
+        precio_str = f"{precio:.2f}€" if not math.isnan(precio) else "–"
         folium.Marker(
             location=[lat, lon],
             icon=folium.DivIcon(
@@ -1953,9 +1930,7 @@ def calculate_autonomy_radar(track: LineString, gdf_top: gpd.GeoDataFrame, auton
     tuple[list[dict], float]
         Una lista de diccionarios representando los tramos del viaje, y la longitud total del track.
     """
-    import pyproj as _pyproj
-
-    _geod_radar = _pyproj.Geod(ellps="WGS84")
+    _geod_radar = pyproj.Geod(ellps="WGS84")
     _track_coords = list(track.coords)
     _lons = [c[0] for c in _track_coords]
     _lats = [c[1] for c in _track_coords]
