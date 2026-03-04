@@ -426,14 +426,13 @@ def render_mobile_wizard():
     # --- Barra de progreso del wizard ---
     st.progress(step / TOTAL_STEPS, text=f"Paso {step} de {TOTAL_STEPS}")
 
-    # ── VARIABLES con valores por defecto para pasos no visitados ──
-    # Se inicializan desde session_state o defaults para que el dict de retorno siempre sea completo.
-    origen_txt   = st.session_state.get("origen_txt", "")
-    destino_txt  = st.session_state.get("destino_txt", "")
-    gpx_file     = None  # El file_uploader guarda el objeto en session_state["gpx_uploader"]
+    # Persistencia robusta entre pasos: usar claves no-widget (_w_origen, _w_destino)
+    # que no se borran cuando el widget deja de renderizarse en paso 2 y 3.
+    origen_txt  = st.session_state.get("_w_origen") or st.session_state.get("origen_txt", "")
+    destino_txt = st.session_state.get("_w_destino") or st.session_state.get("destino_txt", "")
+    gpx_file    = None  # El file_uploader guarda el objeto en session_state["gpx_uploader"]
 
-    # Fix 4: calcular _input_mode desde session_state, no hardcodear texto_vacio
-    # Así, cuando el usuario avanza al paso 2 o 3, el modo sigue siendo válido.
+    # Calcular _input_mode desde las claves guardadas (no desde widget que puede no existir)
     _gpx_upload = st.session_state.get("gpx_uploader")
     if _gpx_upload is not None:
         _input_mode = "gpx"
@@ -523,6 +522,9 @@ def render_mobile_wizard():
 
         st.markdown("")
         if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True):
+            # Guardar explícitamente a claves no-widget antes de navegar
+            st.session_state["_w_origen"]  = origen_txt
+            st.session_state["_w_destino"] = destino_txt
             st.session_state["wizard_step"] = 2
             st.rerun()
 
