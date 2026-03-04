@@ -159,29 +159,39 @@ def render_controls():
                 placeholder="Ej: Madrid",
                 key="origen_txt",
             )
-            # Geolocalización (disponible en PC y móvil)
-            if st.button("📍 Usar mi ubicación actual", use_container_width=True, help="Detecta tu posición GPS y la usa como origen. Requiere HTTPS en producción."):
-                geo_result = st_js.st_javascript(
-                    "new Promise(resolve => navigator.geolocation.getCurrentPosition("
-                    "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
-                    "err => resolve({error: err.message}), {timeout: 8000}))",
-                    key="geo_js_pc"
-                )
-                if geo_result and isinstance(geo_result, dict) and "lat" in geo_result:
+            # Geolocalización — patrón correcto con session_state flag
+            if st.button("📍 Usar mi ubicación actual", key="geo_btn_pc", use_container_width=True,
+                         help="Detecta tu posición GPS y la usa como origen."):
+                st.session_state["geo_pending"] = "pc"
+                st.rerun()
+            if st.session_state.get("geo_pending") == "pc":
+                with st.spinner("Detectando tu ubicación…"):
+                    geo_result = st_js.st_javascript(
+                        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
+                        "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
+                        "err => resolve({error: err.message}), {timeout: 8000}))",
+                        key="geo_js_pc"
+                    )
+                if isinstance(geo_result, dict) and "lat" in geo_result:
                     import requests as _req
+                    st.session_state["geo_pending"] = None
                     try:
                         _nom = _req.get(
                             f"https://nominatim.openstreetmap.org/reverse?lat={geo_result['lat']}&lon={geo_result['lng']}&format=json",
                             headers={"User-Agent": "GasolinerasEnRuta/1.0"},
                             timeout=5
                         ).json()
-                        _localidad = _nom.get("address", {}).get("city") or _nom.get("address", {}).get("town") or _nom.get("address", {}).get("village") or _nom.get("display_name", "").split(",")[0]
+                        _localidad = (_nom.get("address", {}).get("city")
+                                      or _nom.get("address", {}).get("town")
+                                      or _nom.get("address", {}).get("village")
+                                      or _nom.get("display_name", "").split(",")[0])
                         st.session_state["origen_txt"] = _localidad
                         st.toast(f"📍 Origen detectado: {_localidad}")
                         st.rerun()
                     except Exception:
                         st.warning("⚠️ No se pudo obtener la dirección. Escribe el origen manualmente.")
-                elif geo_result and isinstance(geo_result, dict) and "error" in geo_result:
+                elif isinstance(geo_result, dict) and "error" in geo_result:
+                    st.session_state["geo_pending"] = None
                     st.warning(f"🚫 GPS no disponible: {geo_result['error']}. Escribe el origen manualmente.")
             destino_txt = st.text_input(
                 "Destino",
@@ -456,6 +466,40 @@ def render_mobile_wizard():
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
         with tab_texto:
             origen_txt = st.text_input("Origen", placeholder="Ej: Madrid", key="origen_txt")
+            # Geolocalización — patrón correcto con session_state flag
+            if st.button("📍 Usar mi ubicación actual", key="geo_btn_mobile", use_container_width=True,
+                         help="Detecta tu posición GPS y la usa como origen."):
+                st.session_state["geo_pending"] = "mobile"
+                st.rerun()
+            if st.session_state.get("geo_pending") == "mobile":
+                with st.spinner("Detectando tu ubicación…"):
+                    geo_result = st_js.st_javascript(
+                        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
+                        "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
+                        "err => resolve({error: err.message}), {timeout: 8000}))",
+                        key="geo_js_mobile"
+                    )
+                if isinstance(geo_result, dict) and "lat" in geo_result:
+                    import requests as _req
+                    st.session_state["geo_pending"] = None
+                    try:
+                        _nom = _req.get(
+                            f"https://nominatim.openstreetmap.org/reverse?lat={geo_result['lat']}&lon={geo_result['lng']}&format=json",
+                            headers={"User-Agent": "GasolinerasEnRuta/1.0"},
+                            timeout=5
+                        ).json()
+                        _localidad = (_nom.get("address", {}).get("city")
+                                      or _nom.get("address", {}).get("town")
+                                      or _nom.get("address", {}).get("village")
+                                      or _nom.get("display_name", "").split(",")[0])
+                        st.session_state["origen_txt"] = _localidad
+                        st.toast(f"📍 Origen detectado: {_localidad}")
+                        st.rerun()
+                    except Exception:
+                        st.warning("⚠️ No se pudo obtener la dirección. Escribe el origen manualmente.")
+                elif isinstance(geo_result, dict) and "error" in geo_result:
+                    st.session_state["geo_pending"] = None
+                    st.warning(f"🚫 GPS no disponible: {geo_result['error']}")
             destino_txt = st.text_input("Destino", placeholder="Ej: Barcelona", key="destino_txt")
             if origen_txt or destino_txt:
                 _input_mode = "texto"
