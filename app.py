@@ -134,10 +134,11 @@ _fuel_default = qp.get("fuel", "Gasolina 95")
 _fuel_default = _fuel_default if _fuel_default in COMBUSTIBLES else "Gasolina 95"
 _buffer_default = int(qp.get("buffer", 5))
 _buffer_default = max(1, min(15, _buffer_default))
-_top_default = int(qp.get("top", 10))
+_top_default = int(qp.get("top", 5))
 _top_default = max(1, min(20, _top_default))
 _autonomia_default = int(qp.get("autonomia", 0))
 _solo24h_default = qp.get("solo24h", "False").lower() == "true"
+_desvio_default = qp.get("desvio", "False").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # BARRA LATERAL / MAIN VIEWS — Controles de Configuración
@@ -304,7 +305,6 @@ def render_controls():
             else:
                 segment_km = 0.0
 
-            st.markdown("---")
             espana_vaciada = st.checkbox(
                 "🏜️ Modo España Vaciada",
                 value=False,
@@ -315,6 +315,16 @@ def render_controls():
                     "No filtra por precio ni por top-N. "
                     "Ideal para rutas por zonas despobladas donde no puedes permitirte ignorar ninguna estación."
                 ),
+            )
+            calcular_desvio = st.checkbox(
+                "⏱️ Calcular tiempos de desvío reales",
+                value=_desvio_default,
+                help=(
+                    "Consulta OSRM (Open Source Routing Machine) para obtener el tiempo real que tardarás en "
+                    "llegar a la gasolinera y volver a la ruta. Si se desactiva, la app funcionará más rápido "
+                    "pero no mostrará el tiempo de desvío en la tabla."
+                ),
+                key="calcular_desvio_chk"
             )
 
         buffer_m = radio_km * 1000
@@ -360,6 +370,7 @@ def render_controls():
                     "top":        str(top_n),
                     "solo24h":    str(solo_24h),
                     "autonomia":  str(autonomia_km),
+                    "desvio":     str(calcular_desvio),
                 })
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
                 
@@ -389,6 +400,7 @@ def render_controls():
         "buffer_m": buffer_m,
         "run_btn": run_btn,
         "espana_vaciada": espana_vaciada,
+        "calcular_desvio": calcular_desvio,
     }
 
 def render_desktop_view():
@@ -599,16 +611,12 @@ def render_mobile_wizard():
         radio_km = st.slider("Desvío máximo (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
         top_n = st.slider("Gasolineras a mostrar max.", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
         solo_24h = st.checkbox("Solo estaciones abiertas 24H", value=_solo24h_default, key="solo_24h_chk")
-        buscar_tramos = st.checkbox(
-            "Añadir 1 por sub-tramo", value=True,
-            help="Asegura cobertura en tramos largos.",
-            key="buscar_tramos_chk"
-        )
         if buscar_tramos:
             segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
         else:
             segment_km = 0.0
         espana_vaciada = st.checkbox("🏜️ Modo España Vaciada", value=False, key="espana_vaciada_chk")
+        calcular_desvio = st.checkbox("⏱️ Calcular tiempos de desvío reales", value=_desvio_default, key="calcular_desvio_chk")
         buffer_m = radio_km * 1000
 
         st.markdown("")
@@ -628,6 +636,7 @@ def render_mobile_wizard():
                 st.query_params.update({
                     "fuel": combustible_elegido, "buffer": str(radio_km),
                     "top": str(top_n), "solo24h": str(solo_24h), "autonomia": str(autonomia_km),
+                    "desvio": str(calcular_desvio),
                 })
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones! 📌", icon="🔗")
         with rc2:
@@ -660,6 +669,7 @@ def render_mobile_wizard():
         "buffer_m": buffer_m,
         "run_btn": run_btn,
         "espana_vaciada": espana_vaciada,
+        "calcular_desvio": calcular_desvio,
     }
 
 
@@ -696,11 +706,15 @@ segment_km = ctrl["segment_km"]
 buffer_m = ctrl["buffer_m"]
 run_btn = ctrl["run_btn"]
 espana_vaciada = ctrl["espana_vaciada"]
+calcular_desvio = ctrl["calcular_desvio"]
 
 # ---------------------------------------------------------------------------
 # Pipeline de cálculo
 # ---------------------------------------------------------------------------
 _is_demo_first_run = st.session_state.get("demo_mode") and "pipeline_results" not in st.session_state
+# Asegurar que origen/destino son strings (evitar errores de strip si vinieran como bool de session_state)
+origen_txt = str(origen_txt) if origen_txt is not None else ""
+destino_txt = str(destino_txt) if destino_txt is not None else ""
 _hay_ruta_texto = _input_mode == "texto" and bool(origen_txt.strip()) and bool(destino_txt.strip())
 _pipeline_active = run_btn or _is_demo_first_run
 
@@ -711,7 +725,9 @@ _using_demo = (_pipeline_active and _input_mode in ("demo", "gpx_vacio") and st.
 
 if _pipeline_active:
     # ---------------- EARLY VALIDATORS ----------------
-    if buffer_m > 20000:
+    # Robustez: asegurar tipos para validadores
+    _buffer_m_val = float(buffer_m) if buffer_m is not None else 0.0
+    if _buffer_m_val > 20000:
         st.error("🚨 La zona de búsqueda es demasiado amplia. Por favor, reduce el radio de desvío a un máximo de 20 km.")
         st.stop()
         
@@ -759,7 +775,17 @@ if _pipeline_active:
             with open(demo_gpx_path, "rb") as f:
                 _gpx_bytes = f.read()
         else:
-            _gpx_bytes = gpx_file.read()
+            # Robustez: gpx_file puede venir como bool o None si hubo errores en session_state/wizard
+            _is_file = (gpx_file is not None and 
+                       not isinstance(gpx_file, (bool, str, int, float)) and 
+                       hasattr(gpx_file, "read"))
+            
+            if _is_file:
+                _gpx_bytes = gpx_file.read() # type: ignore
+            else:
+                _gpx_bytes = b""
+                st.error("❌ No se pudo localizar o leer el archivo GPX. Intenta volver a subirlo.")
+                st.stop()
             if len(_gpx_bytes) > 5 * 1024 * 1024:
                 st.error("❌ El archivo GPX excede el límite de 5MB. Por seguridad contra degradación de memoria, ha sido bloqueado.")
                 st.stop()
@@ -862,32 +888,37 @@ if _pipeline_active:
                 st.stop()
 
             # ---- OSRM: Filtro Fino — Distancia real por carretera ----
-            st.write("🛣️ Calculando tiempos de desvío reales · esto puede tardar unos segundos…")
-            gdf_top["osrm_distance_km"] = float("nan")
-            gdf_top["osrm_duration_min"] = float("nan")
-            
-            try:
-                osrm_progress = st.progress(0.0, text="Calculando desvíos reales por carretera…")
-                total_osrm = len(gdf_top)
-                completed_osrm = 0
+            if calcular_desvio:
+                st.write("🛣️ Calculando tiempos de desvío reales · esto puede tardar unos segundos…")
+                gdf_top["osrm_distance_km"] = float("nan")
+                gdf_top["osrm_duration_min"] = float("nan")
                 
-                for idx, result in enrich_stations_with_osrm(
-                    gdf_top,
-                    track_original=track,
-                ):
-                    completed_osrm += 1
-                    osrm_progress.progress(
-                        completed_osrm / total_osrm, 
-                        text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}"
-                    )
+                try:
+                    osrm_progress = st.progress(0.0, text="Calculando desvíos reales por carretera…")
+                    total_osrm = len(gdf_top)
+                    completed_osrm = 0
                     
-                    if result is not None:
-                        gdf_top.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
-                        gdf_top.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+                    for idx, result in enrich_stations_with_osrm(
+                        gdf_top,
+                        track_original=track,
+                    ):
+                        completed_osrm += 1
+                        osrm_progress.progress(
+                            completed_osrm / total_osrm, 
+                            text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}"
+                        )
                         
-                osrm_progress.empty()
-            except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
-                pass
+                        if result is not None:
+                            gdf_top.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
+                            gdf_top.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+                            
+                    osrm_progress.empty()
+                except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
+                    pass
+            else:
+                st.write("⏩ Omitiendo cálculo de desvíos reales por carretera.")
+                gdf_top["osrm_distance_km"] = float("nan")
+                gdf_top["osrm_duration_min"] = float("nan")
 
             status.update(label="✅ ¡Listo! Tu ruta ha sido analizada", state="complete", expanded=True)
 
@@ -986,9 +1017,11 @@ if "pipeline_results" in st.session_state:
     # -----------------------------------------------------------------------
     @st.fragment
     def render_map_view():
+        # Robustez tipos
+        _autonomia_val = float(autonomia_km) if autonomia_km is not None else 0.0
         header_map = "🗺️ Mapa Interactivo de la Ruta"
-        if autonomia_km > 0:
-            header_map += f"  ·  ⚠️ Zonas de riesgo con {autonomia_km} km de autonomía"
+        if _autonomia_val > 0:
+            header_map += f"  ·  ⚠️ Zonas de riesgo con {_autonomia_val:.0f} km de autonomía"
         st.subheader(header_map)
         
         _sel = st.session_state.get("map_selected_station", {})
@@ -997,10 +1030,10 @@ if "pipeline_results" in st.session_state:
 
         if _sel.get("nombre"):
             st.caption(f"📍 Centrado en: **{_sel['nombre']}** — haz clic en otro marcador o fila de la tabla para cambiar.")
-        elif autonomia_km > 0:
+        elif _autonomia_val > 0:
             st.caption(
                 "Los segmentos **rojos discontinuos** indican tramos donde no hay gasolinera "
-                f"dentro de tus {autonomia_km} km de autonomía."
+                f"dentro de tus {_autonomia_val:.0f} km de autonomía."
             )
 
         # Fix M1: toggle visible, desactivado por defecto en móvil
@@ -1030,7 +1063,7 @@ if "pipeline_results" in st.session_state:
             track_original=track,
             gdf_top_stations=gdf_top,
             fuel_column=fuel_column,
-            autonomy_km=float(autonomia_km)
+            autonomy_km=float(autonomia_km) if autonomia_km is not None and not isinstance(autonomia_km, bool) else 0.0
         )
 
         st_folium(
