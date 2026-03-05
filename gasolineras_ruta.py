@@ -320,10 +320,15 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
         try:
             time.sleep(1 + attempt)  # Backoff
             
+            # Forzar búsqueda en España
+            query_lugar = lugar
+            if "españa" not in lugar.lower() and "spain" not in lugar.lower():
+                query_lugar = f"{lugar}, España"
+            
             if ep["type"] == "nominatim":
-                params = {"q": lugar, "format": "json", "limit": 1}
+                params = {"q": query_lugar, "format": "json", "limit": 1, "countrycodes": "es"}
             else: # photon
-                params = {"q": lugar, "limit": 1}
+                params = {"q": query_lugar, "limit": 1}
                 
             resp = requests.get(
                 ep["url"],
