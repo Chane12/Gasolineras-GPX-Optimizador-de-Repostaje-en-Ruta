@@ -160,40 +160,6 @@ def render_controls():
                 placeholder="Ej: Madrid",
                 key="origen_txt",
             )
-            # Geolocalización — patrón correcto con session_state flag
-            if st.button("📍 Usar mi ubicación actual", key="geo_btn_pc", use_container_width=True,
-                         help="Detecta tu posición GPS y la usa como origen."):
-                st.session_state["geo_pending"] = "pc"
-                st.rerun()
-            if st.session_state.get("geo_pending") == "pc":
-                with st.spinner("Detectando tu ubicación…"):
-                    geo_result = st_js.st_javascript(
-                        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
-                        "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
-                        "err => resolve({error: err.message}), {timeout: 8000}))",
-                        key="geo_js_pc"
-                    )
-                if isinstance(geo_result, dict) and "lat" in geo_result:
-                    import requests as _req
-                    st.session_state["geo_pending"] = None
-                    try:
-                        _nom = _req.get(
-                            f"https://nominatim.openstreetmap.org/reverse?lat={geo_result['lat']}&lon={geo_result['lng']}&format=json",
-                            headers={"User-Agent": "GasolinerasEnRuta/1.0"},
-                            timeout=5
-                        ).json()
-                        _localidad = (_nom.get("address", {}).get("city")
-                                      or _nom.get("address", {}).get("town")
-                                      or _nom.get("address", {}).get("village")
-                                      or _nom.get("display_name", "").split(",")[0])
-                        st.session_state["origen_txt"] = _localidad
-                        st.toast(f"📍 Origen detectado: {_localidad}")
-                        st.rerun()
-                    except Exception:
-                        st.warning("⚠️ No se pudo obtener la dirección. Escribe el origen manualmente.")
-                elif isinstance(geo_result, dict) and "error" in geo_result:
-                    st.session_state["geo_pending"] = None
-                    st.warning(f"🚫 GPS no disponible: {geo_result['error']}. Escribe el origen manualmente.")
             destino_txt = st.text_input(
                 "Destino",
                 placeholder="Ej: Barcelona",
@@ -489,41 +455,7 @@ def render_mobile_wizard():
                 "Origen", placeholder="Ej: Madrid",
                 key="origen_txt", on_change=_save_origen
             )
-            # Geolocalización — patrón correcto con session_state flag
-            if st.button("📍 Usar mi ubicación actual", key="geo_btn_mobile", use_container_width=True,
-                         help="Detecta tu posición GPS y la usa como origen."):
-                st.session_state["geo_pending"] = "mobile"
-                st.rerun()
-            if st.session_state.get("geo_pending") == "mobile":
-                with st.spinner("Detectando tu ubicación…"):
-                    geo_result = st_js.st_javascript(
-                        "new Promise(resolve => navigator.geolocation.getCurrentPosition("
-                        "pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),"
-                        "err => resolve({error: err.message}), {timeout: 8000}))",
-                        key="geo_js_mobile"
-                    )
-                if isinstance(geo_result, dict) and "lat" in geo_result:
-                    import requests as _req
-                    st.session_state["geo_pending"] = None
-                    try:
-                        _nom = _req.get(
-                            f"https://nominatim.openstreetmap.org/reverse?lat={geo_result['lat']}&lon={geo_result['lng']}&format=json",
-                            headers={"User-Agent": "GasolinerasEnRuta/1.0"},
-                            timeout=5
-                        ).json()
-                        _localidad = (_nom.get("address", {}).get("city")
-                                      or _nom.get("address", {}).get("town")
-                                      or _nom.get("address", {}).get("village")
-                                      or _nom.get("display_name", "").split(",")[0])
-                        st.session_state["origen_txt"] = _localidad
-                        st.session_state["_w_origen"]  = _localidad
-                        st.toast(f"📍 Origen detectado: {_localidad}")
-                        st.rerun()
-                    except Exception:
-                        st.warning("⚠️ No se pudo obtener la dirección. Escribe el origen manualmente.")
-                elif isinstance(geo_result, dict) and "error" in geo_result:
-                    st.session_state["geo_pending"] = None
-                    st.warning(f"🚫 GPS no disponible: {geo_result['error']}")
+            
             destino_txt = st.text_input(
                 "Destino", placeholder="Ej: Barcelona",
                 key="destino_txt", on_change=_save_destino
@@ -792,8 +724,8 @@ if _pipeline_active:
                 st.stop()
                 
             try:
-                # Verificación temprana de integridad GPX
-                content = _gpx_bytes.decode('utf-8', errors='ignore')
+                # Verificación temprana de integridad GPX (solo cabecera para ahorrar RAM)
+                content = _gpx_bytes[:1024].decode('utf-8', errors='ignore')
                 if "<gpx" not in content.lower():
                     raise ValueError("Not a GPX file")
             except Exception:
@@ -1216,7 +1148,7 @@ if "pipeline_results" in st.session_state:
 
         table_event = st.dataframe(
             df_show,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             on_select="rerun",
             selection_mode="single-row",
@@ -1329,7 +1261,7 @@ if "pipeline_results" in st.session_state:
                     _precio_medio_plan = float(_precios_validos.mean())
                     # Estimación: depósito de 50L como referencia estándar
                     _litros_ref = 50
-                    _ahorro_total = (_precio_zona_max := precio_zona_max) - _precio_medio_plan
+                    _ahorro_total = precio_zona_max - _precio_medio_plan
                     _ahorro_total_eur = max(0.0, _ahorro_total * _litros_ref)
                     st.metric(
                         label=f"💰 Ahorro estimado vs. la más cara de la zona (depósito {_litros_ref}L)",
@@ -1355,32 +1287,31 @@ if "pipeline_results" in st.session_state:
             )
                 
                 
-            if not _using_gpx:
-                gmaps_url, omitidas = generate_google_maps_url(track, gdf_export)
-                st.link_button(
-                    "📱 Abrir Ruta en Google Maps con mis paradas",
-                    url=gmaps_url,
-                    type="primary",
-                    help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
+            gmaps_url, omitidas = generate_google_maps_url(track, gdf_export)
+            st.link_button(
+                "📱 Abrir Ruta en Google Maps con mis paradas",
+                url=gmaps_url,
+                type="primary",
+                help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
+            )
+            if omitidas > 0:
+                st.warning(
+                    f"⚠️ **Atención:** Tu ruta tiene demasiadas paradas. Google Maps solo admite un máximo "
+                    f"de {_GMAPS_MAX_WAYPOINTS} repostajes por enlace. Se han omitido los {omitidas} últimos."
                 )
-                if omitidas > 0:
-                    st.warning(
-                        f"⚠️ **Atención:** Tu ruta tiene demasiadas paradas. Google Maps solo admite un máximo "
-                        f"de {_GMAPS_MAX_WAYPOINTS} repostajes por enlace. Se han omitido los {omitidas} últimos."
-                    )
-            else:
-                if _gpx_bytes:
-                    gpx_xml_con_paradas = enrich_gpx_with_stops(
-                        _gpx_bytes,
-                        gdf_export,
-                        fuel_column=fuel_column
-                    )
-                    st.download_button(
-                        label="💾 Descargar GPX Original + Mis Paradas",
-                        data=gpx_xml_con_paradas,
-                        file_name="ruta_optimizada.gpx",
-                        mime="application/gpx+xml"
-                    )
+
+            if _using_gpx and _gpx_bytes:
+                gpx_xml_con_paradas = enrich_gpx_with_stops(
+                    _gpx_bytes,
+                    gdf_export,
+                    fuel_column=fuel_column
+                )
+                st.download_button(
+                    label="💾 Descargar GPX Original + Mis Paradas",
+                    data=gpx_xml_con_paradas,
+                    file_name="ruta_optimizada.gpx",
+                    mime="application/gpx+xml"
+                )
 
     render_trip_plan()
     st.divider()

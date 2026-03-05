@@ -209,10 +209,10 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             _FUELS_SPECIAL = {"Precio Hidrogeno", "Precio Gas Natural Comprimido", "Precio Gas Natural Licuado"}
             if col in _FUELS_SPECIAL:
                 # Solo eliminar valores claramente imposibles (negativos o cero)
-                df[col] = df[col].where((df[col].isna()) | (df[col] > 0.10), pd.NA)
+                df[col] = df[col].where((df[col].isna()) | (df[col] > 0.0), pd.NA)
             else:
                 # Rango razonable para carburantes líquidos en España (€/L)
-                df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.80) & (df[col] < 2.50)), pd.NA)
+                df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.0) & (df[col] < 5.0)), pd.NA)
 
     for col in COORD_COLUMNS:
         if col in df.columns:
@@ -298,7 +298,7 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     RouteTextError
         Si Nominatim no devuelve resultados o la llamada falla.
     """
-    # Endpoints en orden de preferencia: Nominatim oficial → Photon (Komoot) → geocode.maps.co
+    # Endpoints en orden de preferencia: Nominatim oficial → Photon (Komoot)
     user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
@@ -311,7 +311,6 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     endpoints = [
         {"url": _NOMINATIM_URL, "type": "nominatim"},
         {"url": "https://photon.komoot.io/api", "type": "photon"},
-        {"url": "https://geocode.maps.co/search", "type": "nominatim"}
     ]
     
     last_err = None
@@ -1145,11 +1144,12 @@ def enrich_gpx_with_stops(
         
         segment = gpx_obj.tracks[t_idx].segments[s_idx]
         
-        # Buscar "Punto de Reincorporación" aprox 30-50m adelante 
-        # (para evitar U-turns extraños del motor de ruteo)
+        # Buscar "Punto de Reincorporación" adelante
+        # Se busca un punto al menos a 1km (1000m) de distancia lineal aproximada para
+        # dar espacio al motor de ruteo a trazar una curva suave de regreso al track
         reinc_idx = p_idx
         dist_accum = 0.0
-        max_search = min(p_idx + 30, len(segment.points) - 1)
+        max_search = min(p_idx + 150, len(segment.points) - 1)
         
         for i in range(p_idx, max_search):
             p1 = segment.points[i]
@@ -1158,12 +1158,11 @@ def enrich_gpx_with_stops(
             d = ((p2.longitude - p1.longitude)**2 + (p2.latitude - p1.latitude)**2)**0.5 * 111000
             dist_accum += d
             reinc_idx = i + 1
-            if dist_accum > 35.0:
+            if dist_accum > 1000.0:  # Buscamos ~1km de separación lineal
                 break
                 
         # Clamp: Si el bucle terminó y la distancia acumulada es bajísima o el track es ralo
-        # forzamos el reingreso al menos al punto siguiente para evitar splice circular/atascado
-        if dist_accum <= 35.0 and reinc_idx == p_idx:
+        if dist_accum <= 1000.0 and reinc_idx == p_idx:
             reinc_idx = min(p_idx + 1, len(segment.points) - 1)
             
         reinc_lon = segment.points[reinc_idx].longitude
@@ -1208,24 +1207,23 @@ def enrich_gpx_with_stops(
         
         # Añadir coordenadas de entrada
         if entrada:
-            # saltamos el [0] porque ya existe en el track original (el split point)
             for coords in entrada[1:]: 
                 new_points.append(_gpx.GPXTrackPoint(latitude=coords[1], longitude=coords[0]))
                 
-        # Opcional: inyectar el point exacto de la gasolinera por si OSRM no llega al mismo cm
+        # Opcional: inyectar el point exacto de la gasolinera
         if not entrada and not salida:
             new_points.append(_gpx.GPXTrackPoint(latitude=station_lat, longitude=station_lon))
 
         # Añadir coordenadas de salida
         if salida:
-            # En saltar [0], evitamos repetir el punto de la gasolinera
             for coords in salida[1:]:
                 new_points.append(_gpx.GPXTrackPoint(latitude=coords[1], longitude=coords[0]))
                 
         # 4. Inyección geométrica final
+        # Eliminamos por completo los puntos originales que quedaban entre el split y la reincorporación,
+        # sustituyéndolos por el desvío generado por OSRM para garantizar un único trazo continuo.
         if new_points:
-            # Construimos la nueva lista de puntos del segmento
-            segment.points = segment.points[:p_idx+1] + new_points + segment.points[reinc_idx+1:]
+            segment.points = segment.points[:p_idx+1] + new_points + segment.points[reinc_idx:]
 
     return gpx_obj.to_xml()
 
@@ -1240,7 +1238,7 @@ def get_real_distance_osrm(
     lat_origen: float,
     lon_destino: float,
     lat_destino: float,
-    timeout: float = 2.0,
+    timeout: float = 5.0,
 ) -> Optional[dict]:
     """
     Consulta la API pública de OSRM para obtener distancia y duración reales
@@ -1272,8 +1270,9 @@ def get_real_distance_osrm(
         f";{lon_destino},{lat_destino}"
         f"?overview=false&alternatives=false&steps=false"
     )
+    headers = {"User-Agent": "OptimizadorGasolineras/1.0", "Accept": "application/json"}
     try:
-        resp = requests.get(url, timeout=timeout)
+        resp = requests.get(url, headers=headers, timeout=timeout)
         if resp.status_code == 429:
             print("[OSRM] Rate-limit (429). Usando fallback euclidiano.")
             return None
@@ -1391,30 +1390,25 @@ def enrich_stations_with_osrm(
     max_fallos = 6
     current_delay = delay_s
 
-    # Reducimos max_workers a 1 para forzar procesamiento en serie y evitar saturar OSRM
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        futures = {executor.submit(process_station, idx, gdf_wgs84.loc[idx]): idx for idx in gdf_top.index}
-        for future in concurrent.futures.as_completed(futures):
+    # Bucle secuencial nativo: sin overhead de instanciación de hilos
+    for idx, row_wgs84 in gdf_wgs84.iterrows():
+        try:
             time.sleep(current_delay)  # throttle de la red
-            try:
-                idx, result = future.result()
-                if result is None:
-                   fallos_consecutivos += 1
-                   # Backoff exponencial suave
-                   current_delay = min(5.0, current_delay + 0.5 + random.uniform(0.1, 0.3))
-                else:
-                   fallos_consecutivos = max(0, fallos_consecutivos - 1)
-                   current_delay = delay_s  # reset en caso de éxito
-                yield idx, result
-            except Exception as exc:
-                idx_failed = futures[future]
+            _, result = process_station(idx, row_wgs84)
+            if result is None:
                 fallos_consecutivos += 1
                 current_delay = min(5.0, current_delay + 0.5 + random.uniform(0.1, 0.3))
-                yield idx_failed, None
+            else:
+                fallos_consecutivos = max(0, fallos_consecutivos - 1)
+                current_delay = delay_s  # reset en caso de éxito
+            yield idx, result
+        except Exception as exc:
+            fallos_consecutivos += 1
+            yield idx, None
 
-            if fallos_consecutivos >= max_fallos:
-                print("[OSRM] Circuit Breaker Activado: Demasiados fallos seguidos. Abortando llamadas OSRM.")
-                break
+        if fallos_consecutivos >= max_fallos:
+            print(f"[OSRM] Circuit Breaker abierto tras {max_fallos} fallos consecutivos.")
+            break
 
 
 # ===========================================================================
@@ -1917,7 +1911,7 @@ if __name__ == "__main__":
         ("Gasolina 95 E10", "Precio Gasolina 95 E10"),
         ("Gasolina 98 E5", "Precio Gasolina 98 E5"),
         ("Gasolina 98 E10", "Precio Gasolina 98 E10"),
-        ("GLP (Autogas)", "Precio Gases licuados del petroleo"),
+        ("GLP (Autogas)", "Precio Gases licuados del petróleo"),
         ("GNC (Gas Natural Comprimido)", "Precio Gas Natural Comprimido"),
         ("GNL (Gas Natural Licuado)", "Precio Gas Natural Licuado"),
         ("Hidrogeno", "Precio Hidrogeno"),
