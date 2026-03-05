@@ -908,8 +908,12 @@ def filter_all_stations_on_route(
     if fuel_column in gdf.columns:
         gdf[fuel_column] = pd.to_numeric(gdf[fuel_column], errors="coerce")
         gdf["precio_seleccionado"] = gdf[fuel_column]
+        
+        # [NUEVO] Eliminar registros donde no existe este combustible
+        gdf = gdf[gdf[fuel_column].notna() & (gdf[fuel_column] > 0)].copy()
     else:
-        gdf["precio_seleccionado"] = float("nan")
+        # Prevención contra errores catastróficos de Módulo:
+        return gpd.GeoDataFrame(columns=gdf.columns, crs=gdf.crs)
 
     gdf["combustible"] = fuel_column
 
@@ -1426,11 +1430,13 @@ def generate_map(
     fuel_column: str,
     output_path: Optional[str | Path] = None,
     autonomy_km: float = 0.0,
+    gdf_all_stations: Optional[gpd.GeoDataFrame] = None,
 ) -> tuple[Optional[Path], folium.Map]:
     """
     Genera un mapa interactivo en HTML con folium mostrando:
       - La ruta GPX original.
       - Las Top N gasolineras más baratas con markers y popups detallados.
+      - Zonas rojas del radar basadas en la red total de estaciones sugerida por gdf_all_stations.
 
     Para la visualización se re-proyecta todo de vuelta a EPSG:4326 (WGS84),
     que es el sistema de coordenadas que Leaflet/folium entiende nativamente.
@@ -1445,6 +1451,11 @@ def generate_map(
         Nombre del combustible seleccionado (para el título del popup).
     output_path : str | Path
         Ruta donde guardar el HTML.
+    autonomy_km : float
+        Kilómetros de autonomía del vehículo (0 = desactivado).
+    gdf_all_stations : gpd.GeoDataFrame | None
+        Conjunto primario total sin filtrar (gdf_within) usado para pintar 
+        Zonas de Riesgo (dash rojas) realistas geográficamente.
 
     Returns
     -------
@@ -1498,14 +1509,19 @@ def generate_map(
     ).add_to(mapa)
 
     # --- Zonas de peligro por autonomía ---
-    if autonomy_km > 0 and not gdf_top_stations.empty:
-        # Reproyectar estaciones a WGS84 para obtener km_ruta en WGS84
-        gdf_for_danger = gdf_top_stations.copy()
-        if gdf_for_danger.crs and gdf_for_danger.crs.to_epsg() != 4326:
-            gdf_for_danger = gdf_for_danger.to_crs(CRS_WGS84)
+    if autonomy_km > 0:
+        # Usar el catálogo completo de supervivencia si se ha proporcionado, 
+        # sino, hacer fallback al top_stations
+        _source_gdf = gdf_all_stations if gdf_all_stations is not None else gdf_top_stations
+        
+        if not _source_gdf.empty:
+            # Reproyectar estaciones a WGS84 para obtener km_ruta en WGS84
+            gdf_for_danger = _source_gdf.copy()
+            if gdf_for_danger.crs and gdf_for_danger.crs.to_epsg() != 4326:
+                gdf_for_danger = gdf_for_danger.to_crs(CRS_WGS84)
 
-        # Construir lista de km de ruta donde hay gasolinera
-        station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist()) if "km_ruta" in gdf_for_danger.columns else []
+            # Construir lista de km de ruta donde hay gasolinera
+            station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist()) if "km_ruta" in gdf_for_danger.columns else []
 
         if station_km_list:
             # Calcular longitud total de la ruta
@@ -1866,6 +1882,7 @@ def run_pipeline(
             gdf_top_stations=gdf_top,
             fuel_column=fuel_column,
             output_path=output_html,
+            gdf_all_stations=gdf_within
         )
     else:
         print("[Mapa] [WARN] Sin gasolineras válidas para generar el mapa.")

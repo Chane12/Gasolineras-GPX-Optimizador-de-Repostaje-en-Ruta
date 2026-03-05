@@ -864,6 +864,7 @@ if _pipeline_active:
             )
             st.session_state["pipeline_results"] = {
                 "gdf_top":          gdf_top,
+                "gdf_within":       gdf_within,  # [NUEVO] Persistir corredor para Radar Autonomía
                 "gdf_within_count": len(gdf_within),
                 "precio_zona_max":  _precio_max_zona,
                 "track":            track,
@@ -996,7 +997,8 @@ if "pipeline_results" in st.session_state:
             track_original=track,
             gdf_top_stations=gdf_top,
             fuel_column=fuel_column,
-            autonomy_km=float(autonomia_km) if autonomia_km is not None and not isinstance(autonomia_km, bool) else 0.0
+            autonomy_km=float(autonomia_km) if autonomia_km is not None and not isinstance(autonomia_km, bool) else 0.0,
+            gdf_all_stations=_r.get("gdf_within")
         )
 
         st_folium(
@@ -1315,14 +1317,14 @@ if "pipeline_results" in st.session_state:
 
     render_trip_plan()
     st.divider()
-    # 6. 🏍️ Radar de Autonomía Crítica
+    # 6. 🏍️ Radar de Autonomía Crítica (Supervivencia Geográfica Real)
     st.subheader("🏍️ Radar de Autonomía Crítica")
     st.caption(
         "Análisis de los tramos entre gasolineras comparado con tu autonomía. "
         "Los tramos **rojos** en el mapa marcan zonas donde podrías quedarte sin combustible."
     )
 
-    tramos, route_total_km = calculate_autonomy_radar(track, gdf_top, autonomia_km)
+    tramos, route_total_km = calculate_autonomy_radar(track, _r.get("gdf_within", gdf_top), autonomia_km)
 
     # --- Autonomy Radar UI Components ---
     ui_components.render_autonomy_radar_ui(tramos, route_total_km, autonomia_km)
