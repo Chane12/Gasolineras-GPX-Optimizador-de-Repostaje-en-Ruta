@@ -862,9 +862,19 @@ if _pipeline_active:
                 if not gdf_within.empty and fuel_column in gdf_within.columns
                 else 0.0
             )
+            
+            # --- Capa de Supervivencia Real ---
+            # Para el Radar de Autonomía, usamos toooooodo el corredor, pero EXIMIENDO las que NO tengan tu combustible
+            gdf_survival = gdf_within.copy()
+            if fuel_column in gdf_survival.columns:
+                gdf_survival[fuel_column] = pd.to_numeric(gdf_survival[fuel_column], errors="coerce")
+                gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
+            else:
+                gdf_survival = gdf_survival.iloc[0:0].copy()
+
             st.session_state["pipeline_results"] = {
                 "gdf_top":          gdf_top,
-                "gdf_within":       gdf_within,  # [NUEVO] Persistir corredor para Radar Autonomía
+                "gdf_within":       gdf_survival,  # [CORREGIDO] Solo gasolineras que SÍ te pueden repostar
                 "gdf_within_count": len(gdf_within),
                 "precio_zona_max":  _precio_max_zona,
                 "track":            track,

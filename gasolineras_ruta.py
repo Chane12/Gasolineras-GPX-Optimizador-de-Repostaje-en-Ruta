@@ -1514,6 +1514,13 @@ def generate_map(
         # sino, hacer fallback al top_stations
         _source_gdf = gdf_all_stations if gdf_all_stations is not None else gdf_top_stations
         
+        # Filtro estricto: eliminar de la ecuación de supervivencia a las que no tienen este combustible
+        if not _source_gdf.empty and fuel_column in _source_gdf.columns:
+            _source_gdf = _source_gdf.copy()
+            _source_gdf[fuel_column] = pd.to_numeric(_source_gdf[fuel_column], errors="coerce")
+            _source_gdf = _source_gdf[_source_gdf[fuel_column].notna() & (_source_gdf[fuel_column] > 0)]
+
+        station_km_list = []
         if not _source_gdf.empty:
             # Reproyectar estaciones a WGS84 para obtener km_ruta en WGS84
             gdf_for_danger = _source_gdf.copy()
@@ -1521,7 +1528,8 @@ def generate_map(
                 gdf_for_danger = gdf_for_danger.to_crs(CRS_WGS84)
 
             # Construir lista de km de ruta donde hay gasolinera
-            station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist()) if "km_ruta" in gdf_for_danger.columns else []
+            if "km_ruta" in gdf_for_danger.columns:
+                station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist())
 
         if station_km_list:
             # Calcular longitud total de la ruta
