@@ -466,6 +466,7 @@ def render_mobile_wizard():
     buscar_tramos = st.session_state.get("buscar_tramos_chk", True)
     segment_km    = st.session_state.get("segment_slider", 50) if buscar_tramos else 0.0
     espana_vaciada = st.session_state.get("espana_vaciada_chk", False)
+    calcular_desvio = st.session_state.get("calcular_desvio_chk", _desvio_default)
     buffer_m      = radio_km * 1000
     run_btn       = False
 
