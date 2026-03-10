@@ -1625,15 +1625,17 @@ def generate_map(
             b = hue_to_rgb(p, q, h - 1/3)
         return "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
 
-    # Ordenar por precio para asignar rank visual correcto (1 = más barato)
-    precios_ordenados = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(1).astype(int)
+    # Ordenar explícitamente por precio descendente.
+    # Así los más caros (rank >) se dibujan primero y los más baratos (rank 1) al final, quedando por encima en Leaflet.
+    # En caso de empate de precio, ordenamos por índice original.
+    
+    # Asegurar que todos tengan un rank numérico para evitar errores
+    gdf_wgs84["_rank_temp"] = gdf_wgs84["precio_seleccionado"].rank(method="min", ascending=True).fillna(9999).astype(int)
+    gdf_wgs84 = gdf_wgs84.sort_values(by=["_rank_temp", "precio_seleccionado"], ascending=[False, False])
 
-    # Para que las más baratas aparezcan por encima al solaparse en el mapa,
-    # Leaflet necesita que se dibujen las últimas. Como gdf_wgs84 está ordenado
-    # de más barato a más caro (índice 0 es la más barata), iteramos al revés.
-    for i in range(len(gdf_wgs84) - 1, -1, -1):
-        row = gdf_wgs84.iloc[i]
-        rank_visual = i + 1
+    # Iterar normalmente (que ahora será del más caro al más barato)
+    for _, row in gdf_wgs84.iterrows():
+        rank_visual = int(row["_rank_temp"])
         lat = row.geometry.y
         lon = row.geometry.x
         precio = row.get("precio_seleccionado", float("nan"))
