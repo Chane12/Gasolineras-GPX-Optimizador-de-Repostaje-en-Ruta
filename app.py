@@ -422,10 +422,14 @@ def render_mobile_wizard():
     else:
         _input_mode = "texto_vacio"
 
-    combustible_elegido = st.session_state.get("comb_selectbox", _fuel_default)
+    combustible_elegido = st.session_state.get("_w_combustible") or st.session_state.get("comb_selectbox", _fuel_default)
     fuel_column  = COMBUSTIBLES.get(combustible_elegido, COMBUSTIBLES["Gasolina 95"])
-    usar_vehiculo = st.session_state.get("limite_autonomia_chk", False)
-    autonomia_km  = st.session_state.get("autonomia_input", 0) if usar_vehiculo else 0
+    
+    usar_vehiculo = st.session_state.get("_w_usar_vehiculo") if "_w_usar_vehiculo" in st.session_state else st.session_state.get("limite_autonomia_chk", False)
+    autonomia_km = st.session_state.get("_w_autonomia") if "_w_autonomia" in st.session_state else st.session_state.get("autonomia_input", 0)
+    if not usar_vehiculo:
+        autonomia_km = 0
+
     radio_km      = st.session_state.get("radio_slider", _buffer_default)
     top_n         = st.session_state.get("top_slider", _top_default)
     solo_24h      = st.session_state.get("solo_24h_chk", _solo24h_default)
@@ -492,19 +496,31 @@ def render_mobile_wizard():
     # PASO 2: VEHÍCULO Y COMBUSTIBLE
     # ══════════════════════════════════════════
     elif step == 2:
+        def _save_step2():
+            st.session_state["_w_combustible"] = st.session_state.get("comb_selectbox", _fuel_default)
+            st.session_state["_w_usar_vehiculo"] = st.session_state.get("limite_autonomia_chk", False)
+            st.session_state["_w_autonomia"] = st.session_state.get("autonomia_input", 0)
+
         st.markdown("### ⛽ Paso 2 — Tu Vehículo")
+        
+        current_comb = st.session_state.get("_w_combustible", _fuel_default)
+        if current_comb not in COMBUSTIBLES:
+            current_comb = _fuel_default
+            
         combustible_elegido = st.selectbox(
             "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
-            index=list(COMBUSTIBLES.keys()).index(_fuel_default),
-            key="comb_selectbox"
+            index=list(COMBUSTIBLES.keys()).index(current_comb),
+            key="comb_selectbox",
+            on_change=_save_step2
         )
         fuel_column = COMBUSTIBLES[combustible_elegido]
 
         usar_vehiculo = st.checkbox(
             "Activar Radar de Autonomía",
-            value=st.session_state.get("usar_vehiculo", False),
+            value=st.session_state.get("_w_usar_vehiculo", st.session_state.get("limite_autonomia_chk", False)),
             help="Mostrar zonas de peligro en el mapa.",
-            key="limite_autonomia_chk"
+            key="limite_autonomia_chk",
+            on_change=_save_step2
         )
         if usar_vehiculo:
             perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Standard (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
@@ -1031,6 +1047,7 @@ if "pipeline_results" in st.session_state:
     COLS = {
         "km_ruta":            "Km en Ruta",
         "Rótulo":             "Marca",
+        "Municipio":          "Municipio",
         fuel_column:          f"Precio {combustible_elegido} (€/L)",
         "osrm_duration_min":  "Desvío (min)",
         "Horario":            "Horario",
@@ -1043,6 +1060,14 @@ if "pipeline_results" in st.session_state:
 
     df_show = gdf_top[list(col_map.keys())].copy()
     df_show = df_show.rename(columns=col_map)
+
+    # Combinar Marca + Municipio en una sola columna "Marca"
+    if "Marca" in df_show.columns and "Municipio" in df_show.columns:
+        df_show["Marca"] = df_show.apply(
+            lambda r: f"{r['Marca']}, {r['Municipio']}" if pd.notna(r['Municipio']) and str(r['Municipio']).strip() else str(r['Marca']),
+            axis=1,
+        )
+        df_show = df_show.drop(columns=["Municipio"])
 
     # --- Fix: pre-formatear la columna Desvío como texto -----------------------
     # NumberColumn con format="%.0f min" no sabe renderizar NaN y muestra "None".
@@ -1152,7 +1177,6 @@ if "pipeline_results" in st.session_state:
             ),
             # Ocultar la columna de texto plano (ya está en el enlace)
             "Dirección": None,
-            "Municipio": None,
         }
         # Eliminar del config las columnas que no existen en df_show
         # (None en column_config oculta la columna sin eliminarla del df)
