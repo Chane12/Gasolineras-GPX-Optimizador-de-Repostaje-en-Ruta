@@ -811,7 +811,7 @@ if _pipeline_active:
             if espana_vaciada:
                 status.update(label="🏜️ Modo España Vaciada · localizando gasolineras en ruta…", state="running")
                 gdf_buffer_narrow = build_route_buffer(track_simp, buffer_meters=_ESPANA_VACIADA_BUFFER_M)
-                gdf_narrow = spatial_join_within_buffer(gdf_utm, gdf_buffer_narrow)
+                gdf_narrow = spatial_join_within_buffer(engine.gdf, gdf_buffer_narrow)
                 if solo_24h:
                     gdf_narrow = gdf_narrow[gdf_narrow["Horario"].str.contains("24H|24 H", case=False, na=False)]
                 if not gdf_narrow.empty:
