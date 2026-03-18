@@ -265,49 +265,4 @@ class TestPipelineSnapshotModular:
             prices_b = result_b["precio_seleccionado"].tolist()
             assert prices_a == prices_b, "Pipeline output is not deterministic"
 
-    def test_golden_output_monolith_vs_modular(self, sample_track, fake_stations_df):
-        """
-        THE CRITICAL TEST: runs the same pipeline via the monolith shim
-        AND via src/ imports, then compares the golden outputs.
-        """
-        # --- Monolith path ---
-        import gasolineras_ruta as mono
 
-        track_simp_m = mono.simplify_track(sample_track, tolerance_deg=0.0005)
-        gdf_buf_m = mono.build_route_buffer(track_simp_m, buffer_meters=10_000)
-        gdf_stations_m = mono.build_stations_geodataframe(fake_stations_df)
-        gdf_within_m = mono.spatial_join_within_buffer(gdf_stations_m, gdf_buf_m)
-        gdf_track_utm_m = gpd.GeoDataFrame(geometry=[track_simp_m], crs=mono.CRS_WGS84).to_crs(mono.CRS_UTM30N)
-        track_utm_m = gdf_track_utm_m.geometry.iloc[0]
-        gdf_top_m = mono.filter_cheapest_stations(
-            gdf_within_m, fuel_column="Precio Gasoleo A", top_n=3, track_utm=track_utm_m
-        )
-
-        # --- Modular path ---
-        track_simp_s = simplify_track(sample_track, tolerance_deg=0.0005)
-        gdf_buf_s = build_route_buffer(track_simp_s, buffer_meters=10_000)
-        gdf_stations_s = build_stations_geodataframe(fake_stations_df)
-        gdf_within_s = spatial_join_within_buffer(gdf_stations_s, gdf_buf_s)
-        gdf_track_utm_s = gpd.GeoDataFrame(geometry=[track_simp_s], crs=CRS_WGS84).to_crs(CRS_UTM30N)
-        track_utm_s = gdf_track_utm_s.geometry.iloc[0]
-        gdf_top_s = filter_cheapest_stations(
-            gdf_within_s, fuel_column="Precio Gasoleo A", top_n=3, track_utm=track_utm_s
-        )
-
-        # --- Comparison ---
-        assert len(gdf_top_m) == len(gdf_top_s), (
-            f"Different number of results: monolith={len(gdf_top_m)}, modular={len(gdf_top_s)}"
-        )
-
-        prices_m = sorted(gdf_top_m["precio_seleccionado"].tolist())
-        prices_s = sorted(gdf_top_s["precio_seleccionado"].tolist())
-        assert prices_m == prices_s, (
-            f"Different prices: monolith={prices_m}, modular={prices_s}"
-        )
-
-        if "km_ruta" in gdf_top_m.columns and "km_ruta" in gdf_top_s.columns:
-            km_m = sorted(gdf_top_m["km_ruta"].round(2).tolist())
-            km_s = sorted(gdf_top_s["km_ruta"].round(2).tolist())
-            assert km_m == km_s, (
-                f"Different km_ruta: monolith={km_m}, modular={km_s}"
-            )

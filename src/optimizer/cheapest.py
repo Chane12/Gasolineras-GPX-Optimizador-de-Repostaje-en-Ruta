@@ -85,7 +85,7 @@ def filter_cheapest_stations(
                 subset_indices = gdf.iloc[possible_ilocs].index
                 subset_precios = precios_num.loc[subset_indices]
                 valid_subset = subset_precios[subset_precios.notna() & (subset_precios > 0)]
-                
+
                 if not valid_subset.empty:
                     idx_cheapest = valid_subset.idxmin()
                     if pd.notna(idx_cheapest):
@@ -93,7 +93,7 @@ def filter_cheapest_stations(
 
     # 4. Único .copy() permitido. Desacoplamos estrictamente las N filas vencedoras
     gdf_top = gdf.loc[list(top_indices)].copy()
-    
+
     gdf_top["precio_seleccionado"] = precios_num.loc[list(top_indices)]
     gdf_top["combustible"] = fuel_column
 
@@ -128,10 +128,10 @@ def filter_all_stations_on_route(
 
     precios_num = pd.to_numeric(gdf[fuel_column], errors="coerce")
     mask_precios = precios_num.notna() & (precios_num > 0)
-    
+
     # Única copia de los elementos validados de la criba
     gdf_valid = gdf.loc[mask_precios].copy()
-    
+
     if gdf_valid.empty:
         return gdf_valid
 

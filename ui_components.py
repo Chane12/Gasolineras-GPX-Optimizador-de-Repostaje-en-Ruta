@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def render_welcome_screen(is_mobile: bool = False):
     """Renders the welcome screen. Uses a 2-col layout on PC and 1-col on mobile."""
     if is_mobile:
@@ -61,23 +62,23 @@ def render_welcome_screen(is_mobile: bool = False):
         with col_right:
             st.markdown(
                 "<div style='"
-                "background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);"
+                "background: var(--secondary-background-color);"
                 "border-radius: 16px;"
                 "padding: 2rem;"
                 "text-align: center;"
                 "min-height: 340px;"
                 "display: flex; flex-direction: column; justify-content: center; align-items: center;"
-                "box-shadow: 0 8px 32px rgba(255,127,0,0.15);"
-                "border: 1px solid rgba(255,127,0,0.2);"
+                "box-shadow: 0 4px 16px rgba(128,128,128,0.1);"
+                "border: 1px solid var(--primary-color);"
                 "'>"
                 "<span style='font-size:5rem; display:block; margin-bottom:1rem;'>⛽</span>"
-                "<span style='color:#FF8C00; font-size:1.3rem; font-weight:700; letter-spacing:0.05em;'>GASOLINERAS EN RUTA</span><br>"
-                "<span style='color: rgba(255,255,255,0.6); font-size:0.9rem; margin-top:0.5rem; display:block;'>"
+                "<span style='color: var(--primary-color); font-size:1.3rem; font-weight:700; letter-spacing:0.05em;'>GASOLINERAS EN RUTA</span><br>"
+                "<span style='color: var(--text-color); opacity: 0.8; font-size:0.9rem; margin-top:0.5rem; display:block;'>"
                 "Optimizador Geoespacial de Repostaje</span>"
                 "<div style='margin-top:1.5rem; display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;'>"
-                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇳🇵 MITECO</span>"
-                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇧🇂 OSRM</span>"
-                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🗺️ GeoPandas</span>"
+                "<span style='border: 1px solid var(--primary-color); color: var(--primary-color); padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇳🇵 MITECO</span>"
+                "<span style='border: 1px solid var(--primary-color); color: var(--primary-color); padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇧🇂 OSRM</span>"
+                "<span style='border: 1px solid var(--primary-color); color: var(--primary-color); padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🗺️ GeoPandas</span>"
                 "</div>"
                 "</div>",
                 unsafe_allow_html=True,
@@ -198,7 +199,7 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
     n_warn = sum(1 for t in tramos if t["nivel"] == "atencion")
     n_safe = sum(1 for t in tramos if t["nivel"] == "seguro")
     max_gap = max((t["gap_km"] for t in tramos), default=0.0)
-    
+
     if n_crit > 0 and autonomia_km > 0:
         with st.container(border=True):
             st.error(f"🔴 **Ruta con {n_crit} tramo(s) CRÍTICO(S)**\n\nEl tramo más largo sin gasolinera es de **{max_gap:.1f} km**. Tu autonomía configurada es de **{autonomia_km} km**. Revisa los tramos marcados en rojo antes de salir.")
@@ -222,7 +223,7 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
 
     # Detalle de cada tramo
     tramos_peligro = [t for t in tramos if t["nivel"] in ["critico", "atencion"] or t["gap_km"] >= 60]
-    
+
     if tramos_peligro:
         with st.expander(f"⚠️ Atención: Tienes {len(tramos_peligro)} tramos que requieren revisión", expanded=True):
             for t in tramos_peligro:
@@ -233,12 +234,12 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
                         st.caption(f"{t['origen']} → {t['destino']}")
                     with c2:
                         st.markdown(f"{t['emoji']} **{t['label']}**")
-                    
+
                     if autonomia_km > 0:
                         pct_bar = min(1.0, t["gap_km"] / autonomia_km)
                         pct_real = (t["gap_km"] / autonomia_km) * 100
                         st.progress(pct_bar, text=f"Consumo de autonomía: {pct_real:.0f}%")
-                        
+
                         if t["nivel"] == "critico":
                             st.error(f"⚠️ Supera tu autonomía en {t['gap_km'] - autonomia_km:.1f} km — Repostar OBLIGATORIAMENTE antes de este tramo.")
                         elif t["nivel"] == "atencion":

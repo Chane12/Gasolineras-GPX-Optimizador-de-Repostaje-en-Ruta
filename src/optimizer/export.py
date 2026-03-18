@@ -7,6 +7,7 @@ OSRM detour calculation, and trip plan GeoDataFrame preparation.
 
 from __future__ import annotations
 
+import concurrent.futures
 import random
 import time
 import urllib.parse as _up
@@ -151,11 +152,12 @@ def get_real_distance_osrm(
 def enrich_stations_with_osrm(
     gdf_top: gpd.GeoDataFrame,
     track_original: LineString,
-    delay_s: float = 0.8,
+    delay_s: float = 0.5,
 ):
     """
     Enriquece el GeoDataFrame de gasolineras con datos reales OSRM.
-    Yields (idx, result_dict | None) for each station.
+    Yields (idx, result_dict | None) for each station progresivamente.
+    Implementa concurrencia segura y backoff exponencial para evitar saturar la API pública.
     """
     if gdf_top.empty:
         return
@@ -174,40 +176,46 @@ def enrich_stations_with_osrm(
         gas_lat = row_wgs84.geometry.y
         origin_lon, origin_lat = rutas_origen_dict[idx]
 
-        d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
-        d_vuelta = get_real_distance_osrm(gas_lon, gas_lat, origin_lon, origin_lat)
+        max_retries = 3
+        # Jitter aleatorio para desincronizar los workers y evitar picos de peticiones
+        current_delay = delay_s + random.uniform(0.1, 0.4)
 
-        if d_ida is None or d_vuelta is None:
-            return idx, None
+        for attempt in range(max_retries):
+            time.sleep(current_delay)
+            
+            d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
+            if d_ida is not None:
+                time.sleep(0.2) # Pausa mínima entre ida y vuelta
+                d_vuelta = get_real_distance_osrm(gas_lon, gas_lat, origin_lon, origin_lat)
+                if d_vuelta is not None:
+                    return idx, {
+                        "distance_km": d_ida["distance_km"] + d_vuelta["distance_km"],
+                        "duration_min": d_ida["duration_min"] + d_vuelta["duration_min"],
+                    }
 
-        return idx, {
-            "distance_km": d_ida["distance_km"] + d_vuelta["distance_km"],
-            "duration_min": d_ida["duration_min"] + d_vuelta["duration_min"],
+            # Si devuelve None (por 429 Too Many Requests o error de ruta), aplicamos backoff
+            current_delay *= 2.0
+
+        return idx, None
+
+    # max_workers=3 es conservador para la API pública de OSRM perdiendo latencia general 
+    # pero manteniendo fiabilidad frente a cuelgues, tal y como se requiere.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(process_station, idx, row): idx 
+            for idx, row in gdf_wgs84.iterrows()
         }
 
-    # Circuit Breaker
-    fallos_consecutivos = 0
-    max_fallos = 6
-    current_delay = delay_s
-
-    for idx, row_wgs84 in gdf_wgs84.iterrows():
-        try:
-            time.sleep(current_delay)
-            _, result = process_station(idx, row_wgs84)
-            if result is None:
-                fallos_consecutivos += 1
-                current_delay = min(5.0, current_delay + 0.5 + random.uniform(0.1, 0.3))
-            else:
-                fallos_consecutivos = max(0, fallos_consecutivos - 1)
-                current_delay = delay_s
-            yield idx, result
-        except Exception:
-            fallos_consecutivos += 1
-            yield idx, None
-
-        if fallos_consecutivos >= max_fallos:
-            print(f"[OSRM] Circuit Breaker abierto tras {max_fallos} fallos consecutivos.")
-            break
+        # as_completed permite que main thread vaya haciendo el progresivo yield 
+        # a Streamlit conforme terminan, no esperando a todos al final.
+        for future in concurrent.futures.as_completed(futures):
+            idx = futures[future]
+            try:
+                result_idx, result = future.result()
+                yield result_idx, result
+            except Exception as e:
+                print(f"[OSRM] Fallo fatal concurrente en idx {idx}: {e}")
+                yield idx, None
 
 
 def enrich_gpx_with_stops(
