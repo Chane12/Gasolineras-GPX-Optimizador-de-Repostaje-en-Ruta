@@ -15,21 +15,25 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 import streamlit as st
+import streamlit_javascript as st_js
 from streamlit_folium import st_folium
 
 import ui_components
 from src.config import CRS_UTM30N, CRS_WGS84
 from src.config import GMAPS_MAX_WAYPOINTS as _GMAPS_MAX_WAYPOINTS
+from src.ingestion.geocoder import RouteTextError, get_route_from_text
+from src.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
 from src.ingestion.miteco import fetch_gasolineras
 from src.optimizer.autonomy import calculate_autonomy_radar
+from src.optimizer.cheapest import filter_all_stations_on_route, filter_cheapest_stations
 from src.optimizer.export import (
     enrich_gpx_with_stops,
+    enrich_stations_with_osrm,
     generate_google_maps_url,
     prepare_export_gdf,
 )
-from src.spatial.engine import build_stations_geodataframe
+from src.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
 from src.visualization.folium_map import generate_map
-from src.pipeline.runner import execute_spatial_pipeline
 
 
 @dataclass(frozen=True)
@@ -615,10 +619,16 @@ def render_mobile_view():
     return render_mobile_wizard()
 
 
-# Detección responsiva eliminada para evitar refrescos JS asíncronos
+# Detección responsiva de ancho
+viewport_width = st_js.st_javascript("window.innerWidth", key="viewport_width")
 is_mobile = False
+if viewport_width and viewport_width > 0 and viewport_width < 768:
+    is_mobile = True
 
-ctrl = render_desktop_view()
+if is_mobile:
+    ctrl = render_mobile_view()
+else:
+    ctrl = render_desktop_view()
 
 # Extracción de variables para el pipeline
 origen_txt = ctrl["origen_txt"]
@@ -643,8 +653,10 @@ calcular_desvio = ctrl["calcular_desvio"]
 # Pipeline de cálculo
 # ---------------------------------------------------------------------------
 _is_demo_first_run = st.session_state.get("demo_mode") and "pipeline_results" not in st.session_state
+# Asegurar que origen/destino son strings (evitar errores de strip si vinieran como bool de session_state)
 origen_txt = str(origen_txt) if origen_txt is not None else ""
 destino_txt = str(destino_txt) if destino_txt is not None else ""
+_hay_ruta_texto = _input_mode == "texto" and bool(origen_txt.strip()) and bool(destino_txt.strip())
 _pipeline_active = run_btn or _is_demo_first_run
 
 if run_btn:
@@ -653,31 +665,255 @@ if run_btn:
 _using_demo = (_pipeline_active and _input_mode in ("demo", "gpx_vacio") and st.session_state.get("demo_mode"))
 
 if _pipeline_active:
-    try:
-        results = execute_spatial_pipeline(
-            engine=get_spatial_engine(),
-            origen_txt=origen_txt,
-            destino_txt=destino_txt,
-            _input_mode=_input_mode,
-            gpx_file=gpx_file,
-            combustible_elegido=combustible_elegido,
-            fuel_column=fuel_column,
-            radio_km=radio_km,
-            top_n=top_n,
-            solo_24h=solo_24h,
-            buscar_tramos=buscar_tramos,
-            segment_km=segment_km,
-            buffer_m=buffer_m,
-            espana_vaciada=espana_vaciada,
-            calcular_desvio=calcular_desvio,
-            _using_demo=_using_demo,
-        )
-        st.session_state["pipeline_results"] = results
-        st.rerun()
-
-    except Exception as exc:
-        st.error(f"Fallo crítico en el pipeline espacial: {exc}")
+    # ---------------- EARLY VALIDATORS ----------------
+    # Robustez: asegurar tipos para validadores
+    _buffer_m_val = float(buffer_m) if buffer_m is not None else 0.0
+    if _buffer_m_val > 20000:
+        st.error("🚨 La zona de búsqueda es demasiado amplia. Por favor, reduce el radio de desvío a un máximo de 20 km.")
         st.stop()
+
+    if _input_mode == "texto":
+        if len(origen_txt.strip()) < 3 or len(destino_txt.strip()) < 3:
+            st.error("📍 Los nombres de origen y destino deben tener al menos 3 caracteres.")
+            st.stop()
+        if origen_txt.strip().lower() == destino_txt.strip().lower():
+            st.error("📍 El origen y el destino no pueden ser iguales.")
+            st.stop()
+
+    # Validar que haya una fuente de ruta válida
+    if _input_mode == "texto_vacio":
+        st.error("📍 Escribe el origen y el destino, o sube un archivo GPX.")
+        st.stop()
+    if _input_mode in ("gpx_vacio",) and not st.session_state.get("demo_mode"):
+        st.error("📂 Sube tu archivo GPX o escribe origen y destino en la pestaña de texto.")
+        st.stop()
+
+    tmp_path = None    # solo se usa en modo GPX
+    _gpx_bytes = None  # para inyectar paradas luego
+
+    if _input_mode == "texto" and _hay_ruta_texto:
+        # ---- MODO TEXTO: obtener track vía Nominatim + OSRM ----
+        with st.status("🗺️ Calculando la ruta por carretera…", expanded=True) as _status_txt:
+            st.write(f" Geocodificando **{origen_txt}** y **{destino_txt}**…")
+            try:
+                track = get_route_from_text(origen_txt.strip(), destino_txt.strip())
+                _status_txt.update(label="✅ Ruta calculada", state="complete", expanded=True)
+            except RouteTextError as exc:
+                _status_txt.update(label="❌ No se pudo calcular la ruta", state="error", expanded=True)
+                st.error(f"🚧 **No hemos podido trazar la ruta entre estas ciudades.**\n\n{exc}")
+                st.stop()
+            except Exception as exc:
+                _status_txt.update(label="❌ Error inesperado", state="error", expanded=True)
+                st.error(f"⚠️ Error inesperado al trazar la ruta: {exc}")
+                st.stop()
+    else:
+        if _using_demo:
+            demo_gpx_path = Path(__file__).parent / "sierra_gredos.gpx"
+            if not demo_gpx_path.exists():
+                st.error("⚠️ No se encontró el archivo de demo.")
+                st.stop()
+            tmp_path = demo_gpx_path
+            with open(demo_gpx_path, "rb") as f:
+                _gpx_bytes = f.read()
+        else:
+            # Robustez: gpx_file puede venir como bool o None si hubo errores en session_state/wizard
+            _is_file = (gpx_file is not None and
+                       not isinstance(gpx_file, (bool, str, int, float)) and
+                       hasattr(gpx_file, "read"))
+
+            if _is_file:
+                _gpx_bytes = gpx_file.read() # type: ignore
+            else:
+                _gpx_bytes = b""
+                st.error("❌ No se pudo localizar o leer el archivo GPX. Intenta volver a subirlo.")
+                st.stop()
+            if len(_gpx_bytes) > 5 * 1024 * 1024:
+                st.error("❌ El archivo GPX excede el límite de 5MB. Por seguridad contra degradación de memoria, ha sido bloqueado.")
+                st.stop()
+
+            try:
+                # Verificación temprana de integridad GPX (solo cabecera para ahorrar RAM)
+                content = _gpx_bytes[:1024].decode('utf-8', errors='ignore')
+                if "<gpx" not in content.lower():
+                    raise ValueError("Not a GPX file")
+            except Exception:
+                st.error("❌ El archivo subido no parece ser un archivo GPX válido o está corrupto. Intenta volver a exportarlo.")
+                st.stop()
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
+                tmp.write(_gpx_bytes)
+                tmp_path = Path(tmp.name)
+        track = None   # se asigna en el bloque try más abajo
+
+    with st.status("⛽ Analizando tu ruta…", expanded=True) as status:
+        try:
+            status.update(label="⛽ Arranque del Motor Espacial (MITECO + R-Tree)…", state="running")
+            # Carga única unificada del GeoDataFrame, evitando Race Conditions y copias en caché
+            engine = get_spatial_engine()
+
+            # --- Carga del track (solo GPX; en modo texto ya está listo) ---
+            if track is None:
+                status.update(label="📍 Leyendo y validando el archivo GPX…", state="running")
+                track = load_gpx_track(tmp_path)
+                validate_gpx_track(track)
+
+            status.update(label="📐 Procesando la geometría de la ruta…", state="running")
+            track_simp = simplify_track(track, tolerance_deg=0.0005)
+
+            # --- Buffer normal — siempre se calcula ---
+            _ESPANA_VACIADA_BUFFER_M = 500
+
+            status.update(label="🔍 Buscando gasolineras en tu corredor de ruta…", state="running")
+            gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
+            # T1: El GeoDataFrame con R-Tree unificado es inmutable y listo para consultarse
+            gdf_within = spatial_join_within_buffer(engine.gdf, gdf_buffer)
+
+            if solo_24h:
+                # Filtrar asumiendo que el MITECO pone "24H" o "24 H" en el string horario
+                # (Genera copia superficial transparente)
+                gdf_within = gdf_within[gdf_within["Horario"].str.contains("24H|24 H", case=False, na=False)]
+
+            if gdf_within.empty and not espana_vaciada:
+                status.update(label="⚠️ Sin resultados para ese filtro", state="error", expanded=True)
+                st.warning(
+                    f"No encontramos gasolineras con precio de **{combustible_elegido}** "
+                    f"en un radio de {radio_km} km (abiertas 24H: {solo_24h}). "
+                    "Prueba a ampliar la distancia o relajar los filtros avanzados."
+                )
+                st.stop()
+
+            gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
+            track_utm = gdf_track_utm.geometry.iloc[0]
+
+            # --- Búsqueda normal (top-N más baratas) ---
+            if not gdf_within.empty and fuel_column in gdf_within.columns and not gdf_within[fuel_column].isna().all():
+                status.update(label="🏆 Ordenando por precio · buscando las mejores opciones…", state="running")
+                gdf_top = filter_cheapest_stations(
+                    gdf_within,
+                    fuel_column=fuel_column,
+                    top_n=top_n,
+                    track_utm=track_utm,
+                    segment_km=segment_km,
+                )
+            else:
+                gdf_top = gdf_within.iloc[0:0].copy()  # GeoDataFrame vacío con las mismas columnas
+
+            # --- España Vaciada: añadir las gasolineras del corredor estricto ---
+            if espana_vaciada:
+                status.update(label="🏜️ Modo España Vaciada · localizando gasolineras en ruta…", state="running")
+                gdf_buffer_narrow = build_route_buffer(track_simp, buffer_meters=_ESPANA_VACIADA_BUFFER_M)
+                gdf_narrow = spatial_join_within_buffer(engine.gdf, gdf_buffer_narrow)
+                if solo_24h:
+                    gdf_narrow = gdf_narrow[gdf_narrow["Horario"].str.contains("24H|24 H", case=False, na=False)]
+                if not gdf_narrow.empty:
+                    gdf_narrow_all = filter_all_stations_on_route(
+                        gdf_narrow, fuel_column=fuel_column, track_utm=track_utm
+                    )
+                    # Unir ambos conjuntos, eliminar duplicados por geometría y reordenar por km en ruta
+                    gdf_top = gpd.GeoDataFrame(
+                        pd.concat([gdf_top, gdf_narrow_all], ignore_index=True),
+                        crs=gdf_top.crs if not gdf_top.empty else gdf_narrow_all.crs,
+                    ).drop_duplicates(subset=["geometry"])
+                    if "km_ruta" in gdf_top.columns:
+                        gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
+
+
+            if gdf_top.empty:
+                status.update(label="⚠️ Sin resultados", state="error", expanded=True)
+                st.warning(
+                    "No hay gasolineras con ese tipo de combustible en la zona de búsqueda. "
+                    "Prueba con otro combustible o amplía la distancia de búsqueda."
+                )
+                st.stop()
+
+            # ---- OSRM: Filtro Fino — Distancia real por carretera ----
+            if calcular_desvio:
+                st.write("🛣️ Calculando tiempos de desvío reales · esto puede tardar unos segundos…")
+                gdf_top["osrm_distance_km"] = float("nan")
+                gdf_top["osrm_duration_min"] = float("nan")
+
+                try:
+                    osrm_progress = st.progress(0.0, text="Calculando desvíos reales por carretera…")
+                    total_osrm = len(gdf_top)
+                    completed_osrm = 0
+
+                    for idx, result in enrich_stations_with_osrm(
+                        gdf_top,
+                        track_original=track,
+                    ):
+                        completed_osrm += 1
+                        osrm_progress.progress(
+                            completed_osrm / total_osrm,
+                            text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}"
+                        )
+
+                        if result is not None:
+                            gdf_top.at[idx, "osrm_distance_km"] = round(result["distance_km"], 2)
+                            gdf_top.at[idx, "osrm_duration_min"] = round(result["duration_min"], 1)
+
+                    osrm_progress.empty()
+                except Exception:  # silencio total: si falla OSRM el mapa sigue funcionando
+                    pass
+            else:
+                st.write("⏩ Omitiendo cálculo de desvíos reales por carretera.")
+                gdf_top["osrm_distance_km"] = float("nan")
+                gdf_top["osrm_duration_min"] = float("nan")
+
+            status.update(label="✅ ¡Listo! Tu ruta ha sido analizada", state="complete", expanded=True)
+
+            # --- Guardar resultados en session_state para sobrevivir reruns ---
+            # OMITIMOS guardar el mapa completo (Leaflet) para evitar Memory Leaks en Streamlit
+            _precio_max_zona = (
+                float(gdf_within[fuel_column].max())
+                if not gdf_within.empty and fuel_column in gdf_within.columns
+                else 0.0
+            )
+
+            # --- Capa de Supervivencia Real ---
+            # Para el Radar de Autonomía, usamos toooooodo el corredor, pero EXIMIENDO las que NO tengan tu combustible
+            gdf_survival = gdf_within.copy()
+            if fuel_column in gdf_survival.columns:
+                gdf_survival[fuel_column] = pd.to_numeric(gdf_survival[fuel_column], errors="coerce")
+                gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
+            else:
+                gdf_survival = gdf_survival.iloc[0:0].copy()
+
+            st.session_state["pipeline_results"] = {
+                "gdf_top":          gdf_top,
+                "gdf_within":       gdf_survival,  # [CORREGIDO] Solo gasolineras que SÍ te pueden repostar
+                "gdf_within_count": len(gdf_within),
+                "precio_zona_max":  _precio_max_zona,
+                "track":            track,
+                "track_utm":        track_utm,
+                "using_demo":       _using_demo,
+                "using_gpx":        _input_mode in ("gpx", "demo"),
+                "gpx_bytes":        _gpx_bytes,
+                "espana_vaciada":   espana_vaciada,
+            }
+
+        except RouteTextError as exc:
+            status.update(label="❌ Ruta imposible", state="error", expanded=True)
+            st.error(f"🚧 **Ruta imposible:** {exc}")
+            st.stop()
+        except ValueError as exc:
+            status.update(label="❌ Error de datos", state="error", expanded=True)
+            st.error(f"⚠️ {exc}")
+            st.stop()
+        except FileNotFoundError:
+            status.update(label="❌ Archivo no encontrado", state="error", expanded=True)
+            st.error("No se pudo leer el archivo GPX. Asegúrate de que sea un archivo GPX válido.")
+            st.stop()
+        except Exception as exc:
+            status.update(label="❌ Error inesperado", state="error", expanded=True)
+            st.error(
+                "Se produjo un error inesperado. Comprueba tu conexión a Internet "
+                f"e inténtalo de nuevo.\n\n*Detalle técnico: {exc}*"
+            )
+            st.stop()
+        finally:
+            # Solo borrar el archivo temporal en modo GPX real
+            if tmp_path is not None and not _using_demo and _input_mode == "gpx":
+                tmp_path.unlink(missing_ok=True)
 
 # -----------------------------------------------------------------------
 # Dashboard — se renderiza si hay resultados en session_state
