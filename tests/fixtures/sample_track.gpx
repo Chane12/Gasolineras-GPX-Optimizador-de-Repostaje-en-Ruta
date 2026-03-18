@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="TestFixture"
+     xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Test Track: Ávila - Segovia (simplificado)</name>
+    <trkseg>
+      <!-- 20 puntos reales sobre la N-110 entre Ávila y Segovia -->
+      <trkpt lat="40.656356" lon="-4.700085"><ele>1130</ele></trkpt>
+      <trkpt lat="40.660000" lon="-4.680000"><ele>1125</ele></trkpt>
+      <trkpt lat="40.665000" lon="-4.660000"><ele>1140</ele></trkpt>
+      <trkpt lat="40.670000" lon="-4.640000"><ele>1155</ele></trkpt>
+      <trkpt lat="40.680000" lon="-4.620000"><ele>1160</ele></trkpt>
+      <trkpt lat="40.690000" lon="-4.600000"><ele>1150</ele></trkpt>
+      <trkpt lat="40.700000" lon="-4.580000"><ele>1130</ele></trkpt>
+      <trkpt lat="40.710000" lon="-4.560000"><ele>1120</ele></trkpt>
+      <trkpt lat="40.720000" lon="-4.540000"><ele>1110</ele></trkpt>
+      <trkpt lat="40.730000" lon="-4.520000"><ele>1090</ele></trkpt>
+      <trkpt lat="40.740000" lon="-4.500000"><ele>1080</ele></trkpt>
+      <trkpt lat="40.750000" lon="-4.480000"><ele>1070</ele></trkpt>
+      <trkpt lat="40.760000" lon="-4.460000"><ele>1060</ele></trkpt>
+      <trkpt lat="40.770000" lon="-4.440000"><ele>1050</ele></trkpt>
+      <trkpt lat="40.780000" lon="-4.420000"><ele>1040</ele></trkpt>
+      <trkpt lat="40.790000" lon="-4.400000"><ele>1030</ele></trkpt>
+      <trkpt lat="40.800000" lon="-4.380000"><ele>1020</ele></trkpt>
+      <trkpt lat="40.810000" lon="-4.360000"><ele>1010</ele></trkpt>
+      <trkpt lat="40.820000" lon="-4.340000"><ele>1005</ele></trkpt>
+      <trkpt lat="40.942903" lon="-4.108162"><ele>1002</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

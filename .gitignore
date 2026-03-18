@@ -1,44 +1,29 @@
 # =============================================================================
-# PYTHON
+# PYTHON — bytecode & packaging
 # =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
-
-# Distribution / packaging
 build/
 dist/
 *.egg-info/
 *.egg
 .eggs/
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-.pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-
 # =============================================================================
-# VIRTUAL ENVIRONMENTS — ALL COMMON NAMES
+# VIRTUAL ENVIRONMENTS — cualquier nombre
 # =============================================================================
-venv/
 .venv/
+venv/
 env/
-.env_dir/
 ENV/
 env.bak/
 venv.bak/
 .virtualenvs/
 
 # =============================================================================
-# ENVIRONMENT VARIABLES & SECRETS
+# VARIABLES DE ENTORNO Y SECRETOS
 # =============================================================================
 .env
 .env.*
@@ -46,26 +31,28 @@ venv.bak/
 secrets.toml
 
 # =============================================================================
-# SPATIAL DATA — NEVER COMMITTED (peso + datos sensibles)
+# DATOS ESPACIALES — política estricta de privacidad
+# Ningún dato espacial, track GPS ni dataset descargado entra en el repo
 # =============================================================================
 
-# GPS tracks
+# Tracks GPS
 *.gpx
 
-# Columnar / analytics formats
+# Datasets tabulares
+*.csv
 *.parquet
 *.geoparquet
 
-# GeoJSON / JSON spatial
+# GeoJSON / JSON
 *.geojson
-*.json
+# *.json  # Desactivado: package-lock.json y configs legítimos usan .json
 
-# Databases
+# Bases de datos
 *.sqlite
 *.sqlite3
 *.db
 
-# Shapefiles (all sidecar files)
+# Shapefiles (todos los archivos asociados)
 *.shp
 *.shx
 *.dbf
@@ -87,14 +74,14 @@ secrets.toml
 *.geotiff
 
 # =============================================================================
-# AUTO-GENERATED HTML (mapas Folium, informes, etc.)
+# MAPAS Y HTML GENERADOS
 # =============================================================================
 *.html
 mapa_*.html
 output_*.html
 
 # =============================================================================
-# DATA & OUTPUT DIRECTORIES
+# DIRECTORIOS DE DATOS Y OUTPUT
 # =============================================================================
 data/
 output/
@@ -102,13 +89,28 @@ maps/
 cache/
 
 # =============================================================================
-# JUPYTER NOTEBOOKS — checkpoints
+# TESTING Y LINTING
+# =============================================================================
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+nosetests.xml
+*.cover
+
+# =============================================================================
+# JUPYTER
 # =============================================================================
 .ipynb_checkpoints/
 *.ipynb
 
 # =============================================================================
-# IDE & EDITORS
+# IDE Y EDITORES
 # =============================================================================
 .vscode/
 .idea/
@@ -118,19 +120,28 @@ cache/
 *~
 
 # =============================================================================
-# OS
+# SISTEMA OPERATIVO
 # =============================================================================
 .DS_Store
 Thumbs.db
 desktop.ini
 
 # =============================================================================
-# LOGS & TEMP
+# LOGS Y TEMPORALES
 # =============================================================================
 *.log
 *.tmp
 *.bak
+
 # =============================================================================
-# EXCEPTION
+# EXCEPCIONES — archivos que SÍ deben entrar al repo
 # =============================================================================
+
+# El GPX demo que incluye la app
 !sierra_gredos.gpx
+
+# El fixture de test (GPX mínimo para regresión)
+!tests/fixtures/sample_track.gpx
+
+# uv.lock DEBE estar en el repo (determinismo de dependencias)
+# pyproject.toml DEBE estar en el repo

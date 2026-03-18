@@ -1,0 +1,73 @@
+[project]
+name = "gasolineras-ruta"
+version = "1.0.0"
+description = "Optimizador geoespacial de repostaje en ruta — España"
+readme = "README.md"
+license = { text = "EUPL-1.2" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "geopandas>=0.14.0",
+    "shapely>=2.0.0",
+    "folium>=0.15.0",
+    "requests>=2.31.0",
+    "gpxpy>=1.6.0",
+    "pyproj>=3.6.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "streamlit>=1.35.0",
+    "streamlit-folium>=0.21.0",
+    "streamlit-javascript>=0.1.5",
+    "altair>=4.0.0,<6.0.0",
+]
+
+[project.scripts]
+gasolineras = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.11.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "N802",  # function name should be lowercase (legacy compat)
+    "N803",  # argument name should be lowercase (legacy compat)
+    "N806",  # variable in function should be lowercase
+    "B904",  # raise without from (too noisy on existing code)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "network: tests that require internet access (deselect with '-m not network')",
+    "slow: tests that take >10s (deselect with '-m not slow')",
+]
