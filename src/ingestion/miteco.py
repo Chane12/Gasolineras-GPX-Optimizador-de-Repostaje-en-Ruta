@@ -38,11 +38,11 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
     data = None
     _err_direct: Exception | None = None
     try:
-        response = requests.get(MITECO_API_URL, headers=headers, timeout=timeout)
+        response = requests.get(MITECO_API_URL, headers=headers, timeout=10) # Timeout reducido a 10s
         response.raise_for_status()
         data = response.json()
         print("[MITECO] Conexión directa exitosa.")
-    except requests.exceptions.RequestException as exc:
+    except (requests.exceptions.RequestException, json.decoder.JSONDecodeError) as exc:
         _err_direct = exc
         print(
             f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). "
@@ -65,7 +65,7 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
             proxy_name = proxy_url.split("//")[1].split("/")[0]
             try:
                 print(f"[MITECO] Intentando proxy: {proxy_name}...")
-                resp = requests.get(proxy_url, headers=headers, timeout=15)
+                resp = requests.get(proxy_url, headers=headers, timeout=5) # Timeout estricto reducido a 5s
                 resp.raise_for_status()
 
                 if "allorigins.win/get" in proxy_url:
@@ -76,7 +76,7 @@ def fetch_gasolineras(timeout: int = 30) -> pd.DataFrame:
 
                 print(f"[MITECO] Datos obtenidos via {proxy_name}.")
                 break
-            except Exception as exc:
+            except (requests.exceptions.RequestException, json.decoder.JSONDecodeError) as exc:
                 last_proxy_err = exc
                 print(f"[MITECO] Proxy {proxy_name} falló: {exc}")
 

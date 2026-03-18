@@ -37,10 +37,14 @@ def build_route_buffer(
     gdf_track = gpd.GeoDataFrame(geometry=[track], crs=CRS_WGS84)
     gdf_track_utm = gdf_track.to_crs(CRS_UTM30N)
 
+    # Simplificamos el track original geométrico ANTES de aplicar el .buffer()
+    # para evitar "salchichones" inflados con miles de vértices geométricos
+    track_simplified = gdf_track_utm.simplify(tolerance=50)
+
     gdf_buffer = gdf_track_utm.copy()
-    gdf_buffer["geometry"] = gdf_track_utm.buffer(buffer_meters, resolution=3)
+    gdf_buffer["geometry"] = track_simplified.buffer(buffer_meters, resolution=3)
     print(
-        f"[Buffer] Buffer de {buffer_meters:.0f}m aplicado sobre el track "
+        f"[Buffer] Buffer de {buffer_meters:.0f}m aplicado sobre track simplificado "
         f"(Area aprox: {gdf_buffer.geometry.area.iloc[0] / 1e6:.1f} km2)"
     )
     return gdf_buffer

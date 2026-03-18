@@ -43,25 +43,26 @@ from gasolineras_ruta import (
     _GMAPS_MAX_WAYPOINTS,
 )
 
-# ---------------------------------------------------------------------------
-# Caché de datos — evitar recalcular en cada interacción
-# ---------------------------------------------------------------------------
+from dataclasses import dataclass
 
-@st.cache_data(ttl=1800, show_spinner=False, max_entries=1)
-def cached_fetch_gasolineras() -> object:
-    """Descarga todas las gasolineras con caché de 30 minutos."""
-    return fetch_gasolineras()
+@dataclass(frozen=True)
+class SpatialEngine:
+    gdf: gpd.GeoDataFrame
 
+# ---------------------------------------------------------------------------
+# Motor Espacial Unificado
+# ---------------------------------------------------------------------------
 
 @st.cache_resource(ttl=1800, show_spinner=False, max_entries=1)
-def cached_build_stations_gdf(_df) -> object:
+def get_spatial_engine() -> SpatialEngine:
     """
-    Construye el GeoDataFrame con índice R-Tree (una vez cada 30 min).
-    Usamos cache_resource (no cache_data) porque los objetos Shapely y el
-    índice espacial GEOS no deben ser clonados por pickle — evita fugas
-    de memoria en servidores con 1 GB de RAM como Streamlit Cloud.
+    Descarga MITECO y construye el GeoDataFrame espacial (1 vez cada 30 min).
+    Retorna un contenedor inmutable con los datos cargados en R-Tree
+    para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
-    return build_stations_geodataframe(_df)
+    df = fetch_gasolineras()
+    gdf = build_stations_geodataframe(df)
+    return SpatialEngine(gdf=gdf)
 
 
 # ---------------------------------------------------------------------------
@@ -755,10 +756,9 @@ if _pipeline_active:
 
     with st.status("⛽ Analizando tu ruta…", expanded=True) as status:
         try:
-            status.update(label="⛽ Obteniendo precios en tiempo real del MITECO…", state="running")
-            # Proteger contra Memory Leaks aislando el DataFrame de posibles mutaciones posteriores
-            # (NOTA: Se tratan los datos cacheados como solo-lectura; los filtros subsecuentes crean copias seguras superficiales)
-            df_gas = cached_fetch_gasolineras()
+            status.update(label="⛽ Arranque del Motor Espacial (MITECO + R-Tree)…", state="running")
+            # Carga única unificada del GeoDataFrame, evitando Race Conditions y copias en caché
+            engine = get_spatial_engine()
 
             # --- Carga del track (solo GPX; en modo texto ya está listo) ---
             if track is None:
@@ -774,9 +774,8 @@ if _pipeline_active:
 
             status.update(label="🔍 Buscando gasolineras en tu corredor de ruta…", state="running")
             gdf_buffer = build_route_buffer(track_simp, buffer_meters=buffer_m)
-            # T1: El GeoDataFrame con R-Tree se construye solo una vez (caché), lo leemos en modo solo-lectura
-            gdf_utm = cached_build_stations_gdf(df_gas)
-            gdf_within = spatial_join_within_buffer(gdf_utm, gdf_buffer)
+            # T1: El GeoDataFrame con R-Tree unificado es inmutable y listo para consultarse
+            gdf_within = spatial_join_within_buffer(engine.gdf, gdf_buffer)
 
             if solo_24h:
                 # Filtrar asumiendo que el MITECO pone "24H" o "24 H" en el string horario

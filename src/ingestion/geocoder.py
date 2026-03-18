@@ -11,6 +11,7 @@ import time
 
 import requests
 from shapely.geometry import LineString
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.config import NOMINATIM_HEADERS, NOMINATIM_URL, OSRM_BASE_URL
 
@@ -58,7 +59,8 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
     for attempt, ep in enumerate(endpoints):
         headers["User-Agent"] = random.choice(user_agents)
         try:
-            time.sleep(1 + attempt)
+            if attempt > 0:
+                time.sleep(2)  # Cooldown básico solo entre alternancia de endpoints principales
 
             query_lugar = lugar
             if "españa" not in lugar.lower() and "spain" not in lugar.lower():
