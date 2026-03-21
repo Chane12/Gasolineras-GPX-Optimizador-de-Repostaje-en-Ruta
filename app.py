@@ -407,6 +407,14 @@ def render_mobile_wizard():
     if _gpx_upload is not None:
         _input_mode = "gpx"
         gpx_file    = _gpx_upload
+        # Guardar en session_state para que persista en pasos posteriores
+        st.session_state["_w_gpx_bytes"] = _gpx_upload.getvalue()
+        st.session_state["_w_gpx_name"] = _gpx_upload.name
+    elif "_w_gpx_bytes" in st.session_state:
+        _input_mode = "gpx"
+        import io
+        gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
+        gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
     elif st.session_state.get("demo_mode"):
         _input_mode = "demo"
     elif origen_txt or destino_txt:
@@ -467,6 +475,18 @@ def render_mobile_wizard():
             if gpx_file_upload is not None:
                 _input_mode = "gpx"
                 gpx_file = gpx_file_upload
+                st.session_state["_w_gpx_bytes"] = gpx_file_upload.getvalue()
+                st.session_state["_w_gpx_name"] = gpx_file_upload.name
+            elif "_w_gpx_bytes" in st.session_state:
+                _input_mode = "gpx"
+                import io
+                gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
+                gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
+                st.info(f"📁 GPX en memoria: {gpx_file.name}")
+                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1"):
+                    del st.session_state["_w_gpx_bytes"]
+                    del st.session_state["_w_gpx_name"]
+                    st.rerun()
             elif st.session_state.get("demo_mode") and _input_mode not in ("gpx",):
                 _input_mode = "demo"
                 gpx_file = None
