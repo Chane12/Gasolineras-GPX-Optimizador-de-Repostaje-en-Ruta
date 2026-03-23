@@ -14,6 +14,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 import streamlit as st
 import streamlit_javascript as st_js
 from streamlit_folium import st_folium
@@ -895,6 +896,10 @@ if _pipeline_active:
             if fuel_column in gdf_survival.columns:
                 gdf_survival[fuel_column] = pd.to_numeric(gdf_survival[fuel_column], errors="coerce")
                 gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
+                
+                # Para que el Radar de autonomía funcione, necesita la columna km_ruta y estar ordenado:
+                gdf_survival["km_ruta"] = shapely.line_locate_point(track_utm, gdf_survival.geometry) / 1000.0
+                gdf_survival = gdf_survival.sort_values("km_ruta").reset_index(drop=True)
             else:
                 gdf_survival = gdf_survival.iloc[0:0].copy()
 
