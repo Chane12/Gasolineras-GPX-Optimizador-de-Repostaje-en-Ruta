@@ -10,11 +10,11 @@ Cómo ejecutar:
 import tempfile
 import urllib.parse
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-import shapely
 import streamlit as st
 import streamlit_javascript as st_js
 from streamlit_folium import st_folium
@@ -40,6 +40,7 @@ from src.visualization.folium_map import generate_map
 @dataclass(frozen=True)
 class SpatialEngine:
     gdf: gpd.GeoDataFrame
+    fetched_at: datetime
 
 # ---------------------------------------------------------------------------
 # Motor Espacial Unificado
@@ -52,9 +53,9 @@ def get_spatial_engine() -> SpatialEngine:
     Retorna un contenedor inmutable con los datos cargados en R-Tree
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
-    df = fetch_gasolineras()
-    gdf = build_stations_geodataframe(df)
-    return SpatialEngine(gdf=gdf)
+    result = fetch_gasolineras()
+    gdf = build_stations_geodataframe(result.df)
+    return SpatialEngine(gdf=gdf, fetched_at=result.fetched_at)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +88,32 @@ st.markdown(
             background: transparent;
         }
     }
+    /* Touch feedback on mobile station cards (Mejora 12) */
+    @media (max-width: 768px) {
+        div[data-testid="stVerticalBlock"] > div[data-testid="element-container"] {
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        div[data-testid="stVerticalBlock"] > div[data-testid="element-container"]:active {
+            transform: scale(0.97);
+            box-shadow: 0 2px 8px rgba(255, 140, 0, 0.3);
+        }
+        button:active {
+            transform: scale(0.95) !important;
+            transition: transform 0.08s ease !important;
+        }
+    }
     </style>
+    <!-- PWA: Manifest & Meta (Mejora 8) -->
+    <link rel="manifest" href="/app/static/manifest.json">
+    <meta name="theme-color" content="#FF8C00">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/app/static/icon-192.png">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/app/static/sw.js').catch(() => {});
+      }
+    </script>
     """,
     unsafe_allow_html=True,
 )
@@ -146,6 +172,8 @@ def render_controls():
         # -----------------------------------------------
         st.markdown('#### Paso 1: Definición de Ruta', unsafe_allow_html=True)
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
+
+        _input_mode = "texto_vacio"  # default; overridden in each tab
 
         with tab_texto:
             origen_txt  = st.text_input(
@@ -340,7 +368,9 @@ def render_controls():
                     del st.session_state[key]
                 st.rerun()
 
-        st.caption("Datos en tiempo real del MITECO · Ministerio de Transición Ecológica.")
+        _mins_ago = int((datetime.now(tz=UTC) - get_spatial_engine().fetched_at).total_seconds() / 60)
+        _freshness = f"hace {_mins_ago} min" if _mins_ago > 0 else "ahora mismo"
+        st.caption(f"📡 Precios MITECO actualizados {_freshness}.")
 
     return {
         "origen_txt": origen_txt,
@@ -573,6 +603,12 @@ def render_mobile_wizard():
         radio_km = st.slider("Desvío máximo (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
         top_n = st.slider("Gasolineras a mostrar max.", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
         solo_24h = st.checkbox("Solo estaciones abiertas 24H", value=_solo24h_default, key="solo_24h_chk")
+        buscar_tramos = st.checkbox(
+            "Añadir obligatoriamente 1 por sub-tramo",
+            value=True,
+            help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas.",
+            key="buscar_tramos_chk"
+        )
         if buscar_tramos:
             segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
         else:
@@ -608,7 +644,9 @@ def render_mobile_wizard():
                     del st.session_state[key]
                 st.rerun()
 
-        st.caption("Datos en tiempo real del MITECO.")
+        _mins_ago = int((datetime.now(tz=UTC) - get_spatial_engine().fetched_at).total_seconds() / 60)
+        _freshness = f"hace {_mins_ago} min" if _mins_ago > 0 else "ahora mismo"
+        st.caption(f"📡 Precios MITECO actualizados {_freshness}.")
 
     # Si el pipeline ya tuvo resultados y el usuario vuelve, resetear wizard al paso 1
     if run_btn and "wizard_step" in st.session_state:
@@ -897,8 +935,30 @@ if _pipeline_active:
                 gdf_survival[fuel_column] = pd.to_numeric(gdf_survival[fuel_column], errors="coerce")
                 gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
 
-                # Para que el Radar de autonomía funcione, necesita la columna km_ruta y estar ordenado:
-                gdf_survival["km_ruta"] = shapely.line_locate_point(track_utm, gdf_survival.geometry) / 1000.0
+                # Para que el Radar de autonomía funcione, necesita la columna km_ruta y estar ordenado.
+                # Usamos distancia geodésica (pyproj Geod) para ser consistentes con
+                # calculate_autonomy_radar(), que mide route_total_km con Geod, no con UTM.
+                import pyproj as _pyproj
+                _geod = _pyproj.Geod(ellps="WGS84")
+                _track_coords = list(track.coords)  # track en WGS84
+                _track_line_wgs = track  # ya está en WGS84
+
+                # Proyectar cada estación al punto más cercano del track WGS84 y medir distancia geodésica
+                gdf_surv_wgs = gdf_survival.to_crs("EPSG:4326")
+                _lons_t = [c[0] for c in _track_coords]
+                _lats_t = [c[1] for c in _track_coords]
+                _, _, _seg_dists = _geod.inv(_lons_t[:-1], _lats_t[:-1], _lons_t[1:], _lats_t[1:])
+                _cum_dist_km = [0.0]
+                for _d in _seg_dists:
+                    _cum_dist_km.append(_cum_dist_km[-1] + _d / 1000.0)
+
+                # Para cada estación, encontrar km en ruta via proyección lineal normalizada
+                _fracs = [
+                    _track_line_wgs.project(pt, normalized=True)
+                    for pt in gdf_surv_wgs.geometry
+                ]
+                _total_geod_km = _cum_dist_km[-1]
+                gdf_survival["km_ruta"] = [f * _total_geod_km for f in _fracs]
                 gdf_survival = gdf_survival.sort_values("km_ruta").reset_index(drop=True)
             else:
                 gdf_survival = gdf_survival.iloc[0:0].copy()

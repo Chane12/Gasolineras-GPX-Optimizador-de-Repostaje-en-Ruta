@@ -76,8 +76,8 @@ def render_welcome_screen(is_mobile: bool = False):
                 "<span style='color: rgba(255,255,255,0.6); font-size:0.9rem; margin-top:0.5rem; display:block;'>"
                 "Optimizador Geoespacial de Repostaje</span>"
                 "<div style='margin-top:1.5rem; display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;'>"
-                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇳🇵 MITECO</span>"
-                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇧🇂 OSRM</span>"
+                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🇪🇸 MITECO</span>"
+                "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🌐 OSRM</span>"
                 "<span style='background:rgba(255,127,0,0.2); color:#FF8C00; padding:0.3rem 0.8rem; border-radius:999px; font-size:0.8rem;'>🗺️ GeoPandas</span>"
                 "</div>"
                 "</div>",
