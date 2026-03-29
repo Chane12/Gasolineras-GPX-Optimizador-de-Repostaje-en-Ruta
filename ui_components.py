@@ -216,10 +216,13 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
     # Chips de resumen rápido
     cols = st.columns(5)
     cols[0].markdown(f"🟢 **{n_safe} seguros**")
-    if n_warn: cols[1].markdown(f"🟡 **{n_warn} atención**")
-    if n_crit: cols[2].markdown(f"🔴 **{n_crit} críticos**")
+    if n_warn:
+        cols[1].markdown(f"🟡 **{n_warn} atención**")
+    if n_crit:
+        cols[2].markdown(f"🔴 **{n_crit} críticos**")
     cols[3].markdown(f"🛣️ **Total: {route_total_km:.1f} km**")
-    if autonomia_km > 0: cols[4].markdown(f"⛽ **Autonomía: {autonomia_km} km**")
+    if autonomia_km > 0:
+        cols[4].markdown(f"⛽ **Autonomía: {autonomia_km} km**")
 
     # Detalle de cada tramo
     tramos_peligro = [t for t in tramos if t["nivel"] in ["critico", "atencion"] or t["gap_km"] >= 60]

@@ -896,7 +896,7 @@ if _pipeline_active:
             if fuel_column in gdf_survival.columns:
                 gdf_survival[fuel_column] = pd.to_numeric(gdf_survival[fuel_column], errors="coerce")
                 gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
-                
+
                 # Para que el Radar de autonomía funcione, necesita la columna km_ruta y estar ordenado:
                 gdf_survival["km_ruta"] = shapely.line_locate_point(track_utm, gdf_survival.geometry) / 1000.0
                 gdf_survival = gdf_survival.sort_values("km_ruta").reset_index(drop=True)
@@ -1026,9 +1026,7 @@ if "pipeline_results" in st.session_state:
                 "explorar el mapa o hacer zoom."
             ),
         )
-        map_height = 700 if map_active else 380
         if not is_mobile:
-            # En PC siempre mostramos el mapa alto
             map_height = 700 if map_active else 420
         else:
             map_height = 480 if map_active else 300
@@ -1047,6 +1045,8 @@ if "pipeline_results" in st.session_state:
             width="100%",
             height=map_height,
             returned_objects=[],
+            center=map_center,
+            zoom=map_zoom,
         )
         if not map_active:
             st.caption("👆 Activa el interruptor de arriba para hacer zoom y desplazarte por el mapa.")
@@ -1110,23 +1110,23 @@ if "pipeline_results" in st.session_state:
         # Filtrar posibles ahorros negativos marginales por diferencias de FP
         df_show["Ahorro (€/L)"] = df_show["Ahorro (€/L)"].apply(lambda x: max(0.0, float(x)))
 
-    # Construir URL de Google Maps para cada dirección (columna LinkColumn)
-    if "Dirección" in df_show.columns and "Municipio" in df_show.columns:
-        df_show["_maps_url"] = df_show.apply(
+    # Construir URL de Google Maps para cada dirección (desde gdf_top, que conserva columnas originales)
+    if "Dirección" in gdf_top.columns and "Municipio" in gdf_top.columns:
+        df_show["_maps_url"] = gdf_top[["Dirección", "Municipio"]].apply(
             lambda r: "https://maps.google.com/?q=" + urllib.parse.quote_plus(
                 f"{r.get('Dirección', '')}, {r.get('Municipio', '')}"
             ),
             axis=1,
-        )
-    elif "Dirección" in df_show.columns:
-        df_show["_maps_url"] = df_show["Dirección"].apply(
+        ).values
+    elif "Dirección" in gdf_top.columns:
+        df_show["_maps_url"] = gdf_top["Dirección"].apply(
             lambda d: "https://maps.google.com/?q=" + urllib.parse.quote_plus(str(d))
-        )
+        ).values
 
     # Coordenadas WGS84 de cada gasolinera (para el zoom del mapa)
     gdf_top_wgs84 = gdf_top.to_crs("EPSG:4326")
     # Vectorizar coordenadas con operaciones de serie (más rápido que iterrows)
-    station_coords = list(zip(gdf_top_wgs84.geometry.y, gdf_top_wgs84.geometry.x))
+    station_coords = list(zip(gdf_top_wgs84.geometry.y, gdf_top_wgs84.geometry.x, strict=True))
 
     @st.fragment
     def render_ranking_table():

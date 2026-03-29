@@ -180,9 +180,9 @@ def enrich_stations_with_osrm(
         # Jitter aleatorio para desincronizar los workers y evitar picos de peticiones
         current_delay = delay_s + random.uniform(0.1, 0.4)
 
-        for attempt in range(max_retries):
+        for _attempt in range(max_retries):
             time.sleep(current_delay)
-            
+
             d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
             if d_ida is not None:
                 time.sleep(0.2) # Pausa mínima entre ida y vuelta
@@ -198,15 +198,15 @@ def enrich_stations_with_osrm(
 
         return idx, None
 
-    # max_workers=3 es conservador para la API pública de OSRM perdiendo latencia general 
+    # max_workers=3 es conservador para la API pública de OSRM perdiendo latencia general
     # pero manteniendo fiabilidad frente a cuelgues, tal y como se requiere.
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(process_station, idx, row): idx 
+            executor.submit(process_station, idx, row): idx
             for idx, row in gdf_wgs84.iterrows()
         }
 
-        # as_completed permite que main thread vaya haciendo el progresivo yield 
+        # as_completed permite que main thread vaya haciendo el progresivo yield
         # a Streamlit conforme terminan, no esperando a todos al final.
         for future in concurrent.futures.as_completed(futures):
             idx = futures[future]
