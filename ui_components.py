@@ -54,8 +54,8 @@ def render_welcome_screen(is_mobile: bool = False):
             st.markdown("")
             st.info(
                 "🛃 **¿Cómo funciona?**\n"
-                "1. **Configura tu ruta** — escribe origen y destino, o sube un `.gpx`.\n"
-                "2. **Elige tu combustible** y, opcionalmente, la autonomía de tu vehículo.\n"
+                "1. **Configura tu ruta** — escribe origen y destino, o sube tu ruta `.gpx` (desde Wikiloc, Calimoto, Kurviger...).\n"
+                "2. **Elige tu combustible** e indica la autonomía de tu moto o coche (¡vital para evitar sustos!).\n"
                 "3. **Haz clic en Iniciar Búsqueda** — el motor geoespacial calcula en segundos.\n"
                 "4. **Revisa el mapa y la tabla** — añade paradas a tu plan y expórtalo a Maps o GPX."
             )
@@ -202,13 +202,13 @@ def render_autonomy_radar_ui(tramos: list[dict], route_total_km: float, autonomi
 
     if n_crit > 0 and autonomia_km > 0:
         with st.container(border=True):
-            st.error(f"🔴 **Ruta con {n_crit} tramo(s) CRÍTICO(S)**\n\nEl tramo más largo sin gasolinera es de **{max_gap:.1f} km**. Tu autonomía configurada es de **{autonomia_km} km**. Revisa los tramos marcados en rojo antes de salir.")
+            st.error(f"🔴 **Ruta con {n_crit} tramo(s) CRÍTICO(S)**\n\nEl tramo más largo sin gasolinera es de **{max_gap:.1f} km**. Tu autonomía configurada es de **{autonomia_km} km**. Revisa estos tramos antes de salir a rodar.")
     elif n_warn > 0:
         with st.container(border=True):
-            st.warning(f"🟡 **Ruta con {n_warn} tramo(s) de ATENCIÓN**\n\nNingún tramo supera tu autonomía ({autonomia_km} km), pero hay segmentos de más del 80%. Procura no llegar a esas zonas con el depósito bajo.")
+            st.warning(f"🟡 **Ruta con {n_warn} tramo(s) de ATENCIÓN**\n\nNingún tramo supera tu autonomía ({autonomia_km} km), pero hay segmentos de más del 80%. Procura no llegar a estas zonas con el depósito bajo.")
     elif autonomia_km > 0:
         with st.container(border=True):
-            st.success(f"🟢 **Ruta completamente SEGURA**\n\nTodos los tramos entre gasolineras están por debajo de tu autonomía ({autonomia_km} km). ¡Puedes salir tranquilo!")
+            st.success(f"🟢 **Ruta completamente SEGURA**\n\nTodos los tramos entre gasolineras están por debajo de tu autonomía ({autonomia_km} km). ¡Puedes salir a rodar tranquilo!")
     else:
         with st.container(border=True):
             st.info(f"ℹ️ **Tramo más largo sin gasolinera:** {max_gap:.1f} km\n\nConfigura tu autonomía en el sidebar para activar las alertas.")

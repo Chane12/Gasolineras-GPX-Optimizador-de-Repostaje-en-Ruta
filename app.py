@@ -134,7 +134,7 @@ st.markdown(
 if "mis_paradas" not in st.session_state:
     st.session_state["mis_paradas"] = []
 
-st.title("⛽ Gasolineras en Ruta Dashboard")
+st.title("🛣️⛽ Planificador de Gasolineras en Ruta")
 st.markdown("Encuentra las estaciones de servicio más económicas a lo largo de tu viaje.")
 
 # ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ def render_controls():
 
         with tab_gpx:
             gpx_file_upload = st.file_uploader(
-                "Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed", key="gpx_uploader"
+                "Sube tu ruta (.gpx)", type=["gpx"], label_visibility="collapsed", key="gpx_uploader"
             )
             if gpx_file_upload is not None:
                 _input_mode = "gpx"
@@ -245,11 +245,11 @@ def render_controls():
 
         if usar_vehiculo:
             # Perfiles de Autonomía (Mobile-First UI via selectbox or radio)
-            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Standard (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
+            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
 
             if "Moto" in perfil:
                 auto_val = 250
-            elif "Standard" in perfil:
+            elif "Estándar" in perfil:
                 auto_val = 600
             elif "Gran" in perfil:
                 auto_val = 900
@@ -278,21 +278,21 @@ def render_controls():
         # -----------------------------------------------
         with st.expander("🛠️ Filtros Avanzados", expanded=False):
             radio_km = st.slider(
-                "Distancia máxima de desvío (km)",
+                "Desvío máximo permitido de la ruta (km)",
                 min_value=1, max_value=15, value=_buffer_default, step=1,
                 help="Distancia lateral máxima al track para incluir gasolineras.",
                 key="radio_slider"
             )
-            top_n = st.slider("Gasolineras a mostrar max.", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
+            top_n = st.slider("Máximo de gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
 
             st.markdown("---")
             solo_24h = st.checkbox(
-                "Solo estaciones abiertas 24H",
+                "Mostrar solo gasolineras abiertas 24h",
                 value=_solo24h_default,
                 key="solo_24h_chk"
             )
             buscar_tramos = st.checkbox(
-                "Añadir obligatoriamente 1 por sub-tramo",
+                "Asegurar al menos 1 gasolinera por tramo",
                 value=True,
                 help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas.",
                 key="buscar_tramos_chk"
@@ -512,7 +512,7 @@ def render_mobile_wizard():
                 _input_mode = "texto_vacio"
                 gpx_file = None
         with tab_gpx:
-            gpx_file_upload = st.file_uploader("Elige un archivo .gpx:", type=["gpx"], label_visibility="collapsed", key="gpx_uploader")
+            gpx_file_upload = st.file_uploader("Sube tu ruta (.gpx)", type=["gpx"], label_visibility="collapsed", key="gpx_uploader")
             if gpx_file_upload is not None:
                 _input_mode = "gpx"
                 gpx_file = gpx_file_upload
@@ -576,10 +576,10 @@ def render_mobile_wizard():
             on_change=_save_step2
         )
         if usar_vehiculo:
-            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Standard (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
+            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
             if "Moto" in perfil:
                 auto_val = 250
-            elif "Standard" in perfil:
+            elif "Estándar" in perfil:
                 auto_val = 600
             elif "Gran" in perfil:
                 auto_val = 900
@@ -610,11 +610,11 @@ def render_mobile_wizard():
     # ══════════════════════════════════════════
     elif step == 3:
         st.markdown("### 🛠️ Paso 3 — Filtros")
-        radio_km = st.slider("Desvío máximo (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
-        top_n = st.slider("Gasolineras a mostrar max.", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
-        solo_24h = st.checkbox("Solo estaciones abiertas 24H", value=_solo24h_default, key="solo_24h_chk")
+        radio_km = st.slider("Desvío máximo permitido de la ruta (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
+        top_n = st.slider("Máximo de gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
+        solo_24h = st.checkbox("Mostrar solo gasolineras abiertas 24h", value=_solo24h_default, key="solo_24h_chk")
         buscar_tramos = st.checkbox(
-            "Añadir obligatoriamente 1 por sub-tramo",
+            "Asegurar al menos 1 gasolinera por tramo",
             value=True,
             help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas.",
             key="buscar_tramos_chk"
@@ -1330,7 +1330,7 @@ if "pipeline_results" in st.session_state:
     # -----------------------------------------------------------------------
     # 5. Mi Plan de Viaje (Carrito)
     # -----------------------------------------------------------------------
-    st.subheader("🛒 Mi Plan de Viaje")
+    st.subheader("🎒 Mi Ruta / Paradas de Repostaje")
     st.caption("Añade gasolineras de la tabla superior para diseñar tu propia estrategia de repostaje.")
 
     @st.fragment
