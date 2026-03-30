@@ -58,7 +58,8 @@ Ejemplos:
         return
 
     # 1. Ingesta MITECO
-    df_gasolineras = fetch_gasolineras().df
+    res = fetch_gasolineras()
+    df_gasolineras = res if isinstance(res, pd.DataFrame) else getattr(res, "df", res)
 
     # 2. Cargar y procesar GPX
     track_original = load_gpx_track(gpx_path)
