@@ -1,3 +1,5 @@
+import html
+
 import streamlit as st
 
 
@@ -91,7 +93,7 @@ def render_config_summary(pipeline_results: dict, combustible: str, radio_km: in
     elif using_gpx:
         ruta_str = "📁 Archivo GPX"
     elif origen_txt and destino_txt:
-        ruta_str = f"📑 {origen_txt.strip().title()} → {destino_txt.strip().title()}"
+        ruta_str = f"📑 {html.escape(origen_txt.strip().title())} → {html.escape(destino_txt.strip().title())}"
     else:
         ruta_str = "📑 Ruta personalizada"
 
@@ -108,7 +110,7 @@ def render_config_summary(pipeline_results: dict, combustible: str, radio_km: in
         '>
         <strong style='color:#FF8C00;'>⚙️ Búsqueda Activa</strong><br>
         {ruta_str}<br>
-        ⛽ {combustible} · 📍 ±{radio_km} km · 🏆 Top {top_n}<br>
+        ⛽ {html.escape(combustible)} · 📍 ±{radio_km} km · 🏆 Top {top_n}<br>
         <span style='color: gray; font-size:0.8rem;'>{total} estaciones en zona</span>
         </div>
         """,
@@ -176,8 +178,8 @@ def render_station_cards(df_show, precio_col_label: str, station_coords: list, m
                     st.caption(f"🕐 {horario[:40]}{'…' if len(horario) > 40 else ''}")
             with col_precio:
                 st.markdown(
-                    f"<div style='text-align:right; font-size:1.25rem; font-weight:700; color:#FF8C00;'>{precio_str}</div>"
-                    + (f"<div style='text-align:right; font-size:0.8rem; color:#4CAF50;'>{ahorro_str}</div>" if ahorro_str else ""),
+                    f"<div style='text-align:right; font-size:1.25rem; font-weight:700; color:#FF8C00;'>{html.escape(precio_str)}</div>"
+                    + (f"<div style='text-align:right; font-size:0.8rem; color:#4CAF50;'>{html.escape(ahorro_str)}</div>" if ahorro_str else ""),
                     unsafe_allow_html=True,
                 )
             btn_cols = st.columns([1, 1])

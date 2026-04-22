@@ -180,7 +180,7 @@ def render_controls():
         # -----------------------------------------------
         # PASO 1: DEFINICIÓN DE RUTA
         # -----------------------------------------------
-        st.markdown('#### Paso 1: Definición de Ruta', unsafe_allow_html=True)
+        st.markdown('#### Paso 1: Definición de Ruta')
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
 
         _input_mode = "texto_vacio"  # default; overridden in each tab
@@ -227,7 +227,7 @@ def render_controls():
         # -----------------------------------------------
         # PASO 2: PARÁMETROS DEL VEHÍCULO Y COMBUSTIBLE
         # -----------------------------------------------
-        st.markdown('#### Paso 2: Parámetros del Vehículo', unsafe_allow_html=True)
+        st.markdown('#### Paso 2: Parámetros del Vehículo')
 
         combustible_elegido = st.selectbox(
             "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
@@ -326,7 +326,7 @@ def render_controls():
 
         buffer_m = radio_km * 1000
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.write("")
         if is_mobile:
             # Sticky CTA on mobile: wrapped in a div with class
             st.markdown(
@@ -1459,7 +1459,7 @@ else:
     # ----- Demo CTA -------------------------------------------------------
     # Psicología: reducir la barrera de entrada («¿Y si no tengo un GPX ahora?»)
     # con un botón de prueba inmediata que carga una ruta real de 55 km.
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.write("")
     _demo_col, _ = st.columns([2, 3])
     with _demo_col:
         if st.button(
