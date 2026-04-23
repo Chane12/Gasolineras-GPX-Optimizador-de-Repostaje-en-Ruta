@@ -1,0 +1,1 @@
+## 2024-04-23 - Tooltips on Streamlit Buttons\n**Learning:** Streamlit buttons (especially icon-only or disabled ones) lack context for screen readers and sighted users. The `help` parameter natively provides tooltips and aria-labels.\n**Action:** Always add descriptive `help="text"` to `st.button` and `st.link_button` to improve accessibility and micro-UX.
