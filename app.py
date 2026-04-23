@@ -352,15 +352,15 @@ def render_controls():
             )
             with st.container():
                 st.markdown('<div class="sticky-search-btn">', unsafe_allow_html=True)
-                run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
+                run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True, help="Ejecuta el análisis geoespacial para encontrar las mejores gasolineras en tu ruta")
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
-            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
+            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True, help="Ejecuta el análisis geoespacial para encontrar las mejores gasolineras en tu ruta")
 
         # Acciones Extra
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("🔗 Compartir ajustes", use_container_width=True):
+            if st.button("🔗 Compartir ajustes", use_container_width=True, help="Copia tu configuración actual en la URL para compartirla"):
                 st.query_params.update({
                     "fuel":       combustible_elegido,
                     "buffer":     str(radio_km),
@@ -372,7 +372,7 @@ def render_controls():
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
 
         with rc2:
-            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary", help="Borra todos los ajustes y recarga la aplicación"):
                 st.query_params.clear()
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
@@ -524,7 +524,7 @@ def render_mobile_wizard():
                 gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
                 gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
                 st.info(f"📁 GPX en memoria: {gpx_file.name}")
-                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1"):
+                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1", help="Elimina el archivo GPX cargado actualmente"):
                     del st.session_state["_w_gpx_bytes"]
                     del st.session_state["_w_gpx_name"]
                     st.rerun()
@@ -538,7 +538,7 @@ def render_mobile_wizard():
                 st.success("✅ Cargada ruta de demo (Sierra de Gredos - 6 Puertos)")
 
         st.markdown("")
-        if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True):
+        if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True, help="Avanzar al paso 2: Tu Vehículo"):
             # Guardar explícitamente (doble seguro, on_change ya debería haberlo hecho)
             st.session_state["_w_origen"]  = st.session_state.get("origen_txt", "") or origen_txt
             st.session_state["_w_destino"] = st.session_state.get("destino_txt", "") or destino_txt
@@ -597,11 +597,11 @@ def render_mobile_wizard():
         st.markdown("")
         col_prev, col_next = st.columns(2)
         with col_prev:
-            if st.button("‹ Ruta", use_container_width=True):
+            if st.button("‹ Ruta", use_container_width=True, help="Volver al paso 1: Tu Ruta"):
                 st.session_state["wizard_step"] = 1
                 st.rerun()
         with col_next:
-            if st.button("Siguiente: Filtros ›", type="primary", use_container_width=True):
+            if st.button("Siguiente: Filtros ›", type="primary", use_container_width=True, help="Avanzar al paso 3: Filtros Avanzados"):
                 st.session_state["wizard_step"] = 3
                 st.rerun()
 
@@ -630,17 +630,17 @@ def render_mobile_wizard():
         st.markdown("")
         col_prev2, col_search = st.columns([1, 2])
         with col_prev2:
-            if st.button("‹ Vehículo", use_container_width=True):
+            if st.button("‹ Vehículo", use_container_width=True, help="Volver al paso 2: Tu Vehículo"):
                 st.session_state["wizard_step"] = 2
                 st.rerun()
         with col_search:
-            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
+            run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True, help="Ejecuta el análisis geoespacial para encontrar las mejores gasolineras en tu ruta")
 
         # Acciones Extra (al final del paso 3)
         st.markdown("---")
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("🔗 Compartir ajustes", use_container_width=True):
+            if st.button("🔗 Compartir ajustes", use_container_width=True, help="Copia tu configuración actual en la URL para compartirla"):
                 st.query_params.update({
                     "fuel": combustible_elegido, "buffer": str(radio_km),
                     "top": str(top_n), "solo24h": str(solo_24h), "autonomia": str(autonomia_km),
@@ -648,7 +648,7 @@ def render_mobile_wizard():
                 })
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones! 📌", icon="🔗")
         with rc2:
-            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary", help="Borra todos los ajustes y recarga la aplicación"):
                 st.query_params.clear()
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
@@ -1307,7 +1307,7 @@ if "pipeline_results" in st.session_state:
             if ya_en_plan:
                 st.info(f"✅ Esta estación **{sel_nombre_cart}** ya está en tu Plan de Viaje.")
             else:
-                if st.button(f"➕ Añadir **{sel_nombre_cart}** a Mi Plan de Viaje", type="primary"):
+                if st.button(f"➕ Añadir **{sel_nombre_cart}** a Mi Plan de Viaje", type="primary", help="Incluye esta estación en tu itinerario de paradas"):
                     parada_dict = sel_row.to_dict()
                     parada_dict["_geom_y"] = coords_y
                     parada_dict["_geom_x"] = coords_x
@@ -1393,7 +1393,7 @@ if "pipeline_results" in st.session_state:
 
             c1, c2 = st.columns([1, 1])
             with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
+                if st.button("🗑️ Vaciar Mi Plan", type="secondary", help="Elimina todas las paradas de tu plan de viaje actual"):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
 

@@ -1,0 +1,3 @@
+## 2024-05-24 - Improve Button Accessibility with Tooltips
+**Learning:** In Streamlit applications, interactive elements like buttons (`st.button`) often lack inherent context for screen readers or users who rely on tooltips, especially when the button text is an icon or very brief (like navigation buttons or simple actions).
+**Action:** Always provide the `help` parameter when creating `st.button` or similar interactive components to ensure that the purpose of the action is clearly communicated to all users, improving overall accessibility and UX.
