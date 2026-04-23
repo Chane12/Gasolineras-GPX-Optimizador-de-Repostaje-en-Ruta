@@ -45,7 +45,7 @@ def render_welcome_screen(is_mobile: bool = False):
                 ("🗺️", "GPX + Texto", "Sube tu ruta o escribe origen y destino"),
                 ("⛽", "12.000 Estaciones", "Toda España indexada con R-Tree"),
             ]
-            for col, (icon, title, desc) in zip(pill_cols, pills):
+            for col, (icon, title, desc) in zip(pill_cols, pills, strict=False):
                 with col:
                     with st.container(border=True):
                         st.markdown(f"<div style='text-align:center; font-size:1.6rem;'>{icon}</div>", unsafe_allow_html=True)
