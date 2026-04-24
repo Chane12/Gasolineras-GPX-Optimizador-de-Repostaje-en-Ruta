@@ -1,0 +1,3 @@
+## 2025-02-20 - Replace Python iterators with Shapely C-vectorized equivalents
+**Learning:** For spatial operations on GeoPandas geometries like linearly projecting points along a track (`project`) or interpolating distances to points (`interpolate`), doing list comprehensions or `.apply()` is significantly slower because Python has to dispatch C API calls for each individual point.
+**Action:** Use the Shapely 2.0 array-aware/C-vectorized functions like `shapely.line_locate_point()` and `shapely.line_interpolate_point()`. Pass the entire GeoSeries array directly to these vectorized functions to do operations purely at the C-level, bypassing the Python interpreter overhead. Use `shapely.get_coordinates()` instead of iterating over vertices.

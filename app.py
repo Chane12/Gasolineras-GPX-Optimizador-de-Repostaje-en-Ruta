@@ -42,9 +42,11 @@ class SpatialEngine:
     gdf: gpd.GeoDataFrame
     fetched_at: datetime
 
+
 # ---------------------------------------------------------------------------
 # Motor Espacial Unificado
 # ---------------------------------------------------------------------------
+
 
 @st.cache_resource(ttl=1800, show_spinner=False, max_entries=1)
 def get_spatial_engine() -> SpatialEngine:
@@ -54,7 +56,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +65,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
@@ -141,18 +143,18 @@ st.markdown("Encuentra las estaciones de servicio más económicas a lo largo de
 # Tipos de combustible
 # ---------------------------------------------------------------------------
 COMBUSTIBLES = {
-    "Gasolina 95":                    "Precio Gasolina 95 E5",
-    "Gasolina 95 Premium":            "Precio Gasolina 95 E5 Premium",
-    "Gasolina 98":                    "Precio Gasolina 98 E5",
-    "Diésel (Gasoil A)":             "Precio Gasoleo A",
-    "Diésel Premium":                 "Precio Gasoleo Premium",
-    "GLP / Autogas":                  "Precio Gases licuados del petroleo",
-    "Gas Natural Comprimido (GNC)":   "Precio Gas Natural Comprimido",
-    "Gas Natural Licuado (GNL)":      "Precio Gas Natural Licuado",
+    "Gasolina 95": "Precio Gasolina 95 E5",
+    "Gasolina 95 Premium": "Precio Gasolina 95 E5 Premium",
+    "Gasolina 98": "Precio Gasolina 98 E5",
+    "Diésel (Gasoil A)": "Precio Gasoleo A",
+    "Diésel Premium": "Precio Gasoleo Premium",
+    "GLP / Autogas": "Precio Gases licuados del petroleo",
+    "Gas Natural Comprimido (GNC)": "Precio Gas Natural Comprimido",
+    "Gas Natural Licuado (GNL)": "Precio Gas Natural Licuado",
     "Gasoil B (agrícola/industrial)": "Precio Gasoleo B",
-    "Gasolina 95 E10":                "Precio Gasolina 95 E10",
-    "Gasolina 98 E10":                "Precio Gasolina 98 E10",
-    "Hidrógeno":                      "Precio Hidrogeno",
+    "Gasolina 95 E10": "Precio Gasolina 95 E10",
+    "Gasolina 98 E10": "Precio Gasolina 98 E10",
+    "Hidrógeno": "Precio Hidrogeno",
 }
 
 # ---------------------------------------------------------------------------
@@ -173,20 +175,23 @@ _desvio_default = qp.get("desvio", "False").lower() == "true"
 # BARRA LATERAL / MAIN VIEWS — Controles de Configuración
 # ---------------------------------------------------------------------------
 
+
 def render_controls():
     _search_done = "pipeline_results" in st.session_state
 
-    with st.expander("⚙️ Modificar Búsqueda" if _search_done else "🛠️ Configuración (Paso 1 y 2)", expanded=not _search_done):
+    with st.expander(
+        "⚙️ Modificar Búsqueda" if _search_done else "🛠️ Configuración (Paso 1 y 2)", expanded=not _search_done
+    ):
         # -----------------------------------------------
         # PASO 1: DEFINICIÓN DE RUTA
         # -----------------------------------------------
-        st.markdown('#### Paso 1: Definición de Ruta', unsafe_allow_html=True)
+        st.markdown("#### Paso 1: Definición de Ruta", unsafe_allow_html=True)
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
 
         _input_mode = "texto_vacio"  # default; overridden in each tab
 
         with tab_texto:
-            origen_txt  = st.text_input(
+            origen_txt = st.text_input(
                 "Origen",
                 placeholder="Ej: Madrid",
                 key="origen_txt",
@@ -220,19 +225,18 @@ def render_controls():
             if gpx_file is None and st.session_state.get("demo_mode"):
                 st.success("✅ Cargada ruta de demo (Sierra de Gredos - 6 Puertos)")
 
-
-
         st.divider()
 
         # -----------------------------------------------
         # PASO 2: PARÁMETROS DEL VEHÍCULO Y COMBUSTIBLE
         # -----------------------------------------------
-        st.markdown('#### Paso 2: Parámetros del Vehículo', unsafe_allow_html=True)
+        st.markdown("#### Paso 2: Parámetros del Vehículo", unsafe_allow_html=True)
 
         combustible_elegido = st.selectbox(
-            "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
+            "Tipo de Combustible:",
+            options=list(COMBUSTIBLES.keys()),
             index=list(COMBUSTIBLES.keys()).index(_fuel_default),
-            key="comb_selectbox"
+            key="comb_selectbox",
         )
         fuel_column = COMBUSTIBLES[combustible_elegido]
 
@@ -240,12 +244,18 @@ def render_controls():
             "Activar Radar de Autonomía",
             value=st.session_state.get("usar_vehiculo", False),
             help="Mostrar zonas de peligro en el mapa donde corres el riesgo de quedarte sin combustible.",
-            key="limite_autonomia_chk"
+            key="limite_autonomia_chk",
         )
 
         if usar_vehiculo:
             # Perfiles de Autonomía (Mobile-First UI via selectbox or radio)
-            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
+            perfil = st.radio(
+                "Perfil de Vehículo",
+                ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"],
+                horizontal=False,
+                index=3,
+                key="perfil_vh",
+            )
 
             if "Moto" in perfil:
                 auto_val = 250
@@ -261,12 +271,13 @@ def render_controls():
 
             autonomia_km = st.number_input(
                 "Autonomía del Vehículo (km)",
-                min_value=10, max_value=2000,
+                min_value=10,
+                max_value=2000,
                 value=auto_val,
                 step=10,
                 help="¿Cuántos kilómetros puede hacer tu vehículo con el depósito completamente lleno?",
                 disabled=(perfil != "Manual"),
-                key="autonomia_input"
+                key="autonomia_input",
             )
         else:
             autonomia_km = 0
@@ -279,26 +290,34 @@ def render_controls():
         with st.expander("🛠️ Filtros Avanzados", expanded=False):
             radio_km = st.slider(
                 "Desvío máximo permitido de la ruta (km)",
-                min_value=1, max_value=15, value=_buffer_default, step=1,
+                min_value=1,
+                max_value=15,
+                value=_buffer_default,
+                step=1,
                 help="Distancia lateral máxima al track para incluir gasolineras.",
-                key="radio_slider"
+                key="radio_slider",
             )
-            top_n = st.slider("Máximo de gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
+            top_n = st.slider(
+                "Máximo de gasolineras a mostrar",
+                min_value=1,
+                max_value=20,
+                value=_top_default,
+                step=1,
+                key="top_slider",
+            )
 
             st.markdown("---")
-            solo_24h = st.checkbox(
-                "Mostrar solo gasolineras abiertas 24h",
-                value=_solo24h_default,
-                key="solo_24h_chk"
-            )
+            solo_24h = st.checkbox("Mostrar solo gasolineras abiertas 24h", value=_solo24h_default, key="solo_24h_chk")
             buscar_tramos = st.checkbox(
                 "Asegurar al menos 1 gasolinera por tramo",
                 value=True,
                 help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas.",
-                key="buscar_tramos_chk"
+                key="buscar_tramos_chk",
             )
             if buscar_tramos:
-                segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
+                segment_km = st.slider(
+                    "Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider"
+                )
             else:
                 segment_km = 0.0
 
@@ -321,7 +340,7 @@ def render_controls():
                     "llegar a la gasolinera y volver a la ruta. Si se desactiva, la app funcionará más rápido "
                     "pero no mostrará el tiempo de desvío en la tabla."
                 ),
-                key="calcular_desvio_chk"
+                key="calcular_desvio_chk",
             )
 
         buffer_m = radio_km * 1000
@@ -353,7 +372,7 @@ def render_controls():
             with st.container():
                 st.markdown('<div class="sticky-search-btn">', unsafe_allow_html=True)
                 run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
         else:
             run_btn = st.button("🔍 Iniciar Búsqueda", type="primary", use_container_width=True)
 
@@ -361,14 +380,16 @@ def render_controls():
         rc1, rc2 = st.columns(2)
         with rc1:
             if st.button("🔗 Compartir ajustes", use_container_width=True):
-                st.query_params.update({
-                    "fuel":       combustible_elegido,
-                    "buffer":     str(radio_km),
-                    "top":        str(top_n),
-                    "solo24h":    str(solo_24h),
-                    "autonomia":  str(autonomia_km),
-                    "desvio":     str(calcular_desvio),
-                })
+                st.query_params.update(
+                    {
+                        "fuel": combustible_elegido,
+                        "buffer": str(radio_km),
+                        "top": str(top_n),
+                        "solo24h": str(solo_24h),
+                        "autonomia": str(autonomia_km),
+                        "desvio": str(calcular_desvio),
+                    }
+                )
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
 
         with rc2:
@@ -401,6 +422,7 @@ def render_controls():
         "espana_vaciada": espana_vaciada,
         "calcular_desvio": calcular_desvio,
     }
+
 
 def render_desktop_view():
     with st.sidebar:
@@ -439,23 +461,24 @@ def render_mobile_wizard():
 
     # Persistencia robusta entre pasos: usar claves no-widget (_w_origen, _w_destino)
     # que no se borran cuando el widget deja de renderizarse en paso 2 y 3.
-    origen_txt  = st.session_state.get("_w_origen") or st.session_state.get("origen_txt", "")
+    origen_txt = st.session_state.get("_w_origen") or st.session_state.get("origen_txt", "")
     destino_txt = st.session_state.get("_w_destino") or st.session_state.get("destino_txt", "")
-    gpx_file    = None  # El file_uploader guarda el objeto en session_state["gpx_uploader"]
+    gpx_file = None  # El file_uploader guarda el objeto en session_state["gpx_uploader"]
 
     # Calcular _input_mode desde las claves guardadas (no desde widget que puede no existir)
     _gpx_upload = st.session_state.get("gpx_uploader")
     if _gpx_upload is not None:
         _input_mode = "gpx"
-        gpx_file    = _gpx_upload
+        gpx_file = _gpx_upload
         # Guardar en session_state para que persista en pasos posteriores
         st.session_state["_w_gpx_bytes"] = _gpx_upload.getvalue()
         st.session_state["_w_gpx_name"] = _gpx_upload.name
     elif "_w_gpx_bytes" in st.session_state:
         _input_mode = "gpx"
         import io
+
         gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
-        gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
+        gpx_file.name = st.session_state["_w_gpx_name"]  # type: ignore
     elif st.session_state.get("demo_mode"):
         _input_mode = "demo"
     elif origen_txt or destino_txt:
@@ -463,23 +486,33 @@ def render_mobile_wizard():
     else:
         _input_mode = "texto_vacio"
 
-    combustible_elegido = st.session_state.get("_w_combustible") or st.session_state.get("comb_selectbox", _fuel_default)
-    fuel_column  = COMBUSTIBLES.get(combustible_elegido, COMBUSTIBLES["Gasolina 95"])
+    combustible_elegido = st.session_state.get("_w_combustible") or st.session_state.get(
+        "comb_selectbox", _fuel_default
+    )
+    fuel_column = COMBUSTIBLES.get(combustible_elegido, COMBUSTIBLES["Gasolina 95"])
 
-    usar_vehiculo = st.session_state.get("_w_usar_vehiculo") if "_w_usar_vehiculo" in st.session_state else st.session_state.get("limite_autonomia_chk", False)
-    autonomia_km = st.session_state.get("_w_autonomia") if "_w_autonomia" in st.session_state else st.session_state.get("autonomia_input", 0)
+    usar_vehiculo = (
+        st.session_state.get("_w_usar_vehiculo")
+        if "_w_usar_vehiculo" in st.session_state
+        else st.session_state.get("limite_autonomia_chk", False)
+    )
+    autonomia_km = (
+        st.session_state.get("_w_autonomia")
+        if "_w_autonomia" in st.session_state
+        else st.session_state.get("autonomia_input", 0)
+    )
     if not usar_vehiculo:
         autonomia_km = 0
 
-    radio_km      = st.session_state.get("radio_slider", _buffer_default)
-    top_n         = st.session_state.get("top_slider", _top_default)
-    solo_24h      = st.session_state.get("solo_24h_chk", _solo24h_default)
+    radio_km = st.session_state.get("radio_slider", _buffer_default)
+    top_n = st.session_state.get("top_slider", _top_default)
+    solo_24h = st.session_state.get("solo_24h_chk", _solo24h_default)
     buscar_tramos = st.session_state.get("buscar_tramos_chk", True)
-    segment_km    = st.session_state.get("segment_slider", 50) if buscar_tramos else 0.0
+    segment_km = st.session_state.get("segment_slider", 50) if buscar_tramos else 0.0
     espana_vaciada = st.session_state.get("espana_vaciada_chk", False)
     calcular_desvio = st.session_state.get("calcular_desvio_chk", _desvio_default)
-    buffer_m      = radio_km * 1000
-    run_btn       = False
+    buffer_m = radio_km * 1000
+    run_btn = False
 
     # ══════════════════════════════════════════
     # PASO 1: DEFINICIÓN DE RUTA
@@ -490,20 +523,17 @@ def render_mobile_wizard():
         # el on_change se dispara antes de procesar el botón. Sin Enter.
         def _save_origen():
             st.session_state["_w_origen"] = st.session_state.get("origen_txt", "")
+
         def _save_destino():
             st.session_state["_w_destino"] = st.session_state.get("destino_txt", "")
 
         st.markdown("### 🗺️ Paso 1 — Tu Ruta")
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
         with tab_texto:
-            origen_txt = st.text_input(
-                "Origen", placeholder="Ej: Madrid",
-                key="origen_txt", on_change=_save_origen
-            )
+            origen_txt = st.text_input("Origen", placeholder="Ej: Madrid", key="origen_txt", on_change=_save_origen)
 
             destino_txt = st.text_input(
-                "Destino", placeholder="Ej: Barcelona",
-                key="destino_txt", on_change=_save_destino
+                "Destino", placeholder="Ej: Barcelona", key="destino_txt", on_change=_save_destino
             )
             if origen_txt or destino_txt:
                 _input_mode = "texto"
@@ -512,7 +542,9 @@ def render_mobile_wizard():
                 _input_mode = "texto_vacio"
                 gpx_file = None
         with tab_gpx:
-            gpx_file_upload = st.file_uploader("Sube tu ruta (.gpx)", type=["gpx"], label_visibility="collapsed", key="gpx_uploader")
+            gpx_file_upload = st.file_uploader(
+                "Sube tu ruta (.gpx)", type=["gpx"], label_visibility="collapsed", key="gpx_uploader"
+            )
             if gpx_file_upload is not None:
                 _input_mode = "gpx"
                 gpx_file = gpx_file_upload
@@ -521,8 +553,9 @@ def render_mobile_wizard():
             elif "_w_gpx_bytes" in st.session_state:
                 _input_mode = "gpx"
                 import io
+
                 gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
-                gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
+                gpx_file.name = st.session_state["_w_gpx_name"]  # type: ignore
                 st.info(f"📁 GPX en memoria: {gpx_file.name}")
                 if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1"):
                     del st.session_state["_w_gpx_bytes"]
@@ -540,7 +573,7 @@ def render_mobile_wizard():
         st.markdown("")
         if st.button("Siguiente: Vehículo ›", type="primary", use_container_width=True):
             # Guardar explícitamente (doble seguro, on_change ya debería haberlo hecho)
-            st.session_state["_w_origen"]  = st.session_state.get("origen_txt", "") or origen_txt
+            st.session_state["_w_origen"] = st.session_state.get("origen_txt", "") or origen_txt
             st.session_state["_w_destino"] = st.session_state.get("destino_txt", "") or destino_txt
             st.session_state["wizard_step"] = 2
             st.rerun()
@@ -549,6 +582,7 @@ def render_mobile_wizard():
     # PASO 2: VEHÍCULO Y COMBUSTIBLE
     # ══════════════════════════════════════════
     elif step == 2:
+
         def _save_step2():
             st.session_state["_w_combustible"] = st.session_state.get("comb_selectbox", _fuel_default)
             st.session_state["_w_usar_vehiculo"] = st.session_state.get("limite_autonomia_chk", False)
@@ -561,10 +595,11 @@ def render_mobile_wizard():
             current_comb = _fuel_default
 
         combustible_elegido = st.selectbox(
-            "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
+            "Tipo de Combustible:",
+            options=list(COMBUSTIBLES.keys()),
             index=list(COMBUSTIBLES.keys()).index(current_comb),
             key="comb_selectbox",
-            on_change=_save_step2
+            on_change=_save_step2,
         )
         fuel_column = COMBUSTIBLES[combustible_elegido]
 
@@ -573,10 +608,16 @@ def render_mobile_wizard():
             value=st.session_state.get("_w_usar_vehiculo", st.session_state.get("limite_autonomia_chk", False)),
             help="Mostrar zonas de peligro en el mapa.",
             key="limite_autonomia_chk",
-            on_change=_save_step2
+            on_change=_save_step2,
         )
         if usar_vehiculo:
-            perfil = st.radio("Perfil de Vehículo", ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"], horizontal=False, index=3, key="perfil_vh")
+            perfil = st.radio(
+                "Perfil de Vehículo",
+                ["Moto (🔥 250km)", "Coche Estándar (🚗 600km)", "Coche Gran Autonomía (🔋 900km)", "Manual"],
+                horizontal=False,
+                index=3,
+                key="perfil_vh",
+            )
             if "Moto" in perfil:
                 auto_val = 250
             elif "Estándar" in perfil:
@@ -588,8 +629,13 @@ def render_mobile_wizard():
             if perfil != "Manual":
                 st.session_state["autonomia_input"] = auto_val
             autonomia_km = st.number_input(
-                "Autonomía del Vehículo (km)", min_value=10, max_value=2000,
-                value=auto_val, step=10, disabled=(perfil != "Manual"), key="autonomia_input"
+                "Autonomía del Vehículo (km)",
+                min_value=10,
+                max_value=2000,
+                value=auto_val,
+                step=10,
+                disabled=(perfil != "Manual"),
+                key="autonomia_input",
             )
         else:
             autonomia_km = 0
@@ -610,21 +656,34 @@ def render_mobile_wizard():
     # ══════════════════════════════════════════
     elif step == 3:
         st.markdown("### 🛠️ Paso 3 — Filtros")
-        radio_km = st.slider("Desvío máximo permitido de la ruta (km)", min_value=1, max_value=15, value=_buffer_default, step=1, key="radio_slider")
-        top_n = st.slider("Máximo de gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider")
+        radio_km = st.slider(
+            "Desvío máximo permitido de la ruta (km)",
+            min_value=1,
+            max_value=15,
+            value=_buffer_default,
+            step=1,
+            key="radio_slider",
+        )
+        top_n = st.slider(
+            "Máximo de gasolineras a mostrar", min_value=1, max_value=20, value=_top_default, step=1, key="top_slider"
+        )
         solo_24h = st.checkbox("Mostrar solo gasolineras abiertas 24h", value=_solo24h_default, key="solo_24h_chk")
         buscar_tramos = st.checkbox(
             "Asegurar al menos 1 gasolinera por tramo",
             value=True,
             help="Añade la gasolinera más barata por tramo. Ideal para asegurar autonomía en rutas largas.",
-            key="buscar_tramos_chk"
+            key="buscar_tramos_chk",
         )
         if buscar_tramos:
-            segment_km = st.slider("Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider")
+            segment_km = st.slider(
+                "Intervalo de seguridad (km)", min_value=10, max_value=300, value=50, step=10, key="segment_slider"
+            )
         else:
             segment_km = 0.0
         espana_vaciada = st.checkbox("🏜️ Modo España Vaciada", value=False, key="espana_vaciada_chk")
-        calcular_desvio = st.checkbox("⏱️ Calcular tiempos de desvío reales", value=_desvio_default, key="calcular_desvio_chk")
+        calcular_desvio = st.checkbox(
+            "⏱️ Calcular tiempos de desvío reales", value=_desvio_default, key="calcular_desvio_chk"
+        )
         buffer_m = radio_km * 1000
 
         st.markdown("")
@@ -641,11 +700,16 @@ def render_mobile_wizard():
         rc1, rc2 = st.columns(2)
         with rc1:
             if st.button("🔗 Compartir ajustes", use_container_width=True):
-                st.query_params.update({
-                    "fuel": combustible_elegido, "buffer": str(radio_km),
-                    "top": str(top_n), "solo24h": str(solo_24h), "autonomia": str(autonomia_km),
-                    "desvio": str(calcular_desvio),
-                })
+                st.query_params.update(
+                    {
+                        "fuel": combustible_elegido,
+                        "buffer": str(radio_km),
+                        "top": str(top_n),
+                        "solo24h": str(solo_24h),
+                        "autonomia": str(autonomia_km),
+                        "desvio": str(calcular_desvio),
+                    }
+                )
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones! 📌", icon="🔗")
         with rc2:
             if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
@@ -731,14 +795,16 @@ _pipeline_active = run_btn or _is_demo_first_run
 if run_btn:
     st.session_state.pop("pipeline_results", None)
 
-_using_demo = (_pipeline_active and _input_mode in ("demo", "gpx_vacio") and st.session_state.get("demo_mode"))
+_using_demo = _pipeline_active and _input_mode in ("demo", "gpx_vacio") and st.session_state.get("demo_mode")
 
 if _pipeline_active:
     # ---------------- EARLY VALIDATORS ----------------
     # Robustez: asegurar tipos para validadores
     _buffer_m_val = float(buffer_m) if buffer_m is not None else 0.0
     if _buffer_m_val > 20000:
-        st.error("🚨 La zona de búsqueda es demasiado amplia. Por favor, reduce el radio de desvío a un máximo de 20 km.")
+        st.error(
+            "🚨 La zona de búsqueda es demasiado amplia. Por favor, reduce el radio de desvío a un máximo de 20 km."
+        )
         st.stop()
 
     if _input_mode == "texto":
@@ -757,7 +823,7 @@ if _pipeline_active:
         st.error("📂 Sube tu archivo GPX o escribe origen y destino en la pestaña de texto.")
         st.stop()
 
-    tmp_path = None    # solo se usa en modo GPX
+    tmp_path = None  # solo se usa en modo GPX
     _gpx_bytes = None  # para inyectar paradas luego
 
     if _input_mode == "texto" and _hay_ruta_texto:
@@ -786,33 +852,37 @@ if _pipeline_active:
                 _gpx_bytes = f.read()
         else:
             # Robustez: gpx_file puede venir como bool o None si hubo errores en session_state/wizard
-            _is_file = (gpx_file is not None and
-                       not isinstance(gpx_file, (bool, str, int, float)) and
-                       hasattr(gpx_file, "read"))
+            _is_file = (
+                gpx_file is not None and not isinstance(gpx_file, (bool, str, int, float)) and hasattr(gpx_file, "read")
+            )
 
             if _is_file:
-                _gpx_bytes = gpx_file.read() # type: ignore
+                _gpx_bytes = gpx_file.read()  # type: ignore
             else:
                 _gpx_bytes = b""
                 st.error("❌ No se pudo localizar o leer el archivo GPX. Intenta volver a subirlo.")
                 st.stop()
             if len(_gpx_bytes) > 5 * 1024 * 1024:
-                st.error("❌ El archivo GPX excede el límite de 5MB. Por seguridad contra degradación de memoria, ha sido bloqueado.")
+                st.error(
+                    "❌ El archivo GPX excede el límite de 5MB. Por seguridad contra degradación de memoria, ha sido bloqueado."
+                )
                 st.stop()
 
             try:
                 # Verificación temprana de integridad GPX (solo cabecera para ahorrar RAM)
-                content = _gpx_bytes[:1024].decode('utf-8', errors='ignore')
+                content = _gpx_bytes[:1024].decode("utf-8", errors="ignore")
                 if "<gpx" not in content.lower():
                     raise ValueError("Not a GPX file")
             except Exception:
-                st.error("❌ El archivo subido no parece ser un archivo GPX válido o está corrupto. Intenta volver a exportarlo.")
+                st.error(
+                    "❌ El archivo subido no parece ser un archivo GPX válido o está corrupto. Intenta volver a exportarlo."
+                )
                 st.stop()
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".gpx") as tmp:
                 tmp.write(_gpx_bytes)
                 tmp_path = Path(tmp.name)
-        track = None   # se asigna en el bloque try más abajo
+        track = None  # se asigna en el bloque try más abajo
 
     with st.status("⛽ Analizando tu ruta…", expanded=True) as status:
         try:
@@ -886,7 +956,6 @@ if _pipeline_active:
                     if "km_ruta" in gdf_top.columns:
                         gdf_top = gdf_top.sort_values("km_ruta").reset_index(drop=True)
 
-
             if gdf_top.empty:
                 status.update(label="⚠️ Sin resultados", state="error", expanded=True)
                 st.warning(
@@ -913,7 +982,7 @@ if _pipeline_active:
                         completed_osrm += 1
                         osrm_progress.progress(
                             completed_osrm / total_osrm,
-                            text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}"
+                            text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}",
                         )
 
                         if result is not None:
@@ -949,6 +1018,7 @@ if _pipeline_active:
                 # Usamos distancia geodésica (pyproj Geod) para ser consistentes con
                 # calculate_autonomy_radar(), que mide route_total_km con Geod, no con UTM.
                 import pyproj as _pyproj
+
                 _geod = _pyproj.Geod(ellps="WGS84")
                 _track_coords = list(track.coords)  # track en WGS84
                 _track_line_wgs = track  # ya está en WGS84
@@ -962,28 +1032,27 @@ if _pipeline_active:
                 for _d in _seg_dists:
                     _cum_dist_km.append(_cum_dist_km[-1] + _d / 1000.0)
 
-                # Para cada estación, encontrar km en ruta via proyección lineal normalizada
-                _fracs = [
-                    _track_line_wgs.project(pt, normalized=True)
-                    for pt in gdf_surv_wgs.geometry
-                ]
+                # Para cada estación, encontrar km en ruta via proyección lineal normalizada (C-vectorized)
+                import shapely
+
+                _fracs = shapely.line_locate_point(_track_line_wgs, gdf_surv_wgs.geometry, normalized=True)
                 _total_geod_km = _cum_dist_km[-1]
-                gdf_survival["km_ruta"] = [f * _total_geod_km for f in _fracs]
+                gdf_survival["km_ruta"] = _fracs * _total_geod_km
                 gdf_survival = gdf_survival.sort_values("km_ruta").reset_index(drop=True)
             else:
                 gdf_survival = gdf_survival.iloc[0:0].copy()
 
             st.session_state["pipeline_results"] = {
-                "gdf_top":          gdf_top,
-                "gdf_within":       gdf_survival,  # [CORREGIDO] Solo gasolineras que SÍ te pueden repostar
+                "gdf_top": gdf_top,
+                "gdf_within": gdf_survival,  # [CORREGIDO] Solo gasolineras que SÍ te pueden repostar
                 "gdf_within_count": len(gdf_within),
-                "precio_zona_max":  _precio_max_zona,
-                "track":            track,
-                "track_utm":        track_utm,
-                "using_demo":       _using_demo,
-                "using_gpx":        _input_mode in ("gpx", "demo"),
-                "gpx_bytes":        _gpx_bytes,
-                "espana_vaciada":   espana_vaciada,
+                "precio_zona_max": _precio_max_zona,
+                "track": track,
+                "track_utm": track_utm,
+                "using_demo": _using_demo,
+                "using_gpx": _input_mode in ("gpx", "demo"),
+                "gpx_bytes": _gpx_bytes,
+                "espana_vaciada": espana_vaciada,
             }
 
         except RouteTextError as exc:
@@ -1015,22 +1084,24 @@ if _pipeline_active:
 # (tanto tras el pipeline como en reruns por interacción con la UI)
 # -----------------------------------------------------------------------
 if "pipeline_results" in st.session_state:
-    _r              = st.session_state["pipeline_results"]
-    gdf_top         = _r["gdf_top"]
+    _r = st.session_state["pipeline_results"]
+    gdf_top = _r["gdf_top"]
 
     # Restituimos variables derivadas ligeras en lugar del gdf_within completo
-    total_zona      = _r.get("gdf_within_count", 0)
+    total_zona = _r.get("gdf_within_count", 0)
     precio_zona_max = _r.get("precio_zona_max", 0.0)
 
-    track           = _r["track"]
-    track_utm       = _r["track_utm"]
-    _using_demo     = _r["using_demo"]
-    _using_gpx      = _r.get("using_gpx", False)
-    _gpx_bytes      = _r.get("gpx_bytes")
-    espana_vaciada  = _r.get("espana_vaciada", False)
+    track = _r["track"]
+    track_utm = _r["track_utm"]
+    _using_demo = _r["using_demo"]
+    _using_gpx = _r.get("using_gpx", False)
+    _gpx_bytes = _r.get("gpx_bytes")
+    espana_vaciada = _r.get("espana_vaciada", False)
 
     if _using_demo:
-        st.info("🧭 **Modo Demo activo** — Ruta Circular Sierra de Gredos (6 Puertos). Sube tu propio GPX desde el panel lateral cuando quieras.")
+        st.info(
+            "🧭 **Modo Demo activo** — Ruta Circular Sierra de Gredos (6 Puertos). Sube tu propio GPX desde el panel lateral cuando quieras."
+        )
     if espana_vaciada:
         st.info(
             "🏜️ **Modo España Vaciada activo** — Mostrando **todas** las gasolineras en un corredor de 500 m a "
@@ -1046,14 +1117,16 @@ if "pipeline_results" in st.session_state:
     ]
     _sel = st.session_state.get("map_selected_station", {})
     map_center = _sel.get("center", _default_center)
-    map_zoom   = _sel.get("zoom", 8)
+    map_zoom = _sel.get("zoom", 8)
 
     # 1. KPIs principales
     precio_top_min = float(gdf_top[fuel_column].min()) if not gdf_top.empty else 0.0
     total_mostradas = len(gdf_top)
     ahorro_vs_caro = precio_zona_max - precio_top_min
 
-    ui_components.render_metric_cards(precio_top_min, ahorro_vs_caro, total_mostradas, total_zona, radio_km, fuel_column)
+    ui_components.render_metric_cards(
+        precio_top_min, ahorro_vs_caro, total_mostradas, total_zona, radio_km, fuel_column
+    )
 
     st.divider()
 
@@ -1071,10 +1144,12 @@ if "pipeline_results" in st.session_state:
 
         _sel = st.session_state.get("map_selected_station", {})
         map_center = _sel.get("center", _default_center)
-        map_zoom   = _sel.get("zoom", 8)
+        map_zoom = _sel.get("zoom", 8)
 
         if _sel.get("nombre"):
-            st.caption(f"📍 Centrado en: **{_sel['nombre']}** — haz clic en otro marcador o fila de la tabla para cambiar.")
+            st.caption(
+                f"📍 Centrado en: **{_sel['nombre']}** — haz clic en otro marcador o fila de la tabla para cambiar."
+            )
         elif _autonomia_val > 0:
             st.caption(
                 "Los segmentos **rojos discontinuos** indican tramos donde no hay gasolinera "
@@ -1107,7 +1182,7 @@ if "pipeline_results" in st.session_state:
             gdf_top_stations=gdf_top,
             fuel_column=fuel_column,
             autonomy_km=float(autonomia_km) if autonomia_km is not None and not isinstance(autonomia_km, bool) else 0.0,
-            gdf_all_stations=_r.get("gdf_within")
+            gdf_all_stations=_r.get("gdf_within"),
         )
 
         st_folium(
@@ -1130,12 +1205,12 @@ if "pipeline_results" in st.session_state:
     # -----------------------------------------------------------------------
 
     COLS = {
-        "km_ruta":            "Km en Ruta",
-        "Rótulo":             "Marca",
-        "Municipio":          "Municipio",
-        fuel_column:          f"Precio {combustible_elegido} (€/L)",
-        "osrm_duration_min":  "Desvío (min)",
-        "Horario":            "Horario",
+        "km_ruta": "Km en Ruta",
+        "Rótulo": "Marca",
+        "Municipio": "Municipio",
+        fuel_column: f"Precio {combustible_elegido} (€/L)",
+        "osrm_duration_min": "Desvío (min)",
+        "Horario": "Horario",
     }
 
     col_map = {}
@@ -1149,7 +1224,11 @@ if "pipeline_results" in st.session_state:
     # Combinar Marca + Municipio en una sola columna "Marca"
     if "Marca" in df_show.columns and "Municipio" in df_show.columns:
         df_show["Marca"] = df_show.apply(
-            lambda r: f"{r['Marca']}, {r['Municipio']}" if pd.notna(r['Municipio']) and str(r['Municipio']).strip() else str(r['Marca']),
+            lambda r: (
+                f"{r['Marca']}, {r['Municipio']}"
+                if pd.notna(r["Municipio"]) and str(r["Municipio"]).strip()
+                else str(r["Marca"])
+            ),
             axis=1,
         )
         df_show = df_show.drop(columns=["Municipio"])
@@ -1167,10 +1246,7 @@ if "pipeline_results" in st.session_state:
             col_map.pop("osrm_duration_min", None)
         else:
             # Formatear: número → "X min", NaN → "—"
-            df_show[_desvio_col] = _raw.apply(
-                lambda x: f"{int(round(x))} min" if pd.notna(x) else "—"
-            )
-
+            df_show[_desvio_col] = _raw.apply(lambda x: f"{int(round(x))} min" if pd.notna(x) else "—")
 
     precio_col_label = f"Precio {combustible_elegido} (€/L)"
 
@@ -1182,16 +1258,21 @@ if "pipeline_results" in st.session_state:
 
     # Construir URL de Google Maps para cada dirección (desde gdf_top, que conserva columnas originales)
     if "Dirección" in gdf_top.columns and "Municipio" in gdf_top.columns:
-        df_show["_maps_url"] = gdf_top[["Dirección", "Municipio"]].apply(
-            lambda r: "https://maps.google.com/?q=" + urllib.parse.quote_plus(
-                f"{r.get('Dirección', '')}, {r.get('Municipio', '')}"
-            ),
-            axis=1,
-        ).values
+        df_show["_maps_url"] = (
+            gdf_top[["Dirección", "Municipio"]]
+            .apply(
+                lambda r: (
+                    "https://maps.google.com/?q="
+                    + urllib.parse.quote_plus(f"{r.get('Dirección', '')}, {r.get('Municipio', '')}")
+                ),
+                axis=1,
+            )
+            .values
+        )
     elif "Dirección" in gdf_top.columns:
-        df_show["_maps_url"] = gdf_top["Dirección"].apply(
-            lambda d: "https://maps.google.com/?q=" + urllib.parse.quote_plus(str(d))
-        ).values
+        df_show["_maps_url"] = (
+            gdf_top["Dirección"].apply(lambda d: "https://maps.google.com/?q=" + urllib.parse.quote_plus(str(d))).values
+        )
 
     # Coordenadas WGS84 de cada gasolinera (para el zoom del mapa)
     gdf_top_wgs84 = gdf_top.to_crs("EPSG:4326")
@@ -1256,9 +1337,7 @@ if "pipeline_results" in st.session_state:
             ),
             # La dirección se muestra como enlace a Google Maps
             "_maps_url": st.column_config.LinkColumn(
-                "Ruta Google",
-                help="Abre Google Maps para navegar hasta esta estación.",
-                display_text="Ver en Maps ↗"
+                "Ruta Google", help="Abre Google Maps para navegar hasta esta estación.", display_text="Ver en Maps ↗"
             ),
             # Ocultar la columna de texto plano (ya está en el enlace)
             "Dirección": None,
@@ -1285,7 +1364,7 @@ if "pipeline_results" in st.session_state:
                 sel_nombre = df_show.iloc[sel_idx].get("Marca", "la gasolinera")
                 st.session_state["map_selected_station"] = {
                     "center": list(station_coords[sel_idx]),
-                    "zoom":   15,
+                    "zoom": 15,
                     "nombre": sel_nombre,
                 }
                 st.session_state["last_selected_idx"] = sel_idx
@@ -1300,8 +1379,7 @@ if "pipeline_results" in st.session_state:
             coords_y, coords_x = station_coords[sel_idx]
 
             ya_en_plan = any(
-                p.get("_geom_x") == coords_x and p.get("_geom_y") == coords_y
-                for p in st.session_state["mis_paradas"]
+                p.get("_geom_x") == coords_x and p.get("_geom_y") == coords_y for p in st.session_state["mis_paradas"]
             )
 
             if ya_en_plan:
@@ -1336,7 +1414,9 @@ if "pipeline_results" in st.session_state:
     @st.fragment
     def render_trip_plan():
         if not st.session_state["mis_paradas"]:
-            st.info("Aún no has añadido ninguna parada. Selecciona una fila en la tabla superior y haz clic en 'Añadir a Mi Plan de Viaje'.")
+            st.info(
+                "Aún no has añadido ninguna parada. Selecciona una fila en la tabla superior y haz clic en 'Añadir a Mi Plan de Viaje'."
+            )
         else:
             df_plan = pd.DataFrame(st.session_state["mis_paradas"])
             df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
@@ -1369,7 +1449,8 @@ if "pipeline_results" in st.session_state:
                             geom_x = row.get("_geom_x")
                             geom_y = row.get("_geom_y")
                             st.session_state["mis_paradas"] = [
-                                p for p in parada_a_borrar
+                                p
+                                for p in parada_a_borrar
                                 if not (p.get("_geom_x") == geom_x and p.get("_geom_y") == geom_y)
                             ]
                             st.toast(f"🗑️ {marca} eliminada del plan")
@@ -1388,7 +1469,7 @@ if "pipeline_results" in st.session_state:
                         label=f"💰 Ahorro estimado vs. la más cara de la zona (depósito {_litros_ref}L)",
                         value=f"{_ahorro_total_eur:.2f} €",
                         delta=f"{_ahorro_total:.3f} €/L más barato",
-                        help="Estimación basada en un depósito de referencia de 50L. El ahorro real depende del tamaño real de tu depósito."
+                        help="Estimación basada en un depósito de referencia de 50L. El ahorro real depende del tamaño real de tu depósito.",
                     )
 
             c1, c2 = st.columns([1, 1])
@@ -1402,18 +1483,15 @@ if "pipeline_results" in st.session_state:
 
             # Reconstruir un GDF temporal para la exportación usando EPSG:4326 a través de un módulo puro
             gdf_export = prepare_export_gdf(
-                st.session_state["mis_paradas"],
-                fuel_column=fuel_column,
-                precio_col_label=precio_col_label
+                st.session_state["mis_paradas"], fuel_column=fuel_column, precio_col_label=precio_col_label
             )
-
 
             gmaps_url, omitidas = generate_google_maps_url(track, gdf_export)
             st.link_button(
                 "📱 Abrir Ruta en Google Maps con mis paradas",
                 url=gmaps_url,
                 type="primary",
-                help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil."
+                help="Abre la ruta con todas las paradas en Google Maps web o en tu app móvil.",
             )
             if omitidas > 0:
                 st.warning(
@@ -1422,16 +1500,12 @@ if "pipeline_results" in st.session_state:
                 )
 
             if _using_gpx and _gpx_bytes:
-                gpx_xml_con_paradas = enrich_gpx_with_stops(
-                    _gpx_bytes,
-                    gdf_export,
-                    fuel_column=fuel_column
-                )
+                gpx_xml_con_paradas = enrich_gpx_with_stops(_gpx_bytes, gdf_export, fuel_column=fuel_column)
                 st.download_button(
                     label="💾 Descargar GPX Original + Mis Paradas",
                     data=gpx_xml_con_paradas,
                     file_name="ruta_optimizada.gpx",
-                    mime="application/gpx+xml"
+                    mime="application/gpx+xml",
                 )
 
     render_trip_plan()
