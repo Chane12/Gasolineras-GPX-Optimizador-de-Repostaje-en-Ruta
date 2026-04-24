@@ -183,12 +183,12 @@ def render_station_cards(df_show, precio_col_label: str, station_coords: list, m
             btn_cols = st.columns([1, 1])
             with btn_cols[0]:
                 if maps_url and maps_url != "nan":
-                    st.link_button("🗺️ Maps", url=maps_url, use_container_width=True)
+                    st.link_button("🗺️ Maps", url=maps_url, use_container_width=True, help="Abre esta ubicación en Google Maps.")
             with btn_cols[1]:
                 if ya_en_plan:
-                    st.button("✅ En plan", key=f"card_plan_{i}", disabled=True, use_container_width=True)
+                    st.button("✅ En plan", key=f"card_plan_{i}", disabled=True, use_container_width=True, help="Esta estación ya ha sido añadida a tu plan de viaje.")
                 else:
-                    if st.button("➕ Añadir", key=f"card_add_{i}", use_container_width=True, type="primary"):
+                    if st.button("➕ Añadir", key=f"card_add_{i}", use_container_width=True, type="primary", help="Añade esta estación a tu plan de viaje."):
                         parada_to_add = (i, coords_x, coords_y, row)
 
     return parada_to_add

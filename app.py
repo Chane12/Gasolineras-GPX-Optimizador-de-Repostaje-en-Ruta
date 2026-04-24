@@ -54,7 +54,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +63,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
@@ -360,7 +360,7 @@ def render_controls():
         # Acciones Extra
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("🔗 Compartir ajustes", use_container_width=True):
+            if st.button("🔗 Compartir ajustes", use_container_width=True, help="Copia una URL con tus ajustes actuales para compartirla."):
                 st.query_params.update({
                     "fuel":       combustible_elegido,
                     "buffer":     str(radio_km),
@@ -372,7 +372,7 @@ def render_controls():
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones para compartirla! 📌", icon="🔗")
 
         with rc2:
-            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary", help="Borra todos los filtros y rutas y vuelve al estado inicial."):
                 st.query_params.clear()
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
@@ -524,7 +524,7 @@ def render_mobile_wizard():
                 gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
                 gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
                 st.info(f"📁 GPX en memoria: {gpx_file.name}")
-                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1"):
+                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1", help="Elimina el archivo GPX actual para poder subir uno nuevo."):
                     del st.session_state["_w_gpx_bytes"]
                     del st.session_state["_w_gpx_name"]
                     st.rerun()
@@ -640,7 +640,7 @@ def render_mobile_wizard():
         st.markdown("---")
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("🔗 Compartir ajustes", use_container_width=True):
+            if st.button("🔗 Compartir ajustes", use_container_width=True, help="Copia una URL con tus ajustes actuales para compartirla."):
                 st.query_params.update({
                     "fuel": combustible_elegido, "buffer": str(radio_km),
                     "top": str(top_n), "solo24h": str(solo_24h), "autonomia": str(autonomia_km),
@@ -648,7 +648,7 @@ def render_mobile_wizard():
                 })
                 st.toast("✅ URL actualizada. ¡Copia la barra de direcciones! 📌", icon="🔗")
         with rc2:
-            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary"):
+            if st.button("🔄 Reiniciar App", use_container_width=True, type="secondary", help="Borra todos los filtros y rutas y vuelve al estado inicial."):
                 st.query_params.clear()
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
@@ -1393,7 +1393,7 @@ if "pipeline_results" in st.session_state:
 
             c1, c2 = st.columns([1, 1])
             with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
+                if st.button("🗑️ Vaciar Mi Plan", type="secondary", help="Elimina todas las gasolineras que has añadido a tu plan de viaje."):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
 
