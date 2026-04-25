@@ -41,9 +41,15 @@ def calculate_autonomy_radar(
     _, _, _dists_m = _geod_radar.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
     route_total_km = sum(_dists_m) / 1000.0
 
+    # ⚡ BOLT OPTIMIZATION:
+    # Sort the GeoDataFrame exactly once outside the loop instead of doing it up to twice
+    # per iteration inside the loop. This reduces the complexity from O(N * M log M)
+    # to O(M log M + N), significantly speeding up the autonomy radar calculation when N and M are large.
     station_km_list: list[float] = []
+    sorted_gdf = None
     if not gdf_top.empty and "km_ruta" in gdf_top.columns:
-        station_km_list = sorted(gdf_top["km_ruta"].dropna().tolist())
+        sorted_gdf = gdf_top.sort_values("km_ruta")
+        station_km_list = sorted_gdf["km_ruta"].dropna().tolist()
 
     checkpoints = [0.0] + station_km_list + [route_total_km]
     tramos: list[dict] = []
@@ -75,16 +81,15 @@ def calculate_autonomy_radar(
 
         if j == 0 and station_km_list:
             nombre_origen = "Inicio de ruta"
-            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
+            nombre_destino = sorted_gdf.iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
         elif j == len(checkpoints) - 2 and station_km_list:
             nombre_origen = (
-                gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
+                sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
                 if j > 0
                 else "Inicio"
             )
             nombre_destino = "Fin de ruta"
         elif station_km_list and 0 < j < len(station_km_list):
-            sorted_gdf = gdf_top.sort_values("km_ruta")
             nombre_origen = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
             nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j + 1}")
         else:

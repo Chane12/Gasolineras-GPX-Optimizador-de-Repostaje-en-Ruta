@@ -1,0 +1,3 @@
+## 2024-05-19 - Redundant Dataframe sorting in loops
+**Learning:** Found a critical performance bottleneck where a pandas/geopandas DataFrame was being re-sorted on every single iteration of a loop over route checkpoints (`gdf_top.sort_values("km_ruta")` inside `for j in range(len(checkpoints) - 1)`). This led to O(N * M log M) complexity, turning a simple linear scan into a very slow operation as the number of stations grows.
+**Action:** Always extract static sorting operations outside of loops in data processing algorithms to avoid exponential complexity growth, reducing time to O(M log M + N). Check for `df.sort_values` calls within loop scopes.
