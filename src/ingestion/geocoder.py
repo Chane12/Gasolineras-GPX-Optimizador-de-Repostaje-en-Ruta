@@ -107,9 +107,7 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
             print(f"[Geocode] Error en {ep['url']}: {exc}")
             continue
 
-    raise RouteTextError(
-        f"Error al geocodificar «{lugar}» tras intentar varios servidores. Último error: {last_err}"
-    )
+    raise RouteTextError(f"Error al geocodificar «{lugar}» tras intentar varios servidores. Último error: {last_err}")
 
 
 def get_route_from_text(origen: str, destino: str) -> LineString:
@@ -168,9 +166,7 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
             data = None
 
     if data is None:
-        raise RouteTextError(
-            f"No se pudo contactar con ningún servicio de OSRM. Último error: {last_err}"
-        )
+        raise RouteTextError(f"No se pudo contactar con ningún servicio de OSRM. Último error: {last_err}")
 
     try:
         routes = data.get("routes", [])

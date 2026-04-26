@@ -24,8 +24,7 @@ CRS_UTM30N: str = "EPSG:25830"
 # MITECO API
 # ---------------------------------------------------------------------------
 MITECO_API_URL: str = (
-    "https://sedeaplicaciones.minetur.gob.es"
-    "/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
+    "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
 )
 
 PRICE_COLUMNS: list[str] = [

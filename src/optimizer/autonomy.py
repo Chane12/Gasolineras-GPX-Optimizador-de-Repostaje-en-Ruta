@@ -42,8 +42,11 @@ def calculate_autonomy_radar(
     route_total_km = sum(_dists_m) / 1000.0
 
     station_km_list: list[float] = []
+    sorted_gdf = None
     if not gdf_top.empty and "km_ruta" in gdf_top.columns:
         station_km_list = sorted(gdf_top["km_ruta"].dropna().tolist())
+        # Cache the sorted dataframe to prevent redundant sorting in the loop (O(N * M log M) bottleneck)
+        sorted_gdf = gdf_top.sort_values("km_ruta")
 
     checkpoints = [0.0] + station_km_list + [route_total_km]
     tramos: list[dict] = []
@@ -73,18 +76,13 @@ def calculate_autonomy_radar(
             emoji = "🟢"
             label = "—"
 
-        if j == 0 and station_km_list:
+        if j == 0 and station_km_list and sorted_gdf is not None:
             nombre_origen = "Inicio de ruta"
-            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
-        elif j == len(checkpoints) - 2 and station_km_list:
-            nombre_origen = (
-                gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
-                if j > 0
-                else "Inicio"
-            )
+            nombre_destino = sorted_gdf.iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
+        elif j == len(checkpoints) - 2 and station_km_list and sorted_gdf is not None:
+            nombre_origen = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
             nombre_destino = "Fin de ruta"
-        elif station_km_list and 0 < j < len(station_km_list):
-            sorted_gdf = gdf_top.sort_values("km_ruta")
+        elif station_km_list and 0 < j < len(station_km_list) and sorted_gdf is not None:
             nombre_origen = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
             nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j + 1}")
         else:
