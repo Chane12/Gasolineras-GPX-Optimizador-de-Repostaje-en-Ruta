@@ -1,0 +1,3 @@
+## 2024-04-26 - Tooltips for Disabled Streamlit Buttons
+**Learning:** In Streamlit applications, disabled buttons (like "✅ En plan" when a station is already added) provide no feedback to the user on *why* they are disabled, leading to potential confusion.
+**Action:** Always utilize the `help` parameter in `st.button` and `st.link_button` to provide context, especially for disabled states, improving clarity and screen reader accessibility.
