@@ -102,9 +102,7 @@ def spatial_join_within_buffer(
         Subconjunto de gasolineras dentro del buffer.
     """
     if gdf_stations.crs != gdf_buffer.crs:
-        raise ValueError(
-            f"CRS mismatch: estaciones={gdf_stations.crs}, buffer={gdf_buffer.crs}"
-        )
+        raise ValueError(f"CRS mismatch: estaciones={gdf_stations.crs}, buffer={gdf_buffer.crs}")
 
     gdf_joined = gpd.sjoin(
         gdf_stations,

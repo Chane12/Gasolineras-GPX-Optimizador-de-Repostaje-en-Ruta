@@ -30,6 +30,7 @@ from src.spatial.nearest import build_kdtree_from_points, query_nearest
 # 1. INGESTION — GPX parsing (via src.ingestion.gpx_parser)
 # ===================================================================
 
+
 class TestGPXIngestionModular:
     """Same tests as TestGPXIngestion but importing from src/."""
 
@@ -71,8 +72,8 @@ class TestGPXIngestionModular:
 # 2. SPATIAL ENGINE (via src.spatial.engine)
 # ===================================================================
 
-class TestSpatialEngineModular:
 
+class TestSpatialEngineModular:
     def test_build_route_buffer_returns_geodataframe(self, sample_track: LineString):
         gdf_buf = build_route_buffer(sample_track, buffer_meters=5000)
         assert isinstance(gdf_buf, gpd.GeoDataFrame)
@@ -110,6 +111,7 @@ class TestSpatialEngineModular:
 # 3. SPATIAL NEAREST (via src.spatial.nearest)
 # ===================================================================
 
+
 class TestSpatialNearestModular:
     """Tests specific to the new KD-Tree utility module."""
 
@@ -132,8 +134,8 @@ class TestSpatialNearestModular:
 # 4. OPTIMIZER (via src.optimizer.cheapest)
 # ===================================================================
 
-class TestOptimizerModular:
 
+class TestOptimizerModular:
     @pytest.fixture
     def gdf_within(self, sample_track, fake_stations_df):
         gdf_buf = build_route_buffer(sample_track, buffer_meters=10_000)
@@ -182,8 +184,8 @@ class TestOptimizerModular:
 # 5. EXPORT (via src.optimizer.export)
 # ===================================================================
 
-class TestExportModular:
 
+class TestExportModular:
     def test_google_maps_url_generation(self, sample_track):
         gdf_stops = gpd.GeoDataFrame(
             {"Rótulo": ["Test Station"]},
@@ -210,6 +212,7 @@ class TestExportModular:
 # 6. FULL PIPELINE SNAPSHOT — GOLDEN OUTPUT COMPARISON
 # ===================================================================
 
+
 class TestPipelineSnapshotModular:
     """
     Mirror of TestPipelineSnapshot but using src/ imports.
@@ -232,9 +235,7 @@ class TestPipelineSnapshotModular:
         gdf_track_utm = gpd.GeoDataFrame(geometry=[track_simp], crs=CRS_WGS84).to_crs(CRS_UTM30N)
         track_utm = gdf_track_utm.geometry.iloc[0]
 
-        gdf_top = filter_cheapest_stations(
-            gdf_within, fuel_column="Precio Gasoleo A", top_n=3, track_utm=track_utm
-        )
+        gdf_top = filter_cheapest_stations(gdf_within, fuel_column="Precio Gasoleo A", top_n=3, track_utm=track_utm)
 
         assert isinstance(gdf_top, gpd.GeoDataFrame)
         assert "precio_seleccionado" in gdf_top.columns
@@ -264,5 +265,3 @@ class TestPipelineSnapshotModular:
             prices_a = result_a["precio_seleccionado"].tolist()
             prices_b = result_b["precio_seleccionado"].tolist()
             assert prices_a == prices_b, "Pipeline output is not deterministic"
-
-

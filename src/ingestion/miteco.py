@@ -21,6 +21,7 @@ from src.config import COORD_COLUMNS, MITECO_API_URL, PRICE_COLUMNS, PROJECT_ROO
 @dataclass(frozen=True)
 class MitecoResult:
     """Encapsula los datos del MITECO junto con el timestamp de descarga."""
+
     df: pd.DataFrame
     fetched_at: datetime
 
@@ -54,10 +55,7 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
         print("[MITECO] Conexión directa exitosa.")
     except (requests.exceptions.RequestException, json.decoder.JSONDecodeError) as exc:
         _err_direct = exc
-        print(
-            f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). "
-            "Probando proxies públicos..."
-        )
+        print(f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). Probando proxies públicos...")
 
     # ----------------------------------------------------------------
     # Intentos 2-4 — proxies de paso en cascada
@@ -75,7 +73,7 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
             proxy_name = proxy_url.split("//")[1].split("/")[0]
             try:
                 print(f"[MITECO] Intentando proxy: {proxy_name}...")
-                resp = requests.get(proxy_url, headers=headers, timeout=5) # Timeout estricto reducido a 5s
+                resp = requests.get(proxy_url, headers=headers, timeout=5)  # Timeout estricto reducido a 5s
                 resp.raise_for_status()
 
                 if "allorigins.win/get" in proxy_url:

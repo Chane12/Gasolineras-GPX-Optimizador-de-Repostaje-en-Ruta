@@ -213,13 +213,13 @@ def generate_map(
             <div class="popup-price-box" style="text-align:center; border-radius:8px; padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color}; line-height:1;">{f"{precio:.3f}" if not math.isnan(precio) else "N/A"} €/L</div>
                 <div class="popup-price-subtitle" style="font-size:0.78rem; margin-top:2px;">
-                    {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp; Km {row.get('km_ruta', 0):.1f} en ruta</div>
+                    {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp; Km {row.get("km_ruta", 0):.1f} en ruta</div>
             </div>
             {osrm_line}
             <div class="popup-text" style="font-size:0.82em; margin:4px 0;">
                 &#128205; {direccion}<br>{municipio}, {provincia}</div>
             <div class="popup-text-muted" style="font-size:0.78em; margin:4px 0;">
-                &#128336; {horario if horario else '—'}</div>
+                &#128336; {horario if horario else "—"}</div>
             <a href="{maps_url}" target="_blank" class="popup-btn" style="
                 display:block; margin-top:10px; padding:8px;
                 background:#2563eb; color:white; text-align:center;
