@@ -14,6 +14,7 @@ import argparse
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 
 from src.config import CRS_UTM30N, CRS_WGS84, PROJECT_ROOT
 from src.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track

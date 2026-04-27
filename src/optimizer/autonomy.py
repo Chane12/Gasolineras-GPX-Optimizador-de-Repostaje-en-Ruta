@@ -48,6 +48,10 @@ def calculate_autonomy_radar(
     checkpoints = [0.0] + station_km_list + [route_total_km]
     tramos: list[dict] = []
 
+    # ⚡ Bolt Optimization: Sort operation extracted outside the loop.
+    # This prevents redundant O(N * M log M) sorting on each iteration of the checkpoints loop.
+    sorted_gdf = gdf_top.sort_values("km_ruta") if station_km_list else None
+
     for j in range(len(checkpoints) - 1):
         km_inicio = checkpoints[j]
         km_fin = checkpoints[j + 1]
@@ -73,18 +77,18 @@ def calculate_autonomy_radar(
             emoji = "🟢"
             label = "—"
 
+
         if j == 0 and station_km_list:
             nombre_origen = "Inicio de ruta"
-            nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
+            nombre_destino = sorted_gdf.iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
         elif j == len(checkpoints) - 2 and station_km_list:
             nombre_origen = (
-                gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
+                sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
                 if j > 0
                 else "Inicio"
             )
             nombre_destino = "Fin de ruta"
         elif station_km_list and 0 < j < len(station_km_list):
-            sorted_gdf = gdf_top.sort_values("km_ruta")
             nombre_origen = sorted_gdf.iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
             nombre_destino = sorted_gdf.iloc[j].get("Rótulo", f"Gasolinera #{j + 1}")
         else:
