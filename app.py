@@ -54,7 +54,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +63,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
@@ -1362,8 +1362,9 @@ if "pipeline_results" in st.session_state:
                     with c_info:
                         st.markdown(f"**⛽ {marca}** &nbsp;&nbsp; `{precio_str}`")
                         st.caption(f"Km {km_val:.1f} en ruta · Tramo desde anterior: {tramo_val:.1f} km")
-                    with c_del:
-                        if st.button("🗑️", key=f"del_parada_{i}", help=f"Eliminar {marca} del plan"):
+                    with c_del, st.popover("🗑️", help=f"Eliminar {marca} del plan"):
+                        st.markdown(f"¿Eliminar **{marca}**?")
+                        if st.button("Confirmar", key=f"del_parada_{i}", type="primary"):
                             # Eliminar por índice en la lista original (ordenada igual)
                             parada_a_borrar = st.session_state["mis_paradas"]
                             geom_x = row.get("_geom_x")
@@ -1392,8 +1393,9 @@ if "pipeline_results" in st.session_state:
                     )
 
             c1, c2 = st.columns([1, 1])
-            with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
+            with c1, st.popover("🗑️ Vaciar Mi Plan", help="Eliminar todas las paradas de tu plan"):
+                st.markdown("¿Seguro que deseas vaciar tu plan de viaje?")
+                if st.button("Confirmar", type="primary"):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
 
