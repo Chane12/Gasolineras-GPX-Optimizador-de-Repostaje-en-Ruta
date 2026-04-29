@@ -39,8 +39,11 @@ def prepare_export_gdf(
     if "Km en Ruta" in df_plan.columns:
         df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
 
-    geometrias = [Point(row["_geom_x"], row["_geom_y"]) for _, row in df_plan.iterrows()]
-    gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
+    gdf_export = gpd.GeoDataFrame(
+        df_plan,
+        geometry=gpd.points_from_xy(df_plan["_geom_x"], df_plan["_geom_y"]),
+        crs="EPSG:4326",
+    )
 
     if "Marca" in gdf_export.columns:
         gdf_export["Rótulo"] = gdf_export["Marca"]
@@ -80,7 +83,11 @@ def generate_google_maps_url(
     waypoints_str = ""
     if gdf_stops is not None and not gdf_stops.empty:
         gdf_wgs84 = gdf_stops.to_crs("EPSG:4326")
-        stops_all = [f"{row.geometry.y:.6f},{row.geometry.x:.6f}" for _, row in gdf_wgs84.iterrows()]
+        # Vectorized extraction of coordinates for Google Maps URL
+        stops_all = [
+            f"{y:.6f},{x:.6f}"
+            for y, x in zip(gdf_wgs84.geometry.y, gdf_wgs84.geometry.x, strict=False)
+        ]
         if len(stops_all) > GMAPS_MAX_WAYPOINTS:
             n_truncated = len(stops_all) - GMAPS_MAX_WAYPOINTS
             stops_all = stops_all[:GMAPS_MAX_WAYPOINTS]
@@ -171,9 +178,7 @@ def enrich_stations_with_osrm(
     for idx, pt in zip(gdf_wgs84.index, nearest_points, strict=False):
         rutas_origen_dict[idx] = (pt.x, pt.y)
 
-    def process_station(idx, row_wgs84):
-        gas_lon = row_wgs84.geometry.x
-        gas_lat = row_wgs84.geometry.y
+    def process_station(idx, gas_lon, gas_lat):
         origin_lon, origin_lat = rutas_origen_dict[idx]
 
         max_retries = 3
@@ -202,8 +207,8 @@ def enrich_stations_with_osrm(
     # pero manteniendo fiabilidad frente a cuelgues, tal y como se requiere.
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(process_station, idx, row): idx
-            for idx, row in gdf_wgs84.iterrows()
+            executor.submit(process_station, idx, geom.x, geom.y): idx
+            for idx, geom in zip(gdf_wgs84.index, gdf_wgs84.geometry, strict=False)
         }
 
         # as_completed permite que main thread vaya haciendo el progresivo yield
@@ -241,14 +246,22 @@ def enrich_gpx_with_stops(
 
     # 1. Create waypoints
     paradas = []
-    for i, (_, row) in enumerate(gdf_wgs84.iterrows(), start=1):
-        lat = row.geometry.y
-        lon = row.geometry.x
 
-        rotulo = row.get("Rótulo", f"Gasolinera #{i}")
-        litros = row.get("litros_a_repostar", 0.0)
-        coste = row.get("coste_parada_eur", 0.0)
-        precio = row.get(fuel_column, 0.0) if fuel_column else 0.0
+    # Optimized waypoint creation using zip to avoid iterrows()
+    lats = gdf_wgs84.geometry.y.values
+    lons = gdf_wgs84.geometry.x.values
+    rotulos = gdf_wgs84["Rótulo"].values if "Rótulo" in gdf_wgs84.columns else [None] * len(gdf_wgs84)
+    litros_list = (
+        gdf_wgs84["litros_a_repostar"].values if "litros_a_repostar" in gdf_wgs84.columns else [0.0] * len(gdf_wgs84)
+    )
+    costes = gdf_wgs84["coste_parada_eur"].values if "coste_parada_eur" in gdf_wgs84.columns else [0.0] * len(gdf_wgs84)
+    precios = gdf_wgs84[fuel_column].values if fuel_column and fuel_column in gdf_wgs84.columns else [0.0] * len(gdf_wgs84)
+
+    for i, (lat, lon, rotulo_raw, litros, coste, precio) in enumerate(
+        zip(lats, lons, rotulos, litros_list, costes, precios, strict=False),
+        start=1,
+    ):
+        rotulo = rotulo_raw if pd.notna(rotulo_raw) else f"Gasolinera #{i}"
 
         nombre_wpt = (
             f"⛽ {i}. {rotulo} | {litros:.1f} L @ {precio:.3f} €/L = {coste:.2f} €"
