@@ -1350,30 +1350,7 @@ if "pipeline_results" in st.session_state:
             df_plan["Tramo (km)"] = tramos_km
 
             # --- Renderizar filas manualmente con botón borrar por parada (Fix D6) ---
-            st.markdown("**Tus paradas de repostaje:**")
-            for i, row in df_plan.iterrows():
-                marca = row.get("Marca", "Estación")
-                precio_val = row.get(precio_col_label, None)
-                tramo_val = row.get("Tramo (km)", 0)
-                km_val = row.get("Km en Ruta", 0)
-                precio_str = f"{precio_val:.3f} €/L" if precio_val is not None else "—"
-                with st.container(border=True):
-                    c_info, c_del = st.columns([5, 1])
-                    with c_info:
-                        st.markdown(f"**⛽ {marca}** &nbsp;&nbsp; `{precio_str}`")
-                        st.caption(f"Km {km_val:.1f} en ruta · Tramo desde anterior: {tramo_val:.1f} km")
-                    with c_del:
-                        if st.button("🗑️", key=f"del_parada_{i}", help=f"Eliminar {marca} del plan"):
-                            # Eliminar por índice en la lista original (ordenada igual)
-                            parada_a_borrar = st.session_state["mis_paradas"]
-                            geom_x = row.get("_geom_x")
-                            geom_y = row.get("_geom_y")
-                            st.session_state["mis_paradas"] = [
-                                p for p in parada_a_borrar
-                                if not (p.get("_geom_x") == geom_x and p.get("_geom_y") == geom_y)
-                            ]
-                            st.toast(f"🗑️ {marca} eliminada del plan")
-                            st.rerun()
+            ui_components.render_trip_plan_items(df_plan, precio_col_label)
 
             # --- Ahorro total estimado (Mejora 3) ---
             if precio_zona_max > 0 and precio_col_label in df_plan.columns:
@@ -1393,9 +1370,12 @@ if "pipeline_results" in st.session_state:
 
             c1, c2 = st.columns([1, 1])
             with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
-                    st.session_state["mis_paradas"] = []
-                    st.rerun()
+                with st.popover("🗑️ Vaciar Mi Plan"):
+                    st.write("¿Estás seguro de que deseas vaciar todo el plan?")
+                    if st.button("Sí, vaciar plan", type="primary", use_container_width=True):
+                        st.session_state["mis_paradas"] = []
+                        st.toast("🗑️ Plan vaciado")
+                        st.rerun()
 
             st.write("")
             st.markdown("**📤 Exportar Ruta**")
