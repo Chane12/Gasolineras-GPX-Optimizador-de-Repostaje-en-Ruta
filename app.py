@@ -54,7 +54,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +63,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
@@ -1392,8 +1392,9 @@ if "pipeline_results" in st.session_state:
                     )
 
             c1, c2 = st.columns([1, 1])
-            with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
+            with c1, st.popover("🗑️ Vaciar Mi Plan", use_container_width=True):
+                st.markdown("¿Seguro que quieres vaciar todo tu plan?")
+                if st.button("Sí, vaciar plan", type="primary", use_container_width=True):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
 
