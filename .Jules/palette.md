@@ -1,0 +1,3 @@
+## 2024-11-20 - [Tooltip for Disabled UI State]
+**Learning:** In Streamlit applications, marking a button as `disabled=True` often strips context for users relying on screen readers or users who are confused about why an action is restricted (e.g. "Why can't I add this station?").
+**Action:** Always provide the `help` attribute when using `st.button` or `st.link_button` (especially when `disabled=True`) to serve as an accessible tooltip clarifying the system's state or the button's action.
