@@ -1,0 +1,4 @@
+## 2025-05-18 - [XSS via Unsafe HTML in Streamlit Markdown]
+**Vulnerability:** User inputs (`origen_txt`, `destino_txt`, `combustible`) in the Streamlit application were injected directly into an f-string and rendered using `st.markdown(..., unsafe_allow_html=True)` without HTML escaping. This allowed Cross-Site Scripting (XSS) via specially crafted user input.
+**Learning:** Streamlit's `st.markdown` with `unsafe_allow_html=True` acts as a raw sink. When using f-strings to inject user-provided data into these blocks, the input must be treated with the same caution as raw HTML in any web framework. The lack of context-aware escaping means any input string could break out of its container and execute arbitrary JavaScript.
+**Prevention:** Always sanitize user-controllable variables using `html.escape()` before injecting them into strings that will be rendered with `unsafe_allow_html=True`.

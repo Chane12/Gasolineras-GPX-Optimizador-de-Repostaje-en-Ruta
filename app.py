@@ -54,7 +54,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +63,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
