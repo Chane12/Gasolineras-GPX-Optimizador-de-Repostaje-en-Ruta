@@ -1,0 +1,3 @@
+## 2024-05-01 - Avoid Pandas apply with Shapely Geometries
+**Learning:** Found `.apply()` over geometries for projection and interpolation in `src/optimizer/export.py` (`dist_along_array = gdf_wgs84.geometry.apply(lambda geom: track_original.project(geom))`). This incurs significant overhead due to Python list comprehensions and Lambda calls per row. Shapely provides C-level vectorized equivalents.
+**Action:** Use `shapely.line_locate_point()` and `shapely.line_interpolate_point()`, and `shapely.get_coordinates()` instead of `.apply()` for better performance when finding nearest points along a track.
