@@ -122,8 +122,5 @@ def simplify_track(track: LineString, tolerance_deg: float = 0.0005) -> LineStri
         LineString simplificado.
     """
     simplified = track.simplify(tolerance_deg, preserve_topology=True)
-    print(
-        f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} "
-        f"(tolerancia={tolerance_deg} deg)"
-    )
+    print(f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} (tolerancia={tolerance_deg} deg)")
     return simplified
