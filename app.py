@@ -180,7 +180,7 @@ def render_controls():
         # -----------------------------------------------
         # PASO 1: DEFINICIÓN DE RUTA
         # -----------------------------------------------
-        st.markdown('#### Paso 1: Definición de Ruta', unsafe_allow_html=True)
+        st.markdown('#### Paso 1: Definición de Ruta')
         tab_texto, tab_gpx = st.tabs(["📍 Origen / Destino", "📁 Subir GPX"])
 
         _input_mode = "texto_vacio"  # default; overridden in each tab
@@ -227,7 +227,7 @@ def render_controls():
         # -----------------------------------------------
         # PASO 2: PARÁMETROS DEL VEHÍCULO Y COMBUSTIBLE
         # -----------------------------------------------
-        st.markdown('#### Paso 2: Parámetros del Vehículo', unsafe_allow_html=True)
+        st.markdown('#### Paso 2: Parámetros del Vehículo')
 
         combustible_elegido = st.selectbox(
             "Tipo de Combustible:", options=list(COMBUSTIBLES.keys()),
