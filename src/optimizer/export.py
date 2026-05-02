@@ -17,6 +17,7 @@ import gpxpy
 import gpxpy.gpx as _gpx
 import pandas as pd
 import requests
+import shapely
 from shapely.geometry import LineString, Point
 
 from src.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL
@@ -166,10 +167,12 @@ def enrich_stations_with_osrm(
 
     # Vectorized nearest-point computation (Shapely C-level)
     rutas_origen_dict = {}
-    dist_along_array = gdf_wgs84.geometry.apply(lambda geom: track_original.project(geom))
-    nearest_points = dist_along_array.apply(lambda d: track_original.interpolate(d))
-    for idx, pt in zip(gdf_wgs84.index, nearest_points, strict=False):
-        rutas_origen_dict[idx] = (pt.x, pt.y)
+    dist_along_array = shapely.line_locate_point(track_original, gdf_wgs84.geometry)
+    nearest_points = shapely.line_interpolate_point(track_original, dist_along_array)
+    nearest_x = shapely.get_x(nearest_points)
+    nearest_y = shapely.get_y(nearest_points)
+    for idx, px, py in zip(gdf_wgs84.index, nearest_x, nearest_y, strict=False):
+        rutas_origen_dict[idx] = (px, py)
 
     def process_station(idx, row_wgs84):
         gas_lon = row_wgs84.geometry.x
