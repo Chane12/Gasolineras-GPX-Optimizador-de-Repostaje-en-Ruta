@@ -1,0 +1,3 @@
+## 2026-05-03 - Vectorized Shapely Operations vs List Comprehensions and Apply
+**Learning:** In the `Gasolineras-GPX-Optimizador-de-Repostaje-en-Ruta` application, performance bottlenecks can occur when projecting many points onto a line using pandas `.apply()` or Python list comprehensions over `geopandas` Geometries (`LineString.project`). This incurs significant Python interpreter overhead and loops.
+**Action:** Replace these `.apply()` and list comprehension calls with Shapely 2.0 array-aware/C-vectorized operations like `shapely.line_locate_point()` and `shapely.line_interpolate_point()`. Use `shapely.get_coordinates()` to pull coordinates back into Python efficiently.

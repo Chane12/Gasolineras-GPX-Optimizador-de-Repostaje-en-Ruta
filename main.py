@@ -57,6 +57,7 @@ Ejemplos:
         print(f"\n[ERROR] No se encontró '{gpx_path}'.")
         return
 
+    import pandas as pd
     # 1. Ingesta MITECO
     res = fetch_gasolineras()
     df_gasolineras = res if isinstance(res, pd.DataFrame) else getattr(res, "df", res)
