@@ -1,0 +1,3 @@
+## 2024-05-03 - [Destructive Action Confirmations via Popover]
+**Learning:** Destructive actions in Streamlit like "Vaciar Mi Plan" or "Borrar GPX" originally executed immediately upon button click, leading to potential data loss. Adding a `st.popover` component around the button with an internal confirmation step effectively solves this UX problem while adhering to native Streamlit conventions and preserving layout consistency. Adding the `help` argument simultaneously provides tooltip context for better accessibility.
+**Action:** Whenever implementing a destructive action (e.g. deleting, clearing, resetting), wrap the primary execution button inside an `st.popover` that asks for explicit user confirmation, and ensure the popover trigger has a clear `help` tooltip.

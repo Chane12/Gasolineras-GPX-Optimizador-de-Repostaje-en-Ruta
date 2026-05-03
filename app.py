@@ -524,10 +524,12 @@ def render_mobile_wizard():
                 gpx_file = io.BytesIO(st.session_state["_w_gpx_bytes"])
                 gpx_file.name = st.session_state["_w_gpx_name"] # type: ignore
                 st.info(f"📁 GPX en memoria: {gpx_file.name}")
-                if st.button("🗑️ Cambiar / Borrar GPX", key="clear_gpx_btn_step1"):
-                    del st.session_state["_w_gpx_bytes"]
-                    del st.session_state["_w_gpx_name"]
-                    st.rerun()
+                with st.popover("🗑️ Cambiar / Borrar GPX", help="Eliminar el archivo GPX actual para subir uno nuevo"):
+                    st.markdown("¿Deseas eliminar el archivo GPX cargado actualmente?")
+                    if st.button("Confirmar", key="clear_gpx_btn_step1", type="primary", use_container_width=True):
+                        del st.session_state["_w_gpx_bytes"]
+                        del st.session_state["_w_gpx_name"]
+                        st.rerun()
             elif st.session_state.get("demo_mode") and _input_mode not in ("gpx",):
                 _input_mode = "demo"
                 gpx_file = None
@@ -1393,9 +1395,11 @@ if "pipeline_results" in st.session_state:
 
             c1, c2 = st.columns([1, 1])
             with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
-                    st.session_state["mis_paradas"] = []
-                    st.rerun()
+                with st.popover("🗑️ Vaciar Mi Plan", help="Eliminar todas las paradas guardadas en tu plan de viaje", use_container_width=True):
+                    st.markdown("¿Estás seguro de que quieres eliminar **todas** las paradas?")
+                    if st.button("Confirmar vaciado", type="primary", use_container_width=True):
+                        st.session_state["mis_paradas"] = []
+                        st.rerun()
 
             st.write("")
             st.markdown("**📤 Exportar Ruta**")
