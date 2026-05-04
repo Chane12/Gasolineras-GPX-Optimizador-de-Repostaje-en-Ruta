@@ -1,0 +1,3 @@
+## 2024-05-04 - C-Level Vectorization in GeoPandas via Shapely 2.0
+**Learning:** For spatial operations involving Geodataframes or Arrays of Geometries, `.apply(lambda x: x.some_method())` incurs massive Python method dispatch overhead (O(N) with Python VM overhead). We should always prioritize using Shapely 2.0 array-aware functions directly, such as `shapely.line_locate_point()` and `shapely.line_interpolate_point()`. Also, `shapely.get_coordinates(array)` accesses raw coordinate buffers far faster than iterating over `(pt.x, pt.y)`.
+**Action:** When needing to project geometries, calculate distances, or find nearest points in bulk, avoid `.apply()`. Always look for the `shapely.*` C-vectorized equivalents.
