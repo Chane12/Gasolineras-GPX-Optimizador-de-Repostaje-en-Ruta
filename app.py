@@ -54,7 +54,7 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
@@ -63,7 +63,7 @@ def get_spatial_engine() -> SpatialEngine:
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+
     gdf = build_stations_geodataframe(df)
     return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
 
@@ -1363,17 +1363,19 @@ if "pipeline_results" in st.session_state:
                         st.markdown(f"**⛽ {marca}** &nbsp;&nbsp; `{precio_str}`")
                         st.caption(f"Km {km_val:.1f} en ruta · Tramo desde anterior: {tramo_val:.1f} km")
                     with c_del:
-                        if st.button("🗑️", key=f"del_parada_{i}", help=f"Eliminar {marca} del plan"):
-                            # Eliminar por índice en la lista original (ordenada igual)
-                            parada_a_borrar = st.session_state["mis_paradas"]
-                            geom_x = row.get("_geom_x")
-                            geom_y = row.get("_geom_y")
-                            st.session_state["mis_paradas"] = [
-                                p for p in parada_a_borrar
-                                if not (p.get("_geom_x") == geom_x and p.get("_geom_y") == geom_y)
-                            ]
-                            st.toast(f"🗑️ {marca} eliminada del plan")
-                            st.rerun()
+                        with st.popover("🗑️", help=f"Eliminar {marca} del plan"):
+                            st.markdown("¿Seguro que quieres eliminar esta parada?")
+                            if st.button("Sí, eliminar", key=f"del_parada_{i}_confirm", type="primary", use_container_width=True):
+                                # Eliminar por índice en la lista original (ordenada igual)
+                                parada_a_borrar = st.session_state["mis_paradas"]
+                                geom_x = row.get("_geom_x")
+                                geom_y = row.get("_geom_y")
+                                st.session_state["mis_paradas"] = [
+                                    p for p in parada_a_borrar
+                                    if not (p.get("_geom_x") == geom_x and p.get("_geom_y") == geom_y)
+                                ]
+                                st.toast(f"🗑️ {marca} eliminada del plan")
+                                st.rerun()
 
             # --- Ahorro total estimado (Mejora 3) ---
             if precio_zona_max > 0 and precio_col_label in df_plan.columns:
@@ -1392,8 +1394,9 @@ if "pipeline_results" in st.session_state:
                     )
 
             c1, c2 = st.columns([1, 1])
-            with c1:
-                if st.button("🗑️ Vaciar Mi Plan", type="secondary"):
+            with c1, st.popover("🗑️ Vaciar Mi Plan"):
+                st.markdown("¿Seguro que quieres vaciar todo tu plan de viaje?")
+                if st.button("Sí, vaciar plan", type="primary", use_container_width=True):
                     st.session_state["mis_paradas"] = []
                     st.rerun()
 

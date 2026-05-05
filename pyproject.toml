@@ -20,6 +20,7 @@ dependencies = [
     "streamlit-folium>=0.21.0",
     "streamlit-javascript>=0.1.5",
     "altair>=4.0.0,<6.0.0",
+    "playwright>=1.59.0",
 ]
 
 [project.scripts]

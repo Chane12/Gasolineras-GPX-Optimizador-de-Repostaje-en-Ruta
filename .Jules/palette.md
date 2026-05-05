@@ -1,0 +1,3 @@
+## 2024-05-24 - Add confirmation popovers for destructive actions
+**Learning:** Destructive actions like deleting items or clearing a form/plan should always ask for user confirmation to prevent accidental data loss. In Streamlit, `st.popover` is an effective pattern for this, wrapping the destructive button inside a tooltip-like container containing a confirmation message and action button.
+**Action:** When implementing features with destructive UI actions, always utilize `st.popover` to prompt user confirmation.
