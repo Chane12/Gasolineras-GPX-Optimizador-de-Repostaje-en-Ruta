@@ -1,0 +1,3 @@
+## 2025-02-28 - Optimize spatial point distance calculations
+**Learning:** Found Python interpreter bottlenecks resulting from using Pandas `.apply()` and Python list comprehensions to perform repeated geometric point projections over LineStrings in GeoDataFrames.
+**Action:** Replaced iterative loops over points to distance along tracks (`.project()` and `interpolate()`) with Shapely 2.0 array-aware, C-vectorized functions: `shapely.line_locate_point()` and `shapely.line_interpolate_point()`. When retrieving results, use `shapely.get_coordinates()` to extract the raw underlying numerical arrays.
