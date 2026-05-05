@@ -6,6 +6,7 @@ Folium map generation for the route and fuel stations.
 
 from __future__ import annotations
 
+import html
 import math
 from pathlib import Path
 
@@ -179,11 +180,11 @@ def generate_map(
         lat = row.geometry.y
         lon = row.geometry.x
         precio = row.get("precio_seleccionado", float("nan"))
-        nombre = row.get("Rótulo", "Sin nombre")
-        municipio = row.get("Municipio", "")
-        provincia = row.get("Provincia", "")
-        direccion = row.get("Dirección", "")
-        horario = row.get("Horario", "")
+        nombre = html.escape(str(row.get("Rótulo", "Sin nombre")))
+        municipio = html.escape(str(row.get("Municipio", "")))
+        provincia = html.escape(str(row.get("Provincia", "")))
+        direccion = html.escape(str(row.get("Dirección", "")))
+        horario = html.escape(str(row.get("Horario", "")))
         color = price_to_hex_color(precio)
 
         osrm_dist = row.get("osrm_distance_km", float("nan"))
@@ -213,13 +214,13 @@ def generate_map(
             <div class="popup-price-box" style="text-align:center; border-radius:8px; padding:10px 0; margin-bottom:8px;">
                 <div style="font-size:2rem; font-weight:800; color:{color}; line-height:1;">{f"{precio:.3f}" if not math.isnan(precio) else "N/A"} €/L</div>
                 <div class="popup-price-subtitle" style="font-size:0.78rem; margin-top:2px;">
-                    {fuel_column.replace("Precio ", "")} &nbsp;·&nbsp; Km {row.get('km_ruta', 0):.1f} en ruta</div>
+                    {html.escape(fuel_column).replace("Precio ", "")} &nbsp;·&nbsp; Km {row.get("km_ruta", 0):.1f} en ruta</div>
             </div>
             {osrm_line}
             <div class="popup-text" style="font-size:0.82em; margin:4px 0;">
                 &#128205; {direccion}<br>{municipio}, {provincia}</div>
             <div class="popup-text-muted" style="font-size:0.78em; margin:4px 0;">
-                &#128336; {horario if horario else '—'}</div>
+                &#128336; {horario if horario else "—"}</div>
             <a href="{maps_url}" target="_blank" class="popup-btn" style="
                 display:block; margin-top:10px; padding:8px;
                 background:#2563eb; color:white; text-align:center;
@@ -273,7 +274,7 @@ def generate_map(
     ">
         <b>Optimizador de Gasolineras</b><br>
         <span style="color:#2563EB;">──</span> Ruta GPX<br><br>
-        <b>Precio {fuel_column.replace("Precio ", "")}:</b><br>
+        <b>Precio {html.escape(fuel_column).replace("Precio ", "")}:</b><br>
         <div style="
             background: linear-gradient(to right, #16a34a, #eab308, #dc2626);
             height: 12px; border-radius: 4px; margin: 5px 0;
