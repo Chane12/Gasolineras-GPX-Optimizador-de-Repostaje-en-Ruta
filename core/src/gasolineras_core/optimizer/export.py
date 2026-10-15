@@ -25,9 +25,11 @@ from gasolineras_core.config import (
     CRS_WGS84,
     DETOUR_CACHE_MAX_ITEMS,
     DETOUR_CACHE_TTL_S,
+    DETOURS_MAX_S,
     GMAPS_MAX_WAYPOINTS,
     OSRM_BASE_URL,
     OSRM_MAX_CONCURRENCY,
+    OSRM_SEMAPHORE_WAIT_S,
     USER_AGENT,
 )
 from gasolineras_core.http_utils import TTLCache
@@ -147,8 +149,13 @@ def get_real_distance_osrm(
         return cached
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
-        with OSRM_SEMAPHORE:
+        if not OSRM_SEMAPHORE.acquire(timeout=OSRM_SEMAPHORE_WAIT_S):
+            logger.warning("OSRM busy: no free slot in %.0f s", OSRM_SEMAPHORE_WAIT_S)
+            return None
+        try:
             resp = requests.get(url, headers=headers, timeout=timeout)
+        finally:
+            OSRM_SEMAPHORE.release()
         if resp.status_code == 429:
             logger.warning("OSRM rate limit (429)")
             return None
@@ -181,6 +188,7 @@ def enrich_stations_with_osrm(
     gdf_top: gpd.GeoDataFrame,
     track_original: LineString,
     delay_s: float = 0.5,
+    deadline: float | None = None,
 ):
     """
     Enriquece el GeoDataFrame de gasolineras con datos reales OSRM.
@@ -218,6 +226,8 @@ def enrich_stations_with_osrm(
         current_delay = delay_s + random.uniform(0.1, 0.4)
 
         for _attempt in range(max_retries):
+            if deadline is not None and time.monotonic() + current_delay >= deadline:
+                return idx, None  # out of time: leave this detour without a result
             time.sleep(current_delay)
 
             d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
@@ -252,12 +262,14 @@ def enrich_stations_with_osrm(
                 yield idx, None
 
 
-def compute_detours(track: LineString, stations_lonlat: list[tuple[float, float]]) -> list[dict | None]:
+def compute_detours(
+    track: LineString, stations_lonlat: list[tuple[float, float]], max_seconds: float = DETOURS_MAX_S
+) -> list[dict | None]:
     """
     Desvío real por carretera (ida desde la ruta + vuelta) para cada gasolinera, en el mismo orden.
 
     Cada elemento es ``{"distance_km", "duration_min"}`` o ``None`` si OSRM no respondió para esa
-    gasolinera (degradación elegante: el resto de resultados siguen siendo válidos).
+    gasolinera o no dio tiempo en ``max_seconds`` (degradación elegante: el resto siguen siendo válidos).
     """
     if not stations_lonlat:
         return []
@@ -266,7 +278,8 @@ def compute_detours(track: LineString, stations_lonlat: list[tuple[float, float]
     )
     position = {idx: i for i, idx in enumerate(gdf.index)}
     results: list[dict | None] = [None] * len(stations_lonlat)
-    for idx, result in enrich_stations_with_osrm(gdf, track_original=track):
+    deadline = time.monotonic() + max_seconds
+    for idx, result in enrich_stations_with_osrm(gdf, track_original=track, deadline=deadline):
         results[position[idx]] = result
     return results
 
@@ -287,6 +300,7 @@ def enrich_gpx_with_stops(
     gpx_bytes: bytes,
     gdf_stops: gpd.GeoDataFrame,
     fuel_column: str = "",
+    max_seconds: float | None = None,
 ) -> str:
     """
     Inyecta las paradas de repostaje como Waypoints (<wpt>) dentro del GPX
@@ -362,6 +376,7 @@ def enrich_gpx_with_stops(
     split_points.sort(key=lambda x: (x["idx"][0], x["idx"][1], x["idx"][2]), reverse=True)
 
     # 3. OSRM-based Track Splicing
+    deadline = time.monotonic() + max_seconds if max_seconds is not None else None
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
     for sp in split_points:
@@ -389,6 +404,12 @@ def enrich_gpx_with_stops(
 
         reinc_lon = segment.points[reinc_idx].longitude
         reinc_lat = segment.points[reinc_idx].latitude
+
+        if deadline is not None and time.monotonic() >= deadline:
+            # Out of time: the track just goes through the station, without asking OSRM.
+            station_point = _gpx.GPXTrackPoint(latitude=station_lat, longitude=station_lon)
+            segment.points = segment.points[: p_idx + 1] + [station_point] + segment.points[reinc_idx:]
+            continue
 
         entrada = []
         salida = []

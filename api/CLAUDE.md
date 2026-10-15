@@ -14,7 +14,8 @@ Expone el motor `gasolineras_core` por HTTP para la web (`web/`, Next.js). Stack
   - `413`: archivo demasiado grande.
   - `422`: el cuerpo no cumple el esquema (lo genera FastAPI; `detail` es una lista).
   - `503`: un servicio externo está caído o saturado.
-  - Nunca un `500` sin explicar.
+  - Nunca un `500` sin explicar: un manejador global registra el error y responde con un mensaje en español.
+- Llamadas lentas a servicios externos con tiempo máximo (`DETOURS_MAX_S`, `GPX_SPLICE_MAX_S`): lo que no dé tiempo se devuelve sin calcular, nunca una petición de minutos.
 - **Todo endpoint nuevo declara su cupo** (`ratelimit.py`): `dependencies=[Depends(rate_limited("external"))]` si llama a Nominatim u OSRM, `"default"` si no, y `responses=RATE_LIMIT_RESPONSE`. Solo `/health` va sin límite. Detrás de un proxy (Cloud Run) hay que definir `GASOLINERAS_TRUSTED_PROXY_HOPS=1`; si no, todos los usuarios compartirían la IP del proxy.
 - Los routers van en `routers/` (uno por recurso); los modelos públicos, en `schemas.py`. Las geometrías se devuelven en GeoJSON (`[lon, lat]`, WGS84).
 - **Precios**: siempre a través de `PriceCatalogue` (`catalogue.py`, en `app.state.catalogue`): una descarga cada 30 min para todos, sin proxies, y si el MITECO cae se conservan los últimos datos. Toda respuesta con precios debe incluir su antigüedad (`price_freshness`: fresh ≤ 30 min, stale ≤ 24 h con aviso, very_stale > 24 h con aviso fuerte). Nunca se deja al usuario sin resultados por antigüedad.
@@ -30,4 +31,4 @@ uv run pytest -q api/tests
 docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api   # imagen de producción (Dockerfile en la raíz)
 ```
 
-Variables de entorno: `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (1 detrás de Cloud Run), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).
+Variables de entorno: `GASOLINERAS_CORS_ORIGINS` (dominios de la web separados por comas; por defecto `http://localhost:3000`), `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (1 detrás de Cloud Run), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).

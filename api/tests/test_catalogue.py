@@ -42,12 +42,16 @@ class FakeFetch:
         return outcome
 
 
+def stations_df(n: int) -> pd.DataFrame:
+    return pd.DataFrame({"Latitud": [40.0 + i * 0.01 for i in range(n)], "Longitud (WGS84)": [-4.0] * n})
+
+
 def fresh(clock: Clock, stations: int = 3) -> MitecoResult:
-    return MitecoResult(df=pd.DataFrame({"id": range(stations)}), fetched_at=clock.now)
+    return MitecoResult(df=stations_df(stations), fetched_at=clock.now)
 
 
 def fallback(fetched_at: datetime) -> MitecoResult:
-    return MitecoResult(df=pd.DataFrame({"id": [1]}), fetched_at=fetched_at, from_fallback=True)
+    return MitecoResult(df=stations_df(1), fetched_at=fetched_at, from_fallback=True)
 
 
 def make(clock: Clock, fetch: FakeFetch) -> PriceCatalogue:
@@ -65,7 +69,7 @@ def test_downloads_once_and_reuses_within_ttl():
     assert fetch.calls == 1
 
 
-def test_refreshes_after_ttl():
+def test_after_ttl_serves_current_data_and_refreshes_in_the_background():
     clock = Clock()
     fetch = FakeFetch(clock, fresh(clock, 3), None)
     catalogue = make(clock, fetch)
@@ -74,8 +78,24 @@ def test_refreshes_after_ttl():
     clock.advance(minutes=31)
     fetch.outcomes[0] = fresh(clock, 5)
 
+    assert len(catalogue.get().df) == 3  # nobody waits for MITECO
+    assert catalogue.wait_for_refresh(5)
     assert len(catalogue.get().df) == 5
     assert fetch.calls == 2
+
+
+def test_background_refresh_also_prepares_the_spatial_index():
+    clock = Clock()
+    fetch = FakeFetch(clock, fresh(clock, 3), None)
+    catalogue = make(clock, fetch)
+    catalogue.get()
+    clock.advance(minutes=31)
+    fetch.outcomes[0] = fresh(clock, 5)
+
+    catalogue.get()
+    catalogue.wait_for_refresh(5)
+
+    assert catalogue._stations is not None and len(catalogue._stations[1]) == 5
 
 
 def test_keeps_old_data_when_miteco_fails_and_waits_before_retrying():
@@ -85,13 +105,17 @@ def test_keeps_old_data_when_miteco_fails_and_waits_before_retrying():
     original = catalogue.get()
 
     clock.advance(minutes=40)
+    assert catalogue.get() is original
+    catalogue.wait_for_refresh(5)
     assert catalogue.get() is original  # refresh failed: old data, real age
     clock.advance(minutes=4)
-    assert catalogue.get() is original  # within the 5 min backoff: no new attempt
-    assert fetch.calls == 2
+    catalogue.get()
+    catalogue.wait_for_refresh(5)
+    assert fetch.calls == 2  # within the 5 min backoff: no new attempt
 
     clock.advance(minutes=2)
     catalogue.get()  # backoff over: tries again
+    catalogue.wait_for_refresh(5)
     assert fetch.calls == 3
 
 
@@ -102,6 +126,8 @@ def test_fallback_copy_is_used_only_if_newer_than_memory():
     original = catalogue.get()
 
     clock.advance(minutes=31)
+    catalogue.get()
+    catalogue.wait_for_refresh(5)
     assert catalogue.get() is original
 
 
@@ -142,14 +168,13 @@ def test_requests_during_a_refresh_get_current_data_without_waiting():
     original = catalogue.get()
     clock.advance(minutes=31)
 
-    refresher = threading.Thread(target=catalogue.get)
-    refresher.start()
+    assert catalogue.get() is original  # starts the background refresh and returns at once
     assert started.wait(5)
 
     assert catalogue.is_refreshing
-    assert catalogue.get() is original  # does not block on the running refresh
+    assert catalogue.get() is original  # does not block on the running refresh, nor starts another one
     release.set()
-    refresher.join(5)
+    assert catalogue.wait_for_refresh(5)
     assert len(calls) == 2
 
 

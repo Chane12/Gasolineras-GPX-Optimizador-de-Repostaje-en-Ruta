@@ -6,7 +6,7 @@ from shapely.geometry import LineString
 
 from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import GmapsUrlRequest, GmapsUrlResponse, GpxExportRequest
-from gasolineras_core.config import CRS_WGS84
+from gasolineras_core.config import CRS_WGS84, GPX_SPLICE_MAX_S
 from gasolineras_core.optimizer import export
 
 router = APIRouter(prefix="/export", tags=["exportación"])
@@ -51,7 +51,9 @@ def gpx(body: GpxExportRequest) -> Response:
         geometry=gpd.points_from_xy([s.lon for s in body.stops], [s.lat for s in body.stops]),
         crs=CRS_WGS84,
     )
-    xml = export.enrich_gpx_with_stops(export.build_gpx_from_track(track, body.name), stops, fuel_column=_PRICE_COLUMN)
+    xml = export.enrich_gpx_with_stops(
+        export.build_gpx_from_track(track, body.name), stops, fuel_column=_PRICE_COLUMN, max_seconds=GPX_SPLICE_MAX_S
+    )
     return Response(
         content=xml,
         media_type="application/gpx+xml",

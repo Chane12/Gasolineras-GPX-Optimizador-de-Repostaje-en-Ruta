@@ -37,6 +37,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
 - [x] Límite de peticiones por cliente en la API: 10/min en lo que usa OSM (`/route/text`, `/detours`, `/export/gpx`) y 60/min en el resto; 429 con `Retry-After`. IP real tras proxies con `GASOLINERAS_TRUSTED_PROXY_HOPS`
 - [x] Tests de la API (TestClient) sin red: 62 tests; el core, 85 (sin red) + 1 con red
+- [x] Revisión final de la fase: CORS para la web (`GASOLINERAS_CORS_ORIGINS`), refresco de precios en segundo plano (nadie espera los ~20 s del MITECO), tiempo máximo en desvíos (45 s) y GPX (30 s), errores 500 explicados en español, gzip (track de la demo: 227 → 66 KB), paridad con Streamlit comprobada también con 24 h, España Vaciada, tramos, radar y GLP
 - [x] Dockerfile de la API (multi-etapa con uv, usuario sin privilegios, `PORT` configurable); el CI construye la imagen y comprueba `/health` en cada PR
 
 ## Fase 2 — Web (Next.js)
@@ -53,7 +54,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit.
 
 ## Fase 3 — Lanzamiento
 
-- [ ] Despliegue: web en Vercel, API en Cloud Run (o Render) — ADR 0002
+- [ ] Despliegue: web en Vercel, API en Cloud Run (o Render) — ADR 0002. Variables de la API: `GASOLINERAS_CORS_ORIGINS=<dominio de la web>`, `GASOLINERAS_TRUSTED_PROXY_HOPS=1`
 - [ ] Monitorización básica de errores y disponibilidad
 - [ ] Periodo en paralelo con Streamlit; después, retirar `legacy/streamlit/`
 
@@ -82,4 +83,5 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | `km_ruta` con dos métodos (solo Streamlit) | La API ya usa un único método (`route_positions_km`: ruta original, longitud geodésica). Streamlit sigue midiendo el ranking sobre el track simplificado (~2,5 % menos) | Se va con Streamlit (Fase 3) |
 | Lógica de búsqueda duplicada | `search_stations` (core) replica el pipeline de `legacy/streamlit/app.py`; Streamlit no se migra por estar congelada | Se va con Streamlit (Fase 3) |
 | GPX exportado sin altitud ni horas | `/route/gpx` solo devuelve lon/lat, así que el GPX exportado pierde la altitud y los tiempos del original | Si los usuarios lo piden: guardar el GPX original o devolver la altitud |
+| Tamaño máximo del cuerpo JSON | La API no limita el tamaño de las peticiones JSON (el track admite hasta 50.000 puntos). Cloud Run corta en 32 MB; en otro alojamiento habría que limitarlo | Fase 3 |
 | Tramos de 0 km en el radar | Gasolineras contiguas generan tramos de 0 km (igual que en Streamlit). La web puede agruparlos al pintarlos | Fase 2 |
