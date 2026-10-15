@@ -10,6 +10,7 @@ Cada archivo explica **una** decisión: el contexto, qué se decidió y sus cons
 | [0004](0004-convencion-idioma.md) | Inglés en el código, español en interfaz y docs | Aceptada |
 | [0005](0005-servicios-externos.md) | Uso responsable de MITECO, OSRM y Nominatim | Aceptada (implementación en Fase 1) |
 | [0006](0006-licencia-propietaria.md) | Licencia propietaria (todos los derechos reservados) | Aceptada |
+| [0007](0007-tls-miteco.md) | Cifrado TLS heredado solo para el MITECO | Aceptada |
 
 ## Cuándo escribir un ADR
 

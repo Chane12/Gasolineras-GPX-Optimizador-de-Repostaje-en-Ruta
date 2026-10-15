@@ -33,7 +33,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [ ] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía)
 - [ ] `POST /detours` (desvíos OSRM, con límite de concurrencia)
 - [ ] `POST /export/gpx` y `GET /export/gmaps-url`
-- [ ] Caché del catálogo MITECO en memoria (TTL 30 min) + `GET /health` con antigüedad de los datos
+- [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
 - [ ] Límite de peticiones por cliente en la API (que un solo usuario no agote el cupo de Nominatim/OSRM de todos)
 - [ ] Tests de la API (TestClient) sin red
@@ -69,11 +69,12 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 
 | Tema | Detalle | Cuándo |
 |---|---|---|
-| MITECO con User-Agent de navegador | `miteco.py` se hace pasar por Chrome. Hay que comprobar si el MITECO acepta un User-Agent propio antes de cambiarlo | Con la caché del MITECO (Fase 1) |
 | Track completo de ida y vuelta | `/route/*` devuelve el track entero (hasta 50.000 puntos, ~1 MB) y `/search` lo recibirá de vuelta. Valorar devolver uno simplificado o un id de ruta en el servidor | Al diseñar `/search` |
 | Photon lento | Como respaldo de Nominatim llega a tardar ~14 s; tiene el doble de timeout (10 s) | Vigilar |
 | Servidor demo de OSRM | `routing.openstreetmap.de` / `router.project-osrm.org` no son para producción | Fase 1–3 (ADR 0005) |
-| Proxies públicos para el MITECO | `corsproxy.io` y otros reciben los datos; dependencia frágil de terceros | Fase 1 |
+| Proxies públicos para el MITECO | Solo quedan en Streamlit como último recurso; la API no los usa y la conexión directa ya funciona (ADR 0007) | Se van con Streamlit (Fase 3) |
+| Logs de la API | Con uvicorn no salen nuestros `logger.info` (falta configurar `logging`) | Con el Dockerfile |
+| Fecha oficial del MITECO | La respuesta trae `Fecha` (hora de publicación); usamos la hora de descarga. Valorar mostrar la oficial | Al diseñar `/search` |
 | UTM 30N en Canarias | Distorsión del 2–3 % en distancias (Canarias está en el huso 28) | Cuando haya usuarios allí |
 | `folium_map.py` en `core` | Es presentación, no lógica; desaparece con Streamlit | Fase 3 |
 | `print()` como log | Migrar a `logging` al tocar cada módulo | Continuo |

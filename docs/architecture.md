@@ -27,7 +27,7 @@ Regla de dependencias: `web → api → core`. Nunca al revés, y `core` nunca i
 
 Pipeline de una búsqueda (detalle de módulos en `core/README.md`):
 
-1. **Precios**: `fetch_gasolineras()` descarga unas 12.000 estaciones del MITECO → `parse_miteco_records()` limpia (coma decimal, precios imposibles, sin coordenadas). Respaldo: proxies públicos → `fallback_miteco.parquet`.
+1. **Precios**: `fetch_gasolineras()` descarga unas 12.000 estaciones del MITECO → `parse_miteco_records()` limpia (coma decimal, precios imposibles, sin coordenadas). Respaldo: `fallback_miteco.parquet` con su antigüedad real; los proxies públicos solo los usa Streamlit (la API no). La conexión directa necesita un cifrado TLS heredado (ADR 0007). La API guarda el catálogo en memoria 30 min para todos los usuarios (`api/.../catalogue.py`).
 2. **Ruta**: GPX (`load_gpx_track`) u origen/destino (`get_route_from_text`: Nominatim → OSRM) → `LineString` WGS84 → `validate_gpx_track` (España, ≤ 50.000 puntos) → `simplify_track` (RDP).
 3. **Corredor**: `build_route_buffer` (UTM 30N, metros) + `build_stations_geodataframe` (índice R-Tree) → `spatial_join_within_buffer`.
 4. **Selección**: `filter_cheapest_stations` (Top-N global + la más barata por tramo de X km) o `filter_all_stations_on_route` (España Vaciada, corredor de 500 m). Añade `precio_seleccionado` y `km_ruta`.

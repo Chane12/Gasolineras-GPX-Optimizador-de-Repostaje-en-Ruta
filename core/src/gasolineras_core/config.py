@@ -53,6 +53,19 @@ PRICE_COLUMNS: list[str] = [
 
 COORD_COLUMNS: list[str] = ["Latitud", "Longitud (WGS84)"]
 
+# El servidor del MITECO solo negocia TLS 1.2 con AES256-GCM-SHA384 (intercambio de claves RSA, sin
+# secreto hacia adelante). Python >= 3.10 excluye esos cifrados por defecto y la conexión directa fallaba
+# siempre. Se añade solo ese cifrado y solo para este host; el certificado se sigue verificando. ADR 0007.
+MITECO_HOST_PREFIX: str = "https://sedeaplicaciones.minetur.gob.es/"
+MITECO_EXTRA_TLS_CIPHERS: str = "AES256-GCM-SHA384"
+
+# Antigüedad de los precios (decisión de producto, 2026-10-15):
+# - hasta 30 min: actuales (también es el TTL de la caché del catálogo);
+# - hasta 24 h: se muestran con un aviso visible de su antigüedad;
+# - más de 24 h: se muestran con un aviso fuerte de que pueden no ser fiables. Nunca se deja sin resultados.
+PRICES_FRESH_MAX_AGE_S: float = 30 * 60
+PRICES_STRONG_WARNING_AGE_S: float = 24 * 3600
+
 # ---------------------------------------------------------------------------
 # GPX validation
 # ---------------------------------------------------------------------------

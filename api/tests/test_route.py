@@ -22,7 +22,7 @@ ROAD = LineString([(-4.6627, 40.6572), (-4.4, 40.8), (-4.1172, 40.9481)])
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(warm_up=False))
 
 
 @pytest.fixture
