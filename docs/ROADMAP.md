@@ -8,7 +8,7 @@ Objetivo: convertir la app Streamlit en una **web profesional** (FastAPI + Next.
 
 ---
 
-## Fase 0 — Cimientos ✅ (fusionada: PR #34)
+## Fase 0 — Cimientos ✅
 
 Estructura, documentación y barreras de calidad. Sin cambios visibles para el usuario.
 
@@ -19,9 +19,9 @@ Estructura, documentación y barreras de calidad. Sin cambios visibles para el u
 - [x] pyright (modo `basic`) en 0 errores
 - [x] `scripts/verify.sh` + CI en GitHub Actions
 - [x] Hook de formateo automático + skills `/verificar` y `/nueva-funcionalidad`
-- [ ] **Acción manual**: cambiar en Streamlit Cloud el archivo principal a `legacy/streamlit/app.py` (justo al fusionar el PR)
-- [ ] **Acción manual**: activar en GitHub la protección de `main` (exigir CI en verde antes de fusionar)
-- [ ] **Decisión pendiente (propietario)**: licencia. `LICENSE` es CC BY-NC 4.0 (prohíbe el uso comercial por terceros; además CC no está pensada para software), pero `core/pyproject.toml` declaraba EUPL-1.2. Hay que elegir una y alinearlas antes de monetizar o abrir el código a contribuciones.
+- [x] Streamlit Cloud apunta a `legacy/streamlit/app.py`
+- [x] Protección de `main` en GitHub: PR obligatorio, CI "Lint, tipos y tests" en verde, rama al día; también para administradores
+- [x] Licencia propietaria (todos los derechos reservados), alineada en `LICENSE` y `pyproject.toml` — ADR 0006
 
 ## Fase 1 — API (FastAPI)
 

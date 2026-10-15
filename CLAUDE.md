@@ -2,6 +2,13 @@
 
 Optimizador de repostaje en ruta para España: cruza una ruta (GPX u origen/destino) con los precios oficiales del MITECO y sugiere dónde repostar más barato, con radar de autonomía. Público: motoristas y conductores. Lo desarrolla una persona con ayuda de IA: **el repo es la única memoria entre sesiones**.
 
+## Reparto del trabajo
+
+El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo**: ramas, código, PRs, fusionar, configurar GitHub o revisar despliegues.
+- Pregunta al propietario solo lo que es suyo: producto, dinero o coste, cuentas y credenciales, o lo que necesite su móvil o sus paneles (p. ej. Streamlit Cloud). Si una decisión es técnica, decide tú, justifícala y anótala (ADR si toca).
+- Si puedes hacer una "acción manual" tú mismo (con `gh` o la CLI de un servicio), hazla en vez de pedirla.
+- Al terminar, resume en pocas líneas qué ha cambiado para el usuario y qué decisiones quedan abiertas; sin detalles de implementación que no necesite.
+
 ## Al empezar cada sesión
 
 1. Lee `docs/ROADMAP.md` → fase actual y siguiente tarea.
