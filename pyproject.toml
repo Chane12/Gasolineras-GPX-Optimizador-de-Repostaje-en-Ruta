@@ -3,13 +3,14 @@
 # Ver docs/decisions/0003-monorepo-uv-workspace.md
 
 [tool.uv.workspace]
-members = ["core", "legacy/streamlit"]
+members = ["core", "legacy/streamlit", "api"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.11.0",
     "pyright>=1.1.390",
+    "httpx2>=2.13.0",  # TestClient de FastAPI/Starlette
 ]
 
 [tool.ruff]
@@ -41,14 +42,14 @@ ignore = [
 "legacy/streamlit/app.py" = ["E402"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gasolineras_core"]
+known-first-party = ["gasolineras_core", "gasolineras_api"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 
 [tool.pytest.ini_options]
-testpaths = ["core/tests"]
+testpaths = ["core/tests", "api/tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = [
@@ -63,7 +64,7 @@ markers = [
 ]
 
 [tool.pyright]
-include = ["core/src"]
+include = ["core/src", "api/src", "api/tests"]
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"

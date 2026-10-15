@@ -14,7 +14,7 @@ Optimizador de repostaje en ruta para España: cruza una ruta (GPX u origen/dest
 |---|---|---|
 | `core/` | Motor geoespacial `gasolineras_core` (lógica de negocio, sin UI) | Activo |
 | `legacy/streamlit/` | App Streamlit actual, **en producción** (Streamlit Community Cloud) | Congelada: solo bugs |
-| `api/` | FastAPI sobre `core` | Fase 1 (no existe aún) |
+| `api/` | FastAPI sobre `core` (`gasolineras_api`) | Fase 1 (esqueleto) |
 | `web/` | Next.js | Fase 2 (no existe aún) |
 | `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs) | |
 | `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `smoke_legacy.py` | |
@@ -29,6 +29,7 @@ uv sync --all-packages                            # instalar todo el workspace
 uv run pytest -q                                  # solo tests
 uv run gasolineras --help                         # CLI del motor
 uv run streamlit run legacy/streamlit/app.py      # app actual en local
+uv run uvicorn gasolineras_api.main:app --reload  # API en local (http://127.0.0.1:8000/docs)
 ./scripts/export-legacy-requirements.sh           # tras cambiar dependencias de core o legacy
 ```
 
