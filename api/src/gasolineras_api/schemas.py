@@ -1,9 +1,13 @@
 """Request/response models. They are the public contract: the web generates its TypeScript types from them."""
 
+from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from shapely.geometry import LineString
+
+from gasolineras_core.config import MAX_TRACK_POINTS
+from gasolineras_core.ingestion.miteco import MitecoResult, price_freshness
 
 # ~0.1 m precision: plenty for maps and keeps the JSON small.
 COORD_DECIMALS = 6
@@ -48,3 +52,132 @@ class RouteResponse(BaseModel):
     point_count: int = Field(description="Número de puntos del track")
     origin: Place | None = Field(default=None, description="Solo en rutas calculadas desde texto")
     destination: Place | None = Field(default=None, description="Solo en rutas calculadas desde texto")
+
+
+# ---------------------------------------------------------------------------
+# Prices and fuels
+# ---------------------------------------------------------------------------
+
+FuelId = Literal[
+    "gasolina_95",
+    "gasolina_95_premium",
+    "gasolina_98",
+    "diesel",
+    "diesel_premium",
+    "glp",
+    "gnc",
+    "gnl",
+    "gasoil_b",
+    "gasolina_95_e10",
+    "gasolina_98_e10",
+    "hidrogeno",
+]
+
+
+class Fuel(BaseModel):
+    id: FuelId
+    label: str = Field(description="Nombre para mostrar, en español")
+
+
+class PricesStatus(BaseModel):
+    """Age of the MITECO prices. The web must show a warning unless ``status`` is ``fresh``."""
+
+    status: Literal["fresh", "stale", "very_stale", "loading", "unavailable"] = Field(
+        description=(
+            "fresh: ≤ 30 min · stale: ≤ 24 h (mostrar aviso) · very_stale: > 24 h (aviso fuerte) · "
+            "loading: primera descarga en curso · unavailable: sin datos"
+        )
+    )
+    fetched_at: datetime | None = Field(default=None, description="Momento de la descarga de los precios (UTC)")
+    age_minutes: int | None = None
+    from_fallback: bool = Field(default=False, description="Copia local porque el MITECO no respondía")
+    station_count: int = 0
+
+    @classmethod
+    def from_result(cls, result: MitecoResult, now: datetime | None = None) -> "PricesStatus":
+        now = now or datetime.now(UTC)
+        return cls(
+            status=price_freshness(result.fetched_at, now).value,
+            fetched_at=result.fetched_at,
+            age_minutes=int((now - result.fetched_at).total_seconds() // 60),
+            from_fallback=result.from_fallback,
+            station_count=len(result.df),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+
+
+class SearchRequest(BaseModel):
+    track: LineStringGeometry = Field(description="Ruta devuelta por /route/text o /route/gpx")
+    fuel: FuelId = "gasolina_95"
+    max_detour_km: int = Field(default=5, ge=1, le=15, description="Distancia máxima a la ruta (km)")
+    top_n: int = Field(default=5, ge=1, le=20, description="Cuántas de las más baratas mostrar")
+    segment_km: int = Field(
+        default=50,
+        description="Añade la más barata de cada tramo de esta longitud (10–300 km); 0 lo desactiva",
+    )
+    only_24h: bool = Field(default=False, description="Solo gasolineras abiertas 24 h")
+    all_on_route: bool = Field(
+        default=False,
+        description="Modo España Vaciada: añade todas las gasolineras a ≤ 500 m de la ruta, sean o no baratas",
+    )
+    autonomy_km: int = Field(default=0, ge=0, le=2000, description="Autonomía del vehículo; 0 desactiva el radar")
+
+    @field_validator("segment_km")
+    @classmethod
+    def _segment_range(cls, value: int) -> int:
+        if value != 0 and not 10 <= value <= 300:
+            raise ValueError("segment_km debe ser 0 o estar entre 10 y 300")
+        return value
+
+    @field_validator("track")
+    @classmethod
+    def _track_size(cls, value: LineStringGeometry) -> LineStringGeometry:
+        if not 2 <= len(value.coordinates) <= MAX_TRACK_POINTS:
+            raise ValueError(f"El track debe tener entre 2 y {MAX_TRACK_POINTS} puntos")
+        return value
+
+
+class Station(BaseModel):
+    id: str | None = Field(default=None, description="Identificador del MITECO (IDEESS)")
+    name: str = Field(description="Rótulo")
+    address: str | None = None
+    town: str | None = None
+    province: str | None = None
+    postal_code: str | None = None
+    schedule: str | None = Field(default=None, description="Horario tal como lo publica el MITECO")
+    open_24h: bool
+    lat: float
+    lon: float
+    price: float = Field(description="Precio del combustible elegido (€/L; €/kg en GNC, GNL e hidrógeno)")
+    km_on_route: float = Field(description="Kilómetro de la ruta a la altura de la gasolinera")
+    savings_vs_max: float | None = Field(
+        default=None, description="Ahorro por litro frente a la más cara del corredor (≥ 0)"
+    )
+
+
+class AutonomySegment(BaseModel):
+    start_km: float
+    end_km: float
+    gap_km: float
+    level: Literal["safe", "warning", "critical"] = Field(
+        description="safe · warning: > 80 % de la autonomía · critical: supera la autonomía"
+    )
+    autonomy_ratio: float = Field(description="gap_km / autonomía")
+    from_name: str
+    to_name: str
+
+
+class SearchResponse(BaseModel):
+    prices: PricesStatus
+    fuel: Fuel
+    route_km: float = Field(description="Longitud de la ruta (km)")
+    corridor_station_count: int = Field(description="Gasolineras en el corredor, vendan o no este combustible")
+    max_price_in_corridor: float | None = None
+    stations: list[Station] = Field(description="Gasolineras sugeridas, ordenadas por km en ruta")
+    autonomy: list[AutonomySegment] | None = Field(
+        default=None, description="Radar de autonomía (solo si autonomy_km > 0)"
+    )

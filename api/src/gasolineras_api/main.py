@@ -6,33 +6,18 @@ Run locally: ``uv run uvicorn gasolineras_api.main:app --reload``
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from importlib.metadata import version
 from typing import Literal
 
 from fastapi import FastAPI, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from gasolineras_api.catalogue import PriceCatalogue
-from gasolineras_api.routers import route
-from gasolineras_core.ingestion.miteco import price_freshness
+from gasolineras_api.routers import route, search
+from gasolineras_api.routers.search import get_catalogue
+from gasolineras_api.schemas import PricesStatus
 
 API_VERSION = version("gasolineras-api")
-
-
-class PricesStatus(BaseModel):
-    """State of the MITECO price catalogue held in memory."""
-
-    status: Literal["fresh", "stale", "very_stale", "loading", "unavailable"] = Field(
-        description=(
-            "fresh: ≤ 30 min · stale: ≤ 24 h (mostrar aviso) · very_stale: > 24 h (aviso fuerte) · "
-            "loading: primera descarga en curso · unavailable: sin datos"
-        )
-    )
-    fetched_at: datetime | None = Field(default=None, description="Momento de la descarga de los precios (UTC)")
-    age_minutes: int | None = None
-    from_fallback: bool = Field(default=False, description="Copia local porque el MITECO no respondía")
-    station_count: int = 0
 
 
 class HealthResponse(BaseModel):
@@ -43,22 +28,11 @@ class HealthResponse(BaseModel):
     prices: PricesStatus
 
 
-def get_catalogue(request: Request) -> PriceCatalogue:
-    return request.app.state.catalogue
-
-
 def _prices_status(catalogue: PriceCatalogue) -> PricesStatus:
     result = catalogue.current
     if result is None:
         return PricesStatus(status="loading" if catalogue.is_refreshing else "unavailable")
-    now = datetime.now(UTC)
-    return PricesStatus(
-        status=price_freshness(result.fetched_at, now).value,
-        fetched_at=result.fetched_at,
-        age_minutes=int((now - result.fetched_at).total_seconds() // 60),
-        from_fallback=result.from_fallback,
-        station_count=len(result.df),
-    )
+    return PricesStatus.from_result(result)
 
 
 def create_app(catalogue: PriceCatalogue | None = None, warm_up: bool = True) -> FastAPI:
@@ -84,6 +58,7 @@ def create_app(catalogue: PriceCatalogue | None = None, warm_up: bool = True) ->
         return HealthResponse(status="ok", version=API_VERSION, prices=_prices_status(get_catalogue(request)))
 
     app.include_router(route.router)
+    app.include_router(search.router)
     return app
 
 
