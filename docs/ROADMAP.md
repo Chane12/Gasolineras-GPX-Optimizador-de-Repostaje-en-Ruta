@@ -2,13 +2,13 @@
 
 Objetivo: convertir la app Streamlit en una **web profesional** (FastAPI + Next.js) sin perder funcionalidad, con coste de alojamiento 0 € hasta tener un plan de monetización.
 
-**Fase actual: 0 → 1** · Última actualización: 2026-10-15
+**Fase actual: 1 — API** · Última actualización: 2026-10-15
 
 > Cómo usar este archivo: cada sesión empieza leyendo la fase actual y termina marcando lo hecho y anotando la deuda nueva. Las decisiones de arquitectura van en `docs/decisions/`, no aquí.
 
 ---
 
-## Fase 0 — Cimientos ✅ (pendiente de fusionar)
+## Fase 0 — Cimientos ✅ (fusionada: PR #34)
 
 Estructura, documentación y barreras de calidad. Sin cambios visibles para el usuario.
 
@@ -27,7 +27,7 @@ Estructura, documentación y barreras de calidad. Sin cambios visibles para el u
 
 Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de la app actual y tiene tests.
 
-- [ ] `api/` como miembro del workspace; `api/CLAUDE.md`
+- [x] `api/` como miembro del workspace; `api/CLAUDE.md` (esqueleto con `create_app()` y `GET /health` básico)
 - [ ] Contrato: esquemas Pydantic de petición/respuesta; OpenAPI publicado
 - [ ] `POST /route/text` (origen/destino → track), `POST /route/gpx` (subida)
 - [ ] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía)
@@ -76,4 +76,5 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | `print()` como log | Migrar a `logging` al tocar cada módulo | Continuo |
 | pyright en modo `basic` | Subir a `standard` (~120 avisos, sobre todo tipos de pandas) | Fase 1 |
 | PWA de Streamlit | `.streamlit/static/` no se sirve (falta `enableStaticServing` y la carpeta `static/` junto al script) | No arreglar: la PWA se hace en `web/` |
+| `uv.lock` único compartido | Las dependencias de `api/` (y las de desarrollo) pueden mover versiones de la app legacy en producción (p. ej. pydantic 2.14 → `typing-extensions` 4.16; `httpx2` → `idna` 3.20). Revisar el diff de `legacy/streamlit/requirements.txt` en cada PR y pasar `--smoke` | Hasta retirar Streamlit (Fase 3) |
 | `km_ruta` con dos métodos | Ranking: longitud UTM del track simplificado; radar: geodésica del original | Unificar en la API |
