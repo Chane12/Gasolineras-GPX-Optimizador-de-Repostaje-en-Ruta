@@ -1,11 +1,9 @@
 """
 test_regression_modular.py
 ==========================
-Regression tests that import from the NEW src/ package and verify identical
-behaviour to the monolith (tested by test_regression_monolith.py).
-
-If any test here fails but its monolith counterpart passes, it means
-the refactoring introduced a regression.
+Regression tests for the src/ package. They were written as mirrors of the
+original monolith's tests (since removed) and pin down the behaviour of the
+ingestion, spatial, optimizer and export modules.
 """
 
 from pathlib import Path

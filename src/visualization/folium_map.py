@@ -11,6 +11,7 @@ from pathlib import Path
 
 import folium
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 from pyproj import Geod
 from shapely.geometry import LineString
@@ -98,18 +99,21 @@ def generate_map(
             _lons = [c[0] for c in track_coords]
             _lats = [c[1] for c in track_coords]
             _, _, _dist_m = _geod.inv(_lons[:-1], _lats[:-1], _lons[1:], _lats[1:])
-            track_length_km = sum(_dist_m) / 1000.0
+            # Km acumulado en cada vértice: permite localizar cada checkpoint en el track real
+            # aunque los puntos GPX no estén equiespaciados.
+            cum_km = np.concatenate([[0.0], np.cumsum(_dist_m) / 1000.0])
+            track_length_km = float(cum_km[-1])
             checkpoints = [0.0] + station_km_list + [track_length_km]
 
             danger_segments = []
+            total_pts = len(route_latlon)
             for j in range(len(checkpoints) - 1):
                 gap = checkpoints[j + 1] - checkpoints[j]
                 if gap > autonomy_km:
-                    total_pts = len(route_latlon)
-                    seg_start_idx = int((checkpoints[j] / track_length_km) * total_pts)
-                    seg_end_idx = int((checkpoints[j + 1] / track_length_km) * total_pts)
+                    seg_start_idx = int(np.searchsorted(cum_km, checkpoints[j], side="right")) - 1
+                    seg_end_idx = int(np.searchsorted(cum_km, checkpoints[j + 1], side="left")) + 1
                     seg_start_idx = max(0, min(seg_start_idx, total_pts - 1))
-                    seg_end_idx = max(seg_start_idx + 1, min(seg_end_idx, total_pts))
+                    seg_end_idx = max(seg_start_idx + 2, min(seg_end_idx, total_pts))
                     danger_segments.append(route_latlon[seg_start_idx:seg_end_idx])
 
             for seg in danger_segments:

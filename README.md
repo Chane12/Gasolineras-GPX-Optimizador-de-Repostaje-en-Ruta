@@ -80,7 +80,7 @@ uv run ruff check src/ tests/ main.py
 ```
 
 **Suite de Tests de Regresión (Golden Output):**
-Tests intensivos determinan que la estructura modular entrega resultados algorítmicamente idénticos a las pruebas del motor monolítico heredado.
+Tests que fijan el comportamiento de los módulos de ingesta, motor espacial, optimizador y exportación (heredados de la migración desde el monolito original).
 ```bash
 uv run pytest
 ```

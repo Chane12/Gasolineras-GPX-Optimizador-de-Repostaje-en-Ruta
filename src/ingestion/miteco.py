@@ -17,12 +17,32 @@ import requests
 
 from src.config import COORD_COLUMNS, MITECO_API_URL, PRICE_COLUMNS, PROJECT_ROOT
 
+FALLBACK_FILE = PROJECT_ROOT / "fallback_miteco.parquet"
+
 
 @dataclass(frozen=True)
 class MitecoResult:
     """Encapsula los datos del MITECO junto con el timestamp de descarga."""
     df: pd.DataFrame
     fetched_at: datetime
+    from_fallback: bool = False
+
+
+def _load_fallback() -> MitecoResult | None:
+    """
+    Carga la copia local del último catálogo descargado.
+    El timestamp es la fecha de modificación del archivo (no "ahora"),
+    para que la UI muestre la antigüedad real de los precios.
+    """
+    if not FALLBACK_FILE.exists():
+        return None
+    try:
+        df = pd.read_parquet(FALLBACK_FILE)
+        fetched_at = datetime.fromtimestamp(FALLBACK_FILE.stat().st_mtime, tz=UTC)
+        return MitecoResult(df=df, fetched_at=fetched_at, from_fallback=True)
+    except Exception as e:
+        print(f"[MITECO] Error leyendo el fallback local: {e}")
+        return None
 
 
 def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
@@ -91,13 +111,10 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
                 print(f"[MITECO] Proxy {proxy_name} falló: {exc}")
 
         if data is None:
-            fallback_file = PROJECT_ROOT / "fallback_miteco.parquet"
-            if fallback_file.exists():
-                print("[MITECO] Todas las conexiones fallaron. Intentando cargar fallback parquet...")
-                try:
-                    return MitecoResult(df=pd.read_parquet(fallback_file), fetched_at=datetime.now(UTC))
-                except Exception as e:
-                    print(f"[MITECO] Error leyendo el fallback local: {e}")
+            print("[MITECO] Todas las conexiones fallaron. Intentando cargar fallback parquet...")
+            fallback = _load_fallback()
+            if fallback is not None:
+                return fallback
 
             raise ConnectionError(
                 "No se pudo conectar con la API del MITECO ni directamente "
@@ -108,13 +125,10 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
 
     records = data.get("ListaEESSPrecio", [])
     if not records:
-        fallback_file = PROJECT_ROOT / "fallback_miteco.parquet"
-        if fallback_file.exists():
-            print("[MITECO] La API no devolvió registros. Intentando cargar fallback parquet...")
-            try:
-                return MitecoResult(df=pd.read_parquet(fallback_file), fetched_at=datetime.now(UTC))
-            except Exception as e:
-                print(f"[MITECO] Error leyendo el fallback local: {e}")
+        print("[MITECO] La API no devolvió registros. Intentando cargar fallback parquet...")
+        fallback = _load_fallback()
+        if fallback is not None:
+            return fallback
 
         raise ValueError("La API del MITECO no devolvió registros. Comprueba el endpoint.")
 
@@ -154,7 +168,7 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
 
     # Guardar fallback local
     try:
-        df.to_parquet(PROJECT_ROOT / "fallback_miteco.parquet")
+        df.to_parquet(FALLBACK_FILE)
     except Exception as e:
         print(f"[MITECO] Aviso silencioso: No se pudo guardar el fallback parquet: {e}")
 

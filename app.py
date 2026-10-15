@@ -15,6 +15,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 import streamlit as st
 import streamlit_javascript as st_js
 from streamlit_folium import st_folium
@@ -41,6 +42,7 @@ from src.visualization.folium_map import generate_map
 class SpatialEngine:
     gdf: gpd.GeoDataFrame
     fetched_at: datetime
+    from_fallback: bool = False
 
 # ---------------------------------------------------------------------------
 # Motor Espacial Unificado
@@ -54,18 +56,48 @@ def get_spatial_engine() -> SpatialEngine:
     para evitar OOM (Out Of Memory) y desalineación (Race Conditions).
     """
     result = fetch_gasolineras()
-    
+
     # Soporte para transición en caliente en Streamlit Cloud:
     # Si el módulo no se ha recargado, result será pd.DataFrame.
     if isinstance(result, pd.DataFrame):
         df = result
         fetched_at = datetime.now(UTC)
+        from_fallback = False
     else:
         df = result.df
         fetched_at = result.fetched_at
-        
+        from_fallback = getattr(result, "from_fallback", False)
+
     gdf = build_stations_geodataframe(df)
-    return SpatialEngine(gdf=gdf, fetched_at=fetched_at)
+    return SpatialEngine(gdf=gdf, fetched_at=fetched_at, from_fallback=from_fallback)
+
+
+def render_freshness_caption():
+    """Muestra la antigüedad real de los precios y avisa si vienen de la copia local."""
+    engine = get_spatial_engine()
+    _mins_ago = int((datetime.now(tz=UTC) - engine.fetched_at).total_seconds() / 60)
+    if _mins_ago <= 0:
+        _freshness = "ahora mismo"
+    elif _mins_ago < 120:
+        _freshness = f"hace {_mins_ago} min"
+    else:
+        _freshness = f"hace {_mins_ago // 60} h"
+    if engine.from_fallback:
+        st.warning(
+            f"📡 El MITECO no responde. Mostrando la última copia guardada de precios ({_freshness}).",
+            icon="⚠️",
+        )
+    else:
+        st.caption(f"📡 Precios MITECO actualizados {_freshness}.")
+
+
+def _qp_int(name: str, default: int, lo: int, hi: int) -> int:
+    """Lee un entero de la URL tolerando valores inválidos y lo acota a [lo, hi]."""
+    try:
+        value = int(qp.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(lo, min(hi, value))
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +193,9 @@ COMBUSTIBLES = {
 qp = st.query_params
 _fuel_default = qp.get("fuel", "Gasolina 95")
 _fuel_default = _fuel_default if _fuel_default in COMBUSTIBLES else "Gasolina 95"
-_buffer_default = int(qp.get("buffer", 5))
-_buffer_default = max(1, min(15, _buffer_default))
-_top_default = int(qp.get("top", 5))
-_top_default = max(1, min(20, _top_default))
-_autonomia_default = int(qp.get("autonomia", 0))
+_buffer_default = _qp_int("buffer", 5, 1, 15)
+_top_default = _qp_int("top", 5, 1, 20)
+_autonomia_default = _qp_int("autonomia", 0, 0, 2000)
 _solo24h_default = qp.get("solo24h", "False").lower() == "true"
 _desvio_default = qp.get("desvio", "False").lower() == "true"
 
@@ -378,9 +408,7 @@ def render_controls():
                     del st.session_state[key]
                 st.rerun()
 
-        _mins_ago = int((datetime.now(tz=UTC) - get_spatial_engine().fetched_at).total_seconds() / 60)
-        _freshness = f"hace {_mins_ago} min" if _mins_ago > 0 else "ahora mismo"
-        st.caption(f"📡 Precios MITECO actualizados {_freshness}.")
+        render_freshness_caption()
 
     return {
         "origen_txt": origen_txt,
@@ -410,9 +438,9 @@ def render_desktop_view():
             _r = st.session_state["pipeline_results"]
             ui_components.render_config_summary(
                 pipeline_results=_r,
-                combustible=st.session_state.get("comb_selectbox", "Gasolina 95"),
-                radio_km=st.session_state.get("radio_slider", 5),
-                top_n=st.session_state.get("top_slider", 10),
+                combustible=_r.get("combustible_elegido", st.session_state.get("comb_selectbox", "Gasolina 95")),
+                radio_km=_r.get("radio_km", st.session_state.get("radio_slider", 5)),
+                top_n=_r.get("top_n", st.session_state.get("top_slider", 10)),
                 origen_txt=st.session_state.get("origen_txt", ""),
                 destino_txt=st.session_state.get("destino_txt", ""),
                 using_gpx=_r.get("using_gpx", False),
@@ -594,6 +622,13 @@ def render_mobile_wizard():
         else:
             autonomia_km = 0
 
+        # Persistir en claves no-widget en CADA render del paso 2. Los on_change no bastan:
+        # elegir un perfil (radio) cambia autonomia_input sin disparar _save_step2, y al pasar
+        # al paso 3 Streamlit borra el estado de los widgets que ya no se renderizan.
+        st.session_state["_w_combustible"] = combustible_elegido
+        st.session_state["_w_usar_vehiculo"] = usar_vehiculo
+        st.session_state["_w_autonomia"] = autonomia_km
+
         st.markdown("")
         col_prev, col_next = st.columns(2)
         with col_prev:
@@ -654,9 +689,7 @@ def render_mobile_wizard():
                     del st.session_state[key]
                 st.rerun()
 
-        _mins_ago = int((datetime.now(tz=UTC) - get_spatial_engine().fetched_at).total_seconds() / 60)
-        _freshness = f"hace {_mins_ago} min" if _mins_ago > 0 else "ahora mismo"
-        st.caption(f"📡 Precios MITECO actualizados {_freshness}.")
+        render_freshness_caption()
 
     # Si el pipeline ya tuvo resultados y el usuario vuelve, resetear wizard al paso 1
     if run_btn and "wizard_step" in st.session_state:
@@ -690,14 +723,9 @@ def render_mobile_view():
 
 # Detección responsiva de ancho
 viewport_width = st_js.st_javascript("window.innerWidth", key="viewport_width")
-is_mobile = False
-if viewport_width and viewport_width > 0 and viewport_width < 768:
-    is_mobile = True
+is_mobile = bool(viewport_width and 0 < viewport_width < 768)
 
-if is_mobile:
-    ctrl = render_mobile_view()
-else:
-    ctrl = render_desktop_view()
+ctrl = render_mobile_view() if is_mobile else render_desktop_view()
 
 # Extracción de variables para el pipeline
 origen_txt = ctrl["origen_txt"]
@@ -904,13 +932,10 @@ if _pipeline_active:
                 try:
                     osrm_progress = st.progress(0.0, text="Calculando desvíos reales por carretera…")
                     total_osrm = len(gdf_top)
-                    completed_osrm = 0
 
-                    for idx, result in enrich_stations_with_osrm(
-                        gdf_top,
-                        track_original=track,
+                    for completed_osrm, (idx, result) in enumerate(
+                        enrich_stations_with_osrm(gdf_top, track_original=track), start=1
                     ):
-                        completed_osrm += 1
                         osrm_progress.progress(
                             completed_osrm / total_osrm,
                             text=f"Recabando distancias reales: {completed_osrm}/{total_osrm}"
@@ -946,29 +971,15 @@ if _pipeline_active:
                 gdf_survival = gdf_survival[gdf_survival[fuel_column].notna() & (gdf_survival[fuel_column] > 0)].copy()
 
                 # Para que el Radar de autonomía funcione, necesita la columna km_ruta y estar ordenado.
-                # Usamos distancia geodésica (pyproj Geod) para ser consistentes con
-                # calculate_autonomy_radar(), que mide route_total_km con Geod, no con UTM.
+                # La fracción de ruta se calcula en UTM (métrico; proyectar en grados lat/lon deforma
+                # las distancias) y se escala a la longitud geodésica del track original, que es la que
+                # usa calculate_autonomy_radar() como total de la ruta.
                 import pyproj as _pyproj
                 _geod = _pyproj.Geod(ellps="WGS84")
-                _track_coords = list(track.coords)  # track en WGS84
-                _track_line_wgs = track  # ya está en WGS84
-
-                # Proyectar cada estación al punto más cercano del track WGS84 y medir distancia geodésica
-                gdf_surv_wgs = gdf_survival.to_crs("EPSG:4326")
-                _lons_t = [c[0] for c in _track_coords]
-                _lats_t = [c[1] for c in _track_coords]
-                _, _, _seg_dists = _geod.inv(_lons_t[:-1], _lats_t[:-1], _lons_t[1:], _lats_t[1:])
-                _cum_dist_km = [0.0]
-                for _d in _seg_dists:
-                    _cum_dist_km.append(_cum_dist_km[-1] + _d / 1000.0)
-
-                # Para cada estación, encontrar km en ruta via proyección lineal normalizada
-                _fracs = [
-                    _track_line_wgs.project(pt, normalized=True)
-                    for pt in gdf_surv_wgs.geometry
-                ]
-                _total_geod_km = _cum_dist_km[-1]
-                gdf_survival["km_ruta"] = [f * _total_geod_km for f in _fracs]
+                _total_geod_km = _geod.geometry_length(track) / 1000.0
+                _track_full_utm = gpd.GeoSeries([track], crs=CRS_WGS84).to_crs(CRS_UTM30N).iloc[0]
+                _fracs = shapely.line_locate_point(_track_full_utm, gdf_survival.geometry.values, normalized=True)
+                gdf_survival["km_ruta"] = _fracs * _total_geod_km
                 gdf_survival = gdf_survival.sort_values("km_ruta").reset_index(drop=True)
             else:
                 gdf_survival = gdf_survival.iloc[0:0].copy()
@@ -984,6 +995,12 @@ if _pipeline_active:
                 "using_gpx":        _input_mode in ("gpx", "demo"),
                 "gpx_bytes":        _gpx_bytes,
                 "espana_vaciada":   espana_vaciada,
+                # Parámetros con los que se calcularon los resultados: el dashboard debe
+                # usar estos y no los widgets actuales (que el usuario puede cambiar sin re-buscar)
+                "fuel_column":         fuel_column,
+                "combustible_elegido": combustible_elegido,
+                "radio_km":            radio_km,
+                "top_n":               top_n,
             }
 
         except RouteTextError as exc:
@@ -1028,6 +1045,9 @@ if "pipeline_results" in st.session_state:
     _using_gpx      = _r.get("using_gpx", False)
     _gpx_bytes      = _r.get("gpx_bytes")
     espana_vaciada  = _r.get("espana_vaciada", False)
+    fuel_column         = _r.get("fuel_column", fuel_column)
+    combustible_elegido = _r.get("combustible_elegido", combustible_elegido)
+    radio_km            = _r.get("radio_km", radio_km)
 
     if _using_demo:
         st.info("🧭 **Modo Demo activo** — Ruta Circular Sierra de Gredos (6 Puertos). Sube tu propio GPX desde el panel lateral cuando quieras.")
@@ -1096,10 +1116,8 @@ if "pipeline_results" in st.session_state:
                 "explorar el mapa o hacer zoom."
             ),
         )
-        if not is_mobile:
-            map_height = 700 if map_active else 420
-        else:
-            map_height = 480 if map_active else 300
+        map_heights = {(False, True): 700, (False, False): 420, (True, True): 480, (True, False): 300}
+        map_height = map_heights[(is_mobile, map_active)]
 
         # Regenerar mapa de forma determinista para la vista
         _, mapa_view = generate_map(
@@ -1356,7 +1374,7 @@ if "pipeline_results" in st.session_state:
                 precio_val = row.get(precio_col_label, None)
                 tramo_val = row.get("Tramo (km)", 0)
                 km_val = row.get("Km en Ruta", 0)
-                precio_str = f"{precio_val:.3f} €/L" if precio_val is not None else "—"
+                precio_str = f"{precio_val:.3f} €/L" if pd.notna(precio_val) else "—"
                 with st.container(border=True):
                     c_info, c_del = st.columns([5, 1])
                     with c_info:

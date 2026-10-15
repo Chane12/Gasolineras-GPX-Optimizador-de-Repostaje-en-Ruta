@@ -45,12 +45,11 @@ def render_welcome_screen(is_mobile: bool = False):
                 ("🗺️", "GPX + Texto", "Sube tu ruta o escribe origen y destino"),
                 ("⛽", "12.000 Estaciones", "Toda España indexada con R-Tree"),
             ]
-            for col, (icon, title, desc) in zip(pill_cols, pills):
-                with col:
-                    with st.container(border=True):
-                        st.markdown(f"<div style='text-align:center; font-size:1.6rem;'>{icon}</div>", unsafe_allow_html=True)
-                        st.markdown(f"<strong style='display:block; text-align:center;'>{title}</strong>", unsafe_allow_html=True)
-                        st.caption(desc)
+            for col, (icon, title, desc) in zip(pill_cols, pills, strict=True):
+                with col, st.container(border=True):
+                    st.markdown(f"<div style='text-align:center; font-size:1.6rem;'>{icon}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<strong style='display:block; text-align:center;'>{title}</strong>", unsafe_allow_html=True)
+                    st.caption(desc)
             st.markdown("")
             st.info(
                 "🛃 **¿Cómo funciona?**\n"
