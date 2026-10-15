@@ -121,3 +121,36 @@ def test_concurrent_requests_to_osrm_are_bounded(monkeypatch):
 def test_no_stations_means_no_requests(monkeypatch):
     monkeypatch.setattr(export.requests, "get", lambda *a, **k: pytest.fail("no request expected"))
     assert export.compute_detours(TRACK, []) == []
+
+
+def test_detours_out_of_time_return_none_without_asking_osrm(monkeypatch):
+    monkeypatch.setattr(export.requests, "get", lambda *a, **k: pytest.fail("no request expected"))
+
+    assert export.compute_detours(TRACK, [(-4.51, 40.71), (-4.4, 40.75)], max_seconds=0) == [None, None]
+
+
+def test_busy_osrm_slot_gives_up_instead_of_waiting_forever(monkeypatch):
+    monkeypatch.setattr(export, "OSRM_SEMAPHORE_WAIT_S", 0.01)
+    monkeypatch.setattr(export.requests, "get", lambda *a, **k: pytest.fail("no request expected"))
+    for _ in range(OSRM_MAX_CONCURRENCY):
+        export.OSRM_SEMAPHORE.acquire()
+    try:
+        assert export.get_real_distance_osrm(-4.5, 40.7, -4.4, 40.8) is None
+    finally:
+        for _ in range(OSRM_MAX_CONCURRENCY):
+            export.OSRM_SEMAPHORE.release()
+
+
+def test_gpx_splicing_out_of_time_still_passes_through_the_stations(monkeypatch):
+    import geopandas as gpd
+    import gpxpy
+
+    monkeypatch.setattr(export.requests, "get", lambda *a, **k: pytest.fail("no request expected"))
+    stops = gpd.GeoDataFrame({"Rótulo": ["Repsol"]}, geometry=gpd.points_from_xy([-4.5], [40.7]), crs="EPSG:4326")
+
+    xml = export.enrich_gpx_with_stops(export.build_gpx_from_track(TRACK), stops, max_seconds=0)
+
+    gpx = gpxpy.parse(xml)
+    assert len(gpx.waypoints) == 1
+    points = [(p.longitude, p.latitude) for p in gpx.tracks[0].segments[0].points]
+    assert (-4.5, 40.7) in points

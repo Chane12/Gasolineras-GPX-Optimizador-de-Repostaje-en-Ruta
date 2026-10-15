@@ -130,6 +130,12 @@ ROUTE_CACHE_TTL_S: float = 24 * 3600
 ROUTE_CACHE_MAX_ITEMS: int = 512
 # Peticiones simultáneas a OSRM como máximo en todo el proceso (desvíos y GPX con paradas); servidor de demostración.
 OSRM_MAX_CONCURRENCY: int = 3
+# Espera máxima por un hueco en OSRM; si no llega, ese desvío queda sin calcular.
+OSRM_SEMAPHORE_WAIT_S: float = 15.0
+# Tiempo máximo de una petición de desvíos / de un GPX con paradas: lo que no dé tiempo queda sin calcular
+# (Cloud Run corta las peticiones largas y el usuario no debe esperar minutos).
+DETOURS_MAX_S: float = 45.0
+GPX_SPLICE_MAX_S: float = 30.0
 # Desvíos (ida y vuelta a una gasolinera) cacheados por coordenadas redondeadas.
 DETOUR_CACHE_TTL_S: float = 24 * 3600
 DETOUR_CACHE_MAX_ITEMS: int = 4096

@@ -1,6 +1,6 @@
 # 0005 — Uso responsable de MITECO, OSRM y Nominatim
 
-- **Estado**: Aceptada (implementación en Fase 1)
+- **Estado**: Aceptada. Implementada en la Fase 1 (2026-10-15): puntos 1–4 y 6 en el core y la API. El punto 5 (salida de OSRM) queda para cuando haya tráfico (Fase 3+).
 - **Fecha**: 2026-10-15
 
 ## Contexto

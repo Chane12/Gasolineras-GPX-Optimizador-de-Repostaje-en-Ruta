@@ -8,7 +8,7 @@ Cada archivo explica **una** decisión: el contexto, qué se decidió y sus cons
 | [0002](0002-hosting-gratuito.md) | Alojamiento a 0 € hasta monetizar | Aceptada |
 | [0003](0003-monorepo-uv-workspace.md) | Monorepo con workspace uv y `core` sin UI | Aceptada |
 | [0004](0004-convencion-idioma.md) | Inglés en el código, español en interfaz y docs | Aceptada |
-| [0005](0005-servicios-externos.md) | Uso responsable de MITECO, OSRM y Nominatim | Aceptada (implementación en Fase 1) |
+| [0005](0005-servicios-externos.md) | Uso responsable de MITECO, OSRM y Nominatim | Aceptada (implementada en la Fase 1; OSRM propio pendiente) |
 | [0006](0006-licencia-propietaria.md) | Licencia propietaria (todos los derechos reservados) | Aceptada |
 | [0007](0007-tls-miteco.md) | Cifrado TLS heredado solo para el MITECO | Aceptada |
 

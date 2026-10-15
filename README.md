@@ -2,13 +2,14 @@
 
 Encuentra las gasolineras más baratas a lo largo de tu ruta por España. Cruza tu trayecto (archivo GPX u origen y destino) con los precios oficiales del Ministerio para la Transición Ecológica (MITECO), tiene en cuenta el desvío real por carretera y avisa de los tramos en los que tu moto o coche podría quedarse sin combustible.
 
-> **Estado**: la app actual (Streamlit) está en producción. Se está construyendo una web nueva (FastAPI + Next.js). Ver [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Estado**: la app actual (Streamlit) está en producción. La API nueva (FastAPI) está terminada, a falta de desplegarla; la web (Next.js) es la siguiente fase. Ver [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Estructura
 
 | Carpeta | Contenido |
 |---|---|
 | [`core/`](core/) | Motor geoespacial `gasolineras_core` (ingesta MITECO, GPX, corredor espacial, optimizador) y CLI |
+| [`api/`](api/) | API HTTP (FastAPI) sobre el motor; contrato en [`api/openapi.json`](api/openapi.json) |
 | [`legacy/streamlit/`](legacy/streamlit/) | App Streamlit actual (en producción, congelada) |
 | [`docs/`](docs/) | [Roadmap](docs/ROADMAP.md), [arquitectura](docs/architecture.md) y [decisiones](docs/decisions/) |
 | [`scripts/`](scripts/) | Verificación y utilidades |
@@ -28,6 +29,12 @@ uv sync --all-packages
 ```bash
 # App web actual
 uv run streamlit run legacy/streamlit/app.py
+
+# API (documentación interactiva en http://127.0.0.1:8000/docs)
+uv run uvicorn gasolineras_api.main:app --reload
+
+# API en contenedor, como en producción
+docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api
 
 # CLI (por defecto usa la ruta de demo de la Sierra de Gredos)
 uv run gasolineras --fuel "Precio Gasolina 95 E5" --top 10 --segment-km 50
