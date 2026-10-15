@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from shapely.geometry import LineString
 
 from gasolineras_api.catalogue import CatalogueUnavailableError, PriceCatalogue
+from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import (
     AutonomySegment,
     ErrorResponse,
@@ -72,7 +73,9 @@ def _station(row: Any, lon: float, lat: float, max_price: float | None) -> Stati
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Ruta no válida"},
         status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Precios no disponibles"},
+        **RATE_LIMIT_RESPONSE,
     },
+    dependencies=[Depends(rate_limited("default"))],
 )
 def search(body: SearchRequest, catalogue: Annotated[PriceCatalogue, Depends(get_catalogue)]) -> SearchResponse:
     """Busca las gasolineras más baratas a lo largo de la ruta y, opcionalmente, el radar de autonomía."""

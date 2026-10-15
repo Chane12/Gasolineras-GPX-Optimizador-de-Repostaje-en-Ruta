@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from gasolineras_api.catalogue import PriceCatalogue
+from gasolineras_api.ratelimit import RateLimiter
 from gasolineras_api.routers import detours, export, route, search
 from gasolineras_api.routers.search import get_catalogue
 from gasolineras_api.schemas import PricesStatus
@@ -35,8 +36,10 @@ def _prices_status(catalogue: PriceCatalogue) -> PricesStatus:
     return PricesStatus.from_result(result)
 
 
-def create_app(catalogue: PriceCatalogue | None = None, warm_up: bool = True) -> FastAPI:
-    """Build the app. Tests pass their own ``catalogue`` (no network) and ``warm_up=False``."""
+def create_app(
+    catalogue: PriceCatalogue | None = None, warm_up: bool = True, rate_limiter: RateLimiter | None = None
+) -> FastAPI:
+    """Build the app. Tests pass their own ``catalogue`` (no network), ``warm_up=False`` and limits."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -52,6 +55,7 @@ def create_app(catalogue: PriceCatalogue | None = None, warm_up: bool = True) ->
         lifespan=lifespan,
     )
     app.state.catalogue = catalogue or PriceCatalogue()
+    app.state.rate_limiter = rate_limiter or RateLimiter()
 
     @app.get("/health", response_model=HealthResponse, tags=["sistema"])
     def health(request: Request) -> HealthResponse:

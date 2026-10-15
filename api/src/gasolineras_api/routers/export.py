@@ -1,9 +1,10 @@
 """Export the trip: Google Maps link and GPX with fuel stops."""
 
 import geopandas as gpd
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 from shapely.geometry import LineString
 
+from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import GmapsUrlRequest, GmapsUrlResponse, GpxExportRequest
 from gasolineras_core.config import CRS_WGS84
 from gasolineras_core.optimizer import export
@@ -13,7 +14,12 @@ router = APIRouter(prefix="/export", tags=["exportación"])
 _PRICE_COLUMN = "precio_parada"
 
 
-@router.post("/gmaps-url", response_model=GmapsUrlResponse)
+@router.post(
+    "/gmaps-url",
+    response_model=GmapsUrlResponse,
+    responses=RATE_LIMIT_RESPONSE,
+    dependencies=[Depends(rate_limited("default"))],
+)
 def gmaps_url(body: GmapsUrlRequest) -> GmapsUrlResponse:
     """Enlace de Google Maps con la ruta y las paradas de repostaje (máximo 9 intermedias)."""
     stops = gpd.GeoDataFrame(
@@ -26,7 +32,8 @@ def gmaps_url(body: GmapsUrlRequest) -> GmapsUrlResponse:
 @router.post(
     "/gpx",
     response_class=Response,
-    responses={200: {"content": {"application/gpx+xml": {}}, "description": "Archivo GPX"}},
+    responses={200: {"content": {"application/gpx+xml": {}}, "description": "Archivo GPX"}, **RATE_LIMIT_RESPONSE},
+    dependencies=[Depends(rate_limited("external"))],
 )
 def gpx(body: GpxExportRequest) -> Response:
     """GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).

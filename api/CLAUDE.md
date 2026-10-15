@@ -15,6 +15,7 @@ Expone el motor `gasolineras_core` por HTTP para la web (`web/`, Next.js). Stack
   - `422`: el cuerpo no cumple el esquema (lo genera FastAPI; `detail` es una lista).
   - `503`: un servicio externo está caído o saturado.
   - Nunca un `500` sin explicar.
+- **Todo endpoint nuevo declara su cupo** (`ratelimit.py`): `dependencies=[Depends(rate_limited("external"))]` si llama a Nominatim u OSRM, `"default"` si no, y `responses=RATE_LIMIT_RESPONSE`. Solo `/health` va sin límite. Detrás de un proxy (Cloud Run) hay que definir `GASOLINERAS_TRUSTED_PROXY_HOPS=1`; si no, todos los usuarios compartirían la IP del proxy.
 - Los routers van en `routers/` (uno por recurso); los modelos públicos, en `schemas.py`. Las geometrías se devuelven en GeoJSON (`[lon, lat]`, WGS84).
 - **Precios**: siempre a través de `PriceCatalogue` (`catalogue.py`, en `app.state.catalogue`): una descarga cada 30 min para todos, sin proxies, y si el MITECO cae se conservan los últimos datos. Toda respuesta con precios debe incluir su antigüedad (`price_freshness`: fresh ≤ 30 min, stale ≤ 24 h con aviso, very_stale > 24 h con aviso fuerte). Nunca se deja al usuario sin resultados por antigüedad.
 - **Tests sin red** en `api/tests/`: simula el core o `requests.get` con `monkeypatch`. Los que usen red, con `@pytest.mark.network`.

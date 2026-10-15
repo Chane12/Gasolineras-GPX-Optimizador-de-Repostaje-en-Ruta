@@ -3,9 +3,10 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from shapely.geometry import LineString
 
+from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import ErrorResponse, LineStringGeometry, Place, RouteResponse, RouteTextRequest
 from gasolineras_core.ingestion import geocoder
 from gasolineras_core.ingestion.gpx_parser import parse_gpx_track, validate_gpx_track
@@ -19,6 +20,7 @@ MAX_GPX_BYTES = 15 * 1024 * 1024  # a GPX near the 50,000-point limit is ~5-10 M
 ROUTE_ERRORS: dict[int | str, dict] = {
     status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Lugar, ruta o GPX no válidos"},
     status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Servicio externo no disponible"},
+    **RATE_LIMIT_RESPONSE,
 }
 
 
@@ -30,7 +32,12 @@ def _validated(track: LineString) -> LineString:
     return track
 
 
-@router.post("/text", response_model=RouteResponse, responses=ROUTE_ERRORS)
+@router.post(
+    "/text",
+    response_model=RouteResponse,
+    responses=ROUTE_ERRORS,
+    dependencies=[Depends(rate_limited("external"))],
+)
 def route_from_text(body: RouteTextRequest) -> RouteResponse:
     """Calcula la ruta por carretera entre un origen y un destino escritos en texto."""
     try:
@@ -55,6 +62,7 @@ def route_from_text(body: RouteTextRequest) -> RouteResponse:
 @router.post(
     "/gpx",
     response_model=RouteResponse,
+    dependencies=[Depends(rate_limited("default"))],
     responses={
         **ROUTE_ERRORS,
         status.HTTP_413_CONTENT_TOO_LARGE: {"model": ErrorResponse, "description": "Archivo demasiado grande"},
