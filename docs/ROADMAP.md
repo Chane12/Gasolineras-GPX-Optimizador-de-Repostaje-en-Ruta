@@ -32,7 +32,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] `POST /route/text` (origen/destino → track), `POST /route/gpx` (subida) — track en GeoJSON; errores 400/413/503
 - [x] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía) y `GET /fuels` — lógica en `core/optimizer/search.py`; mismas gasolineras y precios que Streamlit en la demo de Gredos (comprobado con datos reales)
 - [x] `POST /detours` (desvíos OSRM, con límite de concurrencia): máx. 3 peticiones simultáneas a OSRM en todo el proceso, caché de 24 h, resultados parciales con `complete: false` si OSRM se satura
-- [ ] `POST /export/gpx` y `GET /export/gmaps-url`
+- [x] `POST /export/gpx` y `POST /export/gmaps-url` (POST en vez de GET: así las coordenadas no van en la URL de la API) — GPX con waypoints y track desviado por cada parada (OSRM, bajo el límite global)
 - [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
 - [ ] Límite de peticiones por cliente en la API (que un solo usuario no agote el cupo de Nominatim/OSRM de todos)
@@ -83,4 +83,5 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | `uv.lock` único compartido | Las dependencias de `api/` (y las de desarrollo) pueden mover versiones de la app legacy en producción (p. ej. pydantic 2.14 → `typing-extensions` 4.16; `httpx2` → `idna` 3.20). Revisar el diff de `legacy/streamlit/requirements.txt` en cada PR y pasar `--smoke` | Hasta retirar Streamlit (Fase 3) |
 | `km_ruta` con dos métodos (solo Streamlit) | La API ya usa un único método (`route_positions_km`: ruta original, longitud geodésica). Streamlit sigue midiendo el ranking sobre el track simplificado (~2,5 % menos) | Se va con Streamlit (Fase 3) |
 | Lógica de búsqueda duplicada | `search_stations` (core) replica el pipeline de `legacy/streamlit/app.py`; Streamlit no se migra por estar congelada | Se va con Streamlit (Fase 3) |
+| GPX exportado sin altitud ni horas | `/route/gpx` solo devuelve lon/lat, así que el GPX exportado pierde la altitud y los tiempos del original | Si los usuarios lo piden: guardar el GPX original o devolver la altitud |
 | Tramos de 0 km en el radar | Gasolineras contiguas generan tramos de 0 km (igual que en Streamlit). La web puede agruparlos al pintarlos | Fase 2 |

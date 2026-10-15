@@ -271,6 +271,18 @@ def compute_detours(track: LineString, stations_lonlat: list[tuple[float, float]
     return results
 
 
+def build_gpx_from_track(track: LineString, name: str = "Ruta") -> bytes:
+    """GPX 1.1 con un único track a partir de un LineString WGS84 (para rutas calculadas desde texto)."""
+    gpx_obj = _gpx.GPX()
+    gpx_obj.creator = "Gasolineras en Ruta"
+    gpx_track = _gpx.GPXTrack(name=name)
+    segment = _gpx.GPXTrackSegment()
+    segment.points = [_gpx.GPXTrackPoint(latitude=lat, longitude=lon) for lon, lat, *_ in track.coords]
+    gpx_track.segments.append(segment)
+    gpx_obj.tracks.append(gpx_track)
+    return gpx_obj.to_xml().encode("utf-8")
+
+
 def enrich_gpx_with_stops(
     gpx_bytes: bytes,
     gdf_stops: gpd.GeoDataFrame,
@@ -387,13 +399,14 @@ def enrich_gpx_with_stops(
                 f"/{split_lon},{split_lat};{station_lon},{station_lat}"
                 f"?overview=full&geometries=geojson&alternatives=false&steps=false"
             )
-            resp_in = requests.get(url_in, headers=headers, timeout=5.0)
+            with OSRM_SEMAPHORE:
+                resp_in = requests.get(url_in, headers=headers, timeout=5.0)
             if resp_in.status_code == 200:
                 data_in = resp_in.json()
                 if data_in.get("routes"):
                     entrada = data_in["routes"][0]["geometry"]["coordinates"]
         except Exception as e:
-            print(f"[GPX Splicing] Fallo entrada OSRM: {e}")
+            logger.warning("GPX splicing: OSRM way in failed: %s", e)
 
         time.sleep(0.3)
 
@@ -403,13 +416,14 @@ def enrich_gpx_with_stops(
                 f"/{station_lon},{station_lat};{reinc_lon},{reinc_lat}"
                 f"?overview=full&geometries=geojson&alternatives=false&steps=false"
             )
-            resp_out = requests.get(url_out, headers=headers, timeout=5.0)
+            with OSRM_SEMAPHORE:
+                resp_out = requests.get(url_out, headers=headers, timeout=5.0)
             if resp_out.status_code == 200:
                 data_out = resp_out.json()
                 if data_out.get("routes"):
                     salida = data_out["routes"][0]["geometry"]["coordinates"]
         except Exception as e:
-            print(f"[GPX Splicing] Fallo salida OSRM: {e}")
+            logger.warning("GPX splicing: OSRM way out failed: %s", e)
 
         new_points = []
         if entrada:
