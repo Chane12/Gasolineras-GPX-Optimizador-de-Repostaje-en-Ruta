@@ -6,7 +6,7 @@ Expone el motor `gasolineras_core` por HTTP para la web (`web/`, Next.js). Stack
 
 - **Capa fina**: aquí solo hay HTTP (validación, serialización, caché, límites). La lógica de negocio vive en `core/`; si falta algo, se añade allí con su test, nunca se duplica aquí.
 - Dependencias: `web → api → core`. `core` no puede importar nada de `api`.
-- **El OpenAPI es el contrato** (la web genera sus tipos a partir de él): cada endpoint con `response_model` Pydantic, con `tags` y nombres de campo estables. Cambiar un campo es un cambio de contrato: dilo en el PR.
+- **El OpenAPI es el contrato** (la web genera sus tipos a partir de él): cada endpoint con `response_model` Pydantic, con `tags` y nombres de campo estables. Está versionado en `api/openapi.json` (`./scripts/export-openapi.sh`; `verify.sh` falla si no está al día). Cambiar un campo es un cambio de contrato: dilo en el PR.
 - Fábrica `create_app()` en `main.py`; los tests construyen su propia app con `TestClient(create_app())` y simulan las funciones del core con `monkeypatch` (ver `tests/test_route.py`).
 - Servicios externos (MITECO, OSRM, Nominatim): timeout, degradación elegante y uso honesto (User-Agent identificable, caché, rate-limit) — ADR 0005. El limitador y las cachés viven en el core (`gasolineras_core.http_utils`) para que también los use la app Streamlit.
 - **Códigos de error** (siempre `{"detail": "mensaje en español para el usuario"}`, declarados en `responses=` con `ErrorResponse`):

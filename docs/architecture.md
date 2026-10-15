@@ -33,6 +33,21 @@ Pipeline de una búsqueda (detalle de módulos en `core/README.md`):
 4. **Selección**: `filter_cheapest_stations` (Top-N global + la más barata por tramo de X km) o `filter_all_stations_on_route` (España Vaciada, corredor de 500 m). Añade `precio_seleccionado` y `km_ruta`.
 5. **Extras**: desvíos reales OSRM (`enrich_stations_with_osrm`), radar de autonomía (`calculate_autonomy_radar`), exportación (`generate_google_maps_url`, `enrich_gpx_with_stops`).
 
+## La API (`api/`)
+
+Capa HTTP fina sobre el core; contrato en `api/openapi.json`. Flujo típico de la web:
+
+| Paso | Endpoint | Notas |
+|---|---|---|
+| Ruta | `POST /route/text` · `POST /route/gpx` | Track validado en GeoJSON |
+| Combustibles | `GET /fuels` | Identificadores estables + nombre en español |
+| Búsqueda | `POST /search` | Gasolineras, km en ruta, ahorro, radar de autonomía y antigüedad de los precios |
+| Desvíos | `POST /detours` | OSRM, en una segunda llamada (es lento); parcial si OSRM se satura |
+| Exportar | `POST /export/gmaps-url` · `POST /export/gpx` | Enlace de Maps; GPX con paradas |
+| Salud | `GET /health` | Estado y antigüedad de los precios; nunca descarga |
+
+Piezas propias: `PriceCatalogue` (precios del MITECO en memoria, 30 min, para todos los usuarios), `ratelimit.py` (cupos por IP) y `logging_config.py`. Imagen: `Dockerfile` en la raíz.
+
 ## Sistemas de referencia
 
 - `EPSG:4326` (WGS84, grados): entrada GPX, APIs externas y salida a mapas.

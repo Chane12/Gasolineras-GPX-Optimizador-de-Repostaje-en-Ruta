@@ -21,10 +21,10 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 |---|---|---|
 | `core/` | Motor geoespacial `gasolineras_core` (lógica de negocio, sin UI) | Activo |
 | `legacy/streamlit/` | App Streamlit actual, **en producción** (Streamlit Community Cloud) | Congelada: solo bugs |
-| `api/` | FastAPI sobre `core` (`gasolineras_api`) | Fase 1 (esqueleto) |
+| `api/` | FastAPI sobre `core` (`gasolineras_api`); contrato en `api/openapi.json` | Activo (sin desplegar hasta la Fase 3) |
 | `web/` | Next.js | Fase 2 (no existe aún) |
 | `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs) | |
-| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `smoke_legacy.py`, `check_prod.py` | |
+| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py` | |
 | `.claude/` | Hooks (formateo automático) y skills del proyecto | |
 
 ## Comandos
@@ -38,7 +38,8 @@ uv run gasolineras --help                         # CLI del motor
 uv run streamlit run legacy/streamlit/app.py      # app actual en local
 uv run uvicorn gasolineras_api.main:app --reload  # API en local (http://127.0.0.1:8000/docs)
 docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api  # API en contenedor (lo prueba el CI)
-./scripts/export-legacy-requirements.sh           # tras cambiar dependencias de core o legacy
+./scripts/export-legacy-requirements.sh           # tras cambiar dependencias o el core
+./scripts/export-openapi.sh                       # tras cambiar el contrato de la API (verify.sh lo regenera y avisa)
 ```
 
 Dependencias: **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nunca pip ni requirements a mano. Después de cambiar dependencias **o el core**, regenera `legacy/streamlit/requirements.txt` con el script: lleva una huella de `core/src` para que Streamlit Cloud reinicie la app con el core nuevo (`verify.sh` lo regenera y avisa).
