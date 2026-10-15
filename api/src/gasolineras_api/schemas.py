@@ -219,3 +219,44 @@ class Detour(BaseModel):
 class DetoursResponse(BaseModel):
     detours: list[Detour] = Field(description="En el mismo orden que la petición")
     complete: bool = Field(description="false si alguna gasolinera se quedó sin desvío (servicio de rutas saturado)")
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+MAX_EXPORT_STOPS = 20
+LonLat = tuple[float, float]
+
+
+class GmapsUrlRequest(BaseModel):
+    origin: LonLat = Field(description="[lon, lat] del inicio de la ruta")
+    destination: LonLat = Field(description="[lon, lat] del final de la ruta")
+    stops: list[StationPoint] = Field(default_factory=list, max_length=MAX_EXPORT_STOPS, description="En orden de ruta")
+
+
+class GmapsUrlResponse(BaseModel):
+    url: str
+    truncated: int = Field(description="Paradas omitidas: Google Maps admite como máximo 9 intermedias")
+
+
+class GpxStop(BaseModel):
+    name: str = Field(max_length=120)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    price: float | None = Field(default=None, ge=0, description="€/L, para la descripción del waypoint")
+    liters: float | None = Field(default=None, ge=0, description="Litros previstos en esta parada")
+    cost: float | None = Field(default=None, ge=0, description="Coste previsto de la parada (€)")
+
+
+class GpxExportRequest(BaseModel):
+    track: LineStringGeometry
+    stops: list[GpxStop] = Field(default_factory=list, max_length=10)
+    name: str = Field(default="Ruta con gasolineras", max_length=120)
+
+    @field_validator("track")
+    @classmethod
+    def _track_size(cls, value: LineStringGeometry) -> LineStringGeometry:
+        if not 2 <= len(value.coordinates) <= MAX_TRACK_POINTS:
+            raise ValueError(f"El track debe tener entre 2 y {MAX_TRACK_POINTS} puntos")
+        return value
