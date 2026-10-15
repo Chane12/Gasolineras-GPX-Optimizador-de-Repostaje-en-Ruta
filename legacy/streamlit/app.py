@@ -195,7 +195,7 @@ COMBUSTIBLES = {
     "Gasolina 98": "Precio Gasolina 98 E5",
     "Diésel (Gasoil A)": "Precio Gasoleo A",
     "Diésel Premium": "Precio Gasoleo Premium",
-    "GLP / Autogas": "Precio Gases licuados del petroleo",
+    "GLP / Autogas": "Precio Gases licuados del petróleo",
     "Gas Natural Comprimido (GNC)": "Precio Gas Natural Comprimido",
     "Gas Natural Licuado (GNL)": "Precio Gas Natural Licuado",
     "Gasoil B (agrícola/industrial)": "Precio Gasoleo B",

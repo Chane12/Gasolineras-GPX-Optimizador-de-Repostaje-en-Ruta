@@ -75,6 +75,21 @@ class TestParseMitecoRecords:
         assert df.loc["HIDROGENERA", "Precio Hidrogeno"] == pytest.approx(12.5)
         assert df.loc["BP", "Precio Gas Natural Comprimido"] == pytest.approx(1.299)
 
+    def test_lpg_column_with_accent_is_parsed_as_a_price(self):
+        """Bug: config used "petroleo" without accent, so GLP was never parsed nor found."""
+        records = [
+            {"Latitud": "40,1", "Longitud (WGS84)": "-4,1", "Precio Gases licuados del petróleo": "0,989"},
+            {"Latitud": "40,2", "Longitud (WGS84)": "-4,2", "Precio Gases licuados del petróleo": ""},
+        ]
+        df = miteco.parse_miteco_records(records)
+        assert df["Precio Gases licuados del petróleo"].tolist()[0] == pytest.approx(0.989)
+        assert pd.isna(df["Precio Gases licuados del petróleo"].tolist()[1])
+
+    def test_old_column_names_are_renamed(self):
+        records = [{"Latitud": "40,1", "Longitud (WGS84)": "-4,1", "Precio Gases licuados del petroleo": "0,989"}]
+        df = miteco.parse_miteco_records(records)
+        assert df["Precio Gases licuados del petróleo"].tolist() == [pytest.approx(0.989)]
+
     def test_index_is_reset(self, miteco_payload):
         df = miteco.parse_miteco_records(miteco_payload["ListaEESSPrecio"])
         assert list(df.index) == [0, 1, 2]

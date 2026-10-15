@@ -47,11 +47,16 @@ PRICE_COLUMNS: list[str] = [
     "Precio Biodiesel",
     "Precio Gas Natural Comprimido",
     "Precio Gas Natural Licuado",
-    "Precio Gases licuados del petroleo",
+    "Precio Gases licuados del petróleo",  # con tilde, como lo publica el MITECO
     "Precio Hidrogeno",
 ]
 
 COORD_COLUMNS: list[str] = ["Latitud", "Longitud (WGS84)"]
+
+# Nombres de columna antiguos o mal escritos → nombre real del MITECO (se renombran al limpiar los datos).
+MITECO_COLUMN_ALIASES: dict[str, str] = {
+    "Precio Gases licuados del petroleo": "Precio Gases licuados del petróleo",
+}
 
 # El servidor del MITECO solo negocia TLS 1.2 con AES256-GCM-SHA384 (intercambio de claves RSA, sin
 # secreto hacia adelante). Python >= 3.10 excluye esos cifrados por defecto y la conexión directa fallaba
