@@ -106,7 +106,7 @@ def validate_gpx_track(track: LineString) -> None:
             "Esta herramienta solo cubre España peninsular, Baleares y Canarias."
         )
 
-    print(f"[Validación] Track OK: {n_pts:,} puntos, centroide ({c_lat:.3f}, {c_lon:.3f}).")
+    logger.debug("Track OK: %d points, centroid (%.3f, %.3f)", n_pts, c_lat, c_lon)
 
 
 def simplify_track(track: LineString, tolerance_deg: float = 0.0005) -> LineString:
@@ -128,5 +128,10 @@ def simplify_track(track: LineString, tolerance_deg: float = 0.0005) -> LineStri
     simplified = track.simplify(tolerance_deg, preserve_topology=True)
     if not isinstance(simplified, LineString):
         raise ValueError(f"La simplificación del track produjo una geometría inesperada: {simplified.geom_type}")
-    print(f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} (tolerancia={tolerance_deg} deg)")
+    logger.debug(
+        "Simplified track: %d -> %d vertices (tolerance %s deg)",
+        len(track.coords),
+        len(simplified.coords),
+        tolerance_deg,
+    )
     return simplified

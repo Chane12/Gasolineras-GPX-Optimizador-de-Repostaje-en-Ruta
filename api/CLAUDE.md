@@ -27,4 +27,7 @@ Expone el motor `gasolineras_core` por HTTP para la web (`web/`, Next.js). Stack
 ```bash
 uv run uvicorn gasolineras_api.main:app --reload   # http://127.0.0.1:8000/docs
 uv run pytest -q api/tests
+docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api   # imagen de producción (Dockerfile en la raíz)
 ```
+
+Variables de entorno: `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (1 detrás de Cloud Run), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).

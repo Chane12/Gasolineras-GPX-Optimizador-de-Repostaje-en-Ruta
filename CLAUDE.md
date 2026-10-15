@@ -37,6 +37,7 @@ uv run pytest -q                                  # solo tests
 uv run gasolineras --help                         # CLI del motor
 uv run streamlit run legacy/streamlit/app.py      # app actual en local
 uv run uvicorn gasolineras_api.main:app --reload  # API en local (http://127.0.0.1:8000/docs)
+docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api  # API en contenedor (lo prueba el CI)
 ./scripts/export-legacy-requirements.sh           # tras cambiar dependencias de core o legacy
 ```
 

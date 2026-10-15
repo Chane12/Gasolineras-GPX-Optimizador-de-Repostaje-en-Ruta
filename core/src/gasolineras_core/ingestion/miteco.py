@@ -216,6 +216,6 @@ def parse_miteco_records(records: list[dict]) -> pd.DataFrame:
     filas_antes = len(df)
     df = df.dropna(subset=[lat_col, lon_col])
     df = df.loc[(df[lat_col] != 0.0) & (df[lon_col] != 0.0)]
-    print(f"[MITECO] Filas eliminadas por falta de coordenadas: {filas_antes - len(df)} -- Válidas: {len(df)}")
+    logger.info("MITECO rows dropped without coordinates: %d; valid: %d", filas_antes - len(df), len(df))
 
     return df.reset_index(drop=True)

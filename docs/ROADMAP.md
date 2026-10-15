@@ -37,7 +37,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
 - [x] Límite de peticiones por cliente en la API: 10/min en lo que usa OSM (`/route/text`, `/detours`, `/export/gpx`) y 60/min en el resto; 429 con `Retry-After`. IP real tras proxies con `GASOLINERAS_TRUSTED_PROXY_HOPS`
 - [ ] Tests de la API (TestClient) sin red
-- [ ] Dockerfile de la API
+- [x] Dockerfile de la API (multi-etapa con uv, usuario sin privilegios, `PORT` configurable); el CI construye la imagen y comprueba `/health` en cada PR
 
 ## Fase 2 — Web (Next.js)
 
@@ -73,11 +73,10 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | Photon lento | Como respaldo de Nominatim llega a tardar ~14 s; tiene el doble de timeout (10 s) | Vigilar |
 | Servidor demo de OSRM | `routing.openstreetmap.de` / `router.project-osrm.org` no son para producción | Fase 1–3 (ADR 0005) |
 | Proxies públicos para el MITECO | Dejaron de funcionar el 2026-10-15 (`corsproxy.io` exige clave; los otros dan 522). Solo quedan en Streamlit, que ya descarga directo (ADR 0007); si el MITECO falla, se pierden ~15 s probándolos. Quitarlos si siguen muertos | Próximo arreglo en Streamlit o Fase 3 |
-| Logs de la API | Con uvicorn no salen nuestros `logger.info` (falta configurar `logging`) | Con el Dockerfile |
 | Fecha oficial del MITECO | La respuesta trae `Fecha` (hora de publicación); usamos la hora de descarga. Valorar mostrar la oficial | Al diseñar `/search` |
 | UTM 30N en Canarias | Distorsión del 2–3 % en distancias (Canarias está en el huso 28) | Cuando haya usuarios allí |
 | `folium_map.py` en `core` | Es presentación, no lógica; desaparece con Streamlit | Fase 3 |
-| `print()` como log | Migrar a `logging` al tocar cada módulo | Continuo |
+| `print()` como log | Ya no queda en el camino de búsqueda de la API; sí en `cli.py` y `folium_map.py` (se van con Streamlit) | Continuo |
 | pyright en modo `basic` | Subir a `standard` (~120 avisos, sobre todo tipos de pandas) | Fase 1 |
 | PWA de Streamlit | `.streamlit/static/` no se sirve (falta `enableStaticServing` y la carpeta `static/` junto al script) | No arreglar: la PWA se hace en `web/` |
 | `uv.lock` único compartido | Las dependencias de `api/` (y las de desarrollo) pueden mover versiones de la app legacy en producción (p. ej. pydantic 2.14 → `typing-extensions` 4.16; `httpx2` → `idna` 3.20). Revisar el diff de `legacy/streamlit/requirements.txt` en cada PR y pasar `--smoke` | Hasta retirar Streamlit (Fase 3) |

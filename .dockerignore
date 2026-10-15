@@ -1,0 +1,15 @@
+.git
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+*.parquet
+web
+docs
+scripts
+.claude
+.github
+core/tests
+api/tests
+legacy/streamlit/*.py
+legacy/streamlit/requirements.txt

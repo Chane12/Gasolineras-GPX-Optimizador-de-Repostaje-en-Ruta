@@ -6,6 +6,7 @@ Fuel station filtering logic: Top-N cheapest, segment-based, and España Vaciada
 
 from __future__ import annotations
 
+import logging
 import math
 
 import geopandas as gpd
@@ -15,6 +16,8 @@ import shapely.ops
 from shapely.geometry import LineString
 
 from gasolineras_core.config import PRICE_COLUMNS
+
+logger = logging.getLogger(__name__)
 
 
 def _numeric_prices(gdf: gpd.GeoDataFrame, fuel_column: str) -> pd.Series:
@@ -61,7 +64,7 @@ def filter_cheapest_stations(
     mask_precios = precios_num.notna() & (precios_num > 0)
 
     if not mask_precios.any():
-        print(f"[Filtrado] [WARN] No hay gasolineras con precio para '{fuel_column}'.")
+        logger.info("No stations with a price for %s", fuel_column)
         return gdf.iloc[0:0].copy()
 
     # Construimos el repositorio de índices de ganadores
@@ -105,13 +108,7 @@ def filter_cheapest_stations(
     else:
         gdf_top = gdf_top.sort_values("precio_seleccionado").reset_index(drop=True)
 
-    print(f"\n[Filtrado] Resultados ({len(gdf_top)} estaciones) para '{fuel_column}':")
-    for i, row in gdf_top.iterrows():
-        nombre = row.get("Rótulo", row.get("C.P.", "N/A"))
-        municipio = row.get("Municipio", "")
-        precio = row["precio_seleccionado"]
-        km_str = f" (Km {row['km_ruta']:.1f})" if "km_ruta" in row else ""
-        print(f"  #{i + 1} {nombre}{km_str} ({municipio}) --> {precio:.3f} EUR/L")
+    logger.info("Cheapest stations: %d for %s", len(gdf_top), fuel_column)
 
     return gdf_top
 
@@ -146,5 +143,5 @@ def filter_all_stations_on_route(
     else:
         gdf_valid = gdf_valid.reset_index(drop=True)
 
-    print(f"[España Vaciada] {len(gdf_valid)} gasolineras en corredor estricto para '{fuel_column}'.")
+    logger.info("España Vaciada: %d stations on the route for %s", len(gdf_valid), fuel_column)
     return gdf_valid
