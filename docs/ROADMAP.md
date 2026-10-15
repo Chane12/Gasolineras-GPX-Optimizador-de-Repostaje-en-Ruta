@@ -42,15 +42,25 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 ## Fase 2 — Web (Next.js)
 
-Hecho cuando iguala la funcionalidad de la app Streamlit.
+Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funciona sin conexión. **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-- [ ] `web/` con Next.js + TypeScript estricto; `web/CLAUDE.md`
-- [ ] Tipos TypeScript generados desde `api/openapi.json` (nunca escritos a mano)
-- [ ] Formulario de ruta (texto / GPX / demo) y parámetros del vehículo
-- [ ] Mapa (MapLibre) con ruta, estaciones coloreadas por precio y zonas de riesgo
-- [ ] Ranking / tarjetas móviles, plan de viaje, exportación Maps/GPX, radar de autonomía
-- [ ] Móvil primero; accesibilidad básica; PWA
-- [ ] Tests de componentes y un test end-to-end (Playwright) del flujo demo
+> **Retomar aquí (2026-10-15)**: la planificación y el diseño están aprobados. Siguiente tarea: el punto 1 si el propietario ya ha creado la cuenta de Render; si no, el punto 2.
+
+- [x] Planificación con el propietario: disposición, alcance, estilo y API en Render (`docs/web/plan.md`)
+- [x] Dirección visual aprobada (mezcla de A y C, sin pastel, paradas en el centro y autonomía opcional) y maquetas en `docs/web/maquetas/`
+- [ ] **Acción del propietario**: crear la cuenta gratuita de Render y dar acceso (bloquea el punto 1)
+- [ ] 1. API publicada en Render (`render.yaml`, CORS, `TRUSTED_PROXY_HOPS=1`)
+- [ ] 2. `web/` con Next.js + TypeScript estricto + pnpm; `web/CLAUDE.md`; CI y `verify.sh` de la web
+- [ ] 3. Sistema de diseño en código: tokens (claro/oscuro), fuentes y componentes base (hito, placa de precio, fila, botones)
+- [ ] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en el CI), TanStack Query y aviso de servidor despertando
+- [ ] 5. Inicio y formulario (texto / GPX / demo, combustible, "Más opciones") con la búsqueda en la URL
+- [ ] 6. Mapa: MapLibre + OpenFreeMap con estilo propio, ruta, placas de precio e hitos
+- [ ] 7. Resultados: hoja deslizable, lista y orden, resumen, desvíos en segundo plano y ficha de gasolinera
+- [ ] 8. Hoja de ruta: paradas en IndexedDB, barra "Tu ruta", roadbook, exportar a Maps/GPX y autonomía opcional
+- [ ] 9. Escritorio y modo noche; revisión visual contra las maquetas
+- [ ] 10. PWA y hoja de ruta sin conexión
+- [ ] 11. Páginas legales (aviso legal, privacidad, fuentes) y SEO
+- [ ] 12. Cierre: e2e Playwright de la demo, axe, presupuesto de rendimiento y lista de paridad completa
 
 ## Fase 3 — Lanzamiento
 
