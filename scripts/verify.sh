@@ -14,7 +14,7 @@ step "Tests (pytest, sin red)";      uv run pytest -q -m "not network"
 step "requirements.txt legacy al día"
 ./scripts/export-legacy-requirements.sh >/dev/null
 git diff --exit-code -- legacy/streamlit/requirements.txt \
-  || { echo "✗ legacy/streamlit/requirements.txt desactualizado: commitea el archivo regenerado."; exit 1; }
+  || { echo "✗ legacy/streamlit/requirements.txt desactualizado (cambiaron las dependencias o el core): commitea el archivo regenerado."; exit 1; }
 
 if [[ "${1:-}" == "--smoke" ]]; then
   step "Smoke test app Streamlit (demo, red)"

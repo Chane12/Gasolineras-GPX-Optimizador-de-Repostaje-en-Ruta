@@ -72,7 +72,7 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | Track completo de ida y vuelta | `/route/*` devuelve el track entero (hasta 50.000 puntos, ~1 MB) y `/search` lo recibirá de vuelta. Valorar devolver uno simplificado o un id de ruta en el servidor | Al diseñar `/search` |
 | Photon lento | Como respaldo de Nominatim llega a tardar ~14 s; tiene el doble de timeout (10 s) | Vigilar |
 | Servidor demo de OSRM | `routing.openstreetmap.de` / `router.project-osrm.org` no son para producción | Fase 1–3 (ADR 0005) |
-| Proxies públicos para el MITECO | Solo quedan en Streamlit como último recurso; la API no los usa y la conexión directa ya funciona (ADR 0007) | Se van con Streamlit (Fase 3) |
+| Proxies públicos para el MITECO | Dejaron de funcionar el 2026-10-15 (`corsproxy.io` exige clave; los otros dan 522). Solo quedan en Streamlit, que ya descarga directo (ADR 0007); si el MITECO falla, se pierden ~15 s probándolos. Quitarlos si siguen muertos | Próximo arreglo en Streamlit o Fase 3 |
 | Logs de la API | Con uvicorn no salen nuestros `logger.info` (falta configurar `logging`) | Con el Dockerfile |
 | Fecha oficial del MITECO | La respuesta trae `Fecha` (hora de publicación); usamos la hora de descarga. Valorar mostrar la oficial | Al diseñar `/search` |
 | UTM 30N en Canarias | Distorsión del 2–3 % en distancias (Canarias está en el huso 28) | Cuando haya usuarios allí |
