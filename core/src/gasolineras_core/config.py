@@ -65,21 +65,31 @@ BBOX_SPAIN: dict[str, float] = {
 MAX_TRACK_POINTS: int = 50_000
 
 # ---------------------------------------------------------------------------
-# OSRM / Nominatim (routing and geocoding)
+# OSRM / Nominatim / Photon (routing and geocoding) — uso responsable, ADR 0005
 # ---------------------------------------------------------------------------
+# Identificación honesta ante los servicios de OSM (nunca suplantar un navegador).
+PROJECT_URL: str = "https://github.com/Chane12/Gasolineras-GPX-Optimizador-de-Repostaje-en-Ruta"
+USER_AGENT: str = f"GasolinerasEnRuta/1.0 (+{PROJECT_URL})"
+
 OSRM_BASE_URL: str = "https://routing.openstreetmap.de/routed-car/route/v1/driving"
+OSRM_FALLBACK_URL: str = "https://router.project-osrm.org/route/v1/driving"
 
 NOMINATIM_URL: str = "https://nominatim.openstreetmap.org/search"
-NOMINATIM_HEADERS: dict[str, str] = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.openstreetmap.org/",
+PHOTON_URL: str = "https://photon.komoot.io/api"
+GEOCODER_HEADERS: dict[str, str] = {
+    "User-Agent": USER_AGENT,
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
     "Accept": "application/json",
 }
+
+# Política de Nominatim: como máximo 1 petición/s por aplicación. Si la cola de espera
+# supera GEOCODER_MAX_WAIT_S, se responde "servicio ocupado" en vez de bloquear.
+GEOCODER_MIN_INTERVAL_S: float = 1.0
+GEOCODER_MAX_WAIT_S: float = 10.0
+GEOCODE_CACHE_TTL_S: float = 7 * 24 * 3600  # los lugares no se mueven
+GEOCODE_CACHE_MAX_ITEMS: int = 2048
+ROUTE_CACHE_TTL_S: float = 24 * 3600
+ROUTE_CACHE_MAX_ITEMS: int = 512
 
 # ---------------------------------------------------------------------------
 # Google Maps export

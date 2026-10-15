@@ -7,8 +7,15 @@ Expone el motor `gasolineras_core` por HTTP para la web (`web/`, Next.js). Stack
 - **Capa fina**: aquí solo hay HTTP (validación, serialización, caché, límites). La lógica de negocio vive en `core/`; si falta algo, se añade allí con su test, nunca se duplica aquí.
 - Dependencias: `web → api → core`. `core` no puede importar nada de `api`.
 - **El OpenAPI es el contrato** (la web genera sus tipos a partir de él): cada endpoint con `response_model` Pydantic, con `tags` y nombres de campo estables. Cambiar un campo es un cambio de contrato: dilo en el PR.
-- Fábrica `create_app()` en `main.py`; los tests construyen su propia app con `TestClient(create_app())`.
-- Servicios externos (MITECO, OSRM, Nominatim): timeout, degradación elegante y uso honesto (User-Agent identificable, caché, rate-limit) — ADR 0005. Un fallo externo devuelve un error HTTP claro (502/503/504), nunca un 500 sin explicar.
+- Fábrica `create_app()` en `main.py`; los tests construyen su propia app con `TestClient(create_app())` y simulan las funciones del core con `monkeypatch` (ver `tests/test_route.py`).
+- Servicios externos (MITECO, OSRM, Nominatim): timeout, degradación elegante y uso honesto (User-Agent identificable, caché, rate-limit) — ADR 0005. El limitador y las cachés viven en el core (`gasolineras_core.http_utils`) para que también los use la app Streamlit.
+- **Códigos de error** (siempre `{"detail": "mensaje en español para el usuario"}`, declarados en `responses=` con `ErrorResponse`):
+  - `400`: la entrada es válida, pero no se puede atender (lugar no encontrado, sin ruta por carretera, GPX inválido, fuera de España).
+  - `413`: archivo demasiado grande.
+  - `422`: el cuerpo no cumple el esquema (lo genera FastAPI; `detail` es una lista).
+  - `503`: un servicio externo está caído o saturado.
+  - Nunca un `500` sin explicar.
+- Los routers van en `routers/` (uno por recurso); los modelos públicos, en `schemas.py`. Las geometrías se devuelven en GeoJSON (`[lon, lat]`, WGS84).
 - **Precios**: no cachear más de 30 min; si se sirven datos de respaldo, la respuesta debe incluir su antigüedad real.
 - **Tests sin red** en `api/tests/`: simula el core o `requests.get` con `monkeypatch`. Los que usen red, con `@pytest.mark.network`.
 - Mensajes de error dirigidos al usuario, en español; identificadores y código, en inglés (ADR 0004).

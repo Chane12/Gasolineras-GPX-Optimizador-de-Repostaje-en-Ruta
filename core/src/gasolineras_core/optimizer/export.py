@@ -19,7 +19,7 @@ import pandas as pd
 import requests
 from shapely.geometry import LineString
 
-from gasolineras_core.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL
+from gasolineras_core.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL, USER_AGENT
 from gasolineras_core.spatial.nearest import build_kdtree_from_points, query_nearest
 
 
@@ -120,7 +120,7 @@ def get_real_distance_osrm(
         f";{lon_destino},{lat_destino}"
         f"?overview=false&alternatives=false&steps=false"
     )
-    headers = {"User-Agent": "OptimizadorGasolineras/1.0", "Accept": "application/json"}
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
         if resp.status_code == 429:
@@ -294,7 +294,7 @@ def enrich_gpx_with_stops(
     split_points.sort(key=lambda x: (x["idx"][0], x["idx"][1], x["idx"][2]), reverse=True)
 
     # 3. OSRM-based Track Splicing
-    headers = {"User-Agent": "OptimizadorGasolineras/1.0", "Accept": "application/json"}
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
     for sp in split_points:
         t_idx, s_idx, p_idx, split_lon, split_lat = sp["idx"]
