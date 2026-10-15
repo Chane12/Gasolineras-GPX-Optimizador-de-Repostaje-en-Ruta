@@ -31,7 +31,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [ ] Contrato: esquemas Pydantic de petición/respuesta; OpenAPI publicado (en curso: `schemas.py` crece con cada endpoint)
 - [x] `POST /route/text` (origen/destino → track), `POST /route/gpx` (subida) — track en GeoJSON; errores 400/413/503
 - [x] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía) y `GET /fuels` — lógica en `core/optimizer/search.py`; mismas gasolineras y precios que Streamlit en la demo de Gredos (comprobado con datos reales)
-- [ ] `POST /detours` (desvíos OSRM, con límite de concurrencia)
+- [x] `POST /detours` (desvíos OSRM, con límite de concurrencia): máx. 3 peticiones simultáneas a OSRM en todo el proceso, caché de 24 h, resultados parciales con `complete: false` si OSRM se satura
 - [ ] `POST /export/gpx` y `GET /export/gmaps-url`
 - [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)

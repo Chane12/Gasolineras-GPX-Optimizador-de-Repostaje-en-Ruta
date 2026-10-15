@@ -8,7 +8,9 @@ OSRM detour calculation, and trip plan GeoDataFrame preparation.
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import random
+import threading
 import time
 import urllib.parse as _up
 
@@ -19,8 +21,23 @@ import pandas as pd
 import requests
 from shapely.geometry import LineString
 
-from gasolineras_core.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL, USER_AGENT
+from gasolineras_core.config import (
+    CRS_WGS84,
+    DETOUR_CACHE_MAX_ITEMS,
+    DETOUR_CACHE_TTL_S,
+    GMAPS_MAX_WAYPOINTS,
+    OSRM_BASE_URL,
+    OSRM_MAX_CONCURRENCY,
+    USER_AGENT,
+)
+from gasolineras_core.http_utils import TTLCache
 from gasolineras_core.spatial.nearest import build_kdtree_from_points, query_nearest
+
+logger = logging.getLogger(__name__)
+
+# Shared by every thread of the process: bounds concurrent requests to the public OSRM demo server (ADR 0005).
+OSRM_SEMAPHORE = threading.BoundedSemaphore(OSRM_MAX_CONCURRENCY)
+_leg_cache: TTLCache[dict] = TTLCache(DETOUR_CACHE_MAX_ITEMS, DETOUR_CACHE_TTL_S)
 
 
 def prepare_export_gdf(
@@ -99,6 +116,10 @@ def generate_google_maps_url(
     return url, n_truncated
 
 
+def _leg_key(lon1: float, lat1: float, lon2: float, lat2: float) -> tuple[float, float, float, float]:
+    return (round(lon1, 5), round(lat1, 5), round(lon2, 5), round(lat2, 5))
+
+
 def get_real_distance_osrm(
     lon_origen: float,
     lat_origen: float,
@@ -120,11 +141,16 @@ def get_real_distance_osrm(
         f";{lon_destino},{lat_destino}"
         f"?overview=false&alternatives=false&steps=false"
     )
+    key = _leg_key(lon_origen, lat_origen, lon_destino, lat_destino)
+    cached = _leg_cache.get(key)
+    if cached is not None:
+        return cached
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
-        resp = requests.get(url, headers=headers, timeout=timeout)
+        with OSRM_SEMAPHORE:
+            resp = requests.get(url, headers=headers, timeout=timeout)
         if resp.status_code == 429:
-            print("[OSRM] Rate-limit (429). Usando fallback euclidiano.")
+            logger.warning("OSRM rate limit (429)")
             return None
         resp.raise_for_status()
         data = resp.json()
@@ -140,12 +166,14 @@ def get_real_distance_osrm(
         if "distance" not in leg or "duration" not in leg:
             return None
 
-        return {
+        result = {
             "distance_km": leg["distance"] / 1000.0,
             "duration_min": leg["duration"] / 60.0,
         }
+        _leg_cache.set(key, result)
+        return result
     except Exception as exc:
-        print(f"[OSRM] Fallo silencioso ({type(exc).__name__}). Usando fallback euclidiano.")
+        logger.warning("OSRM request failed (%s)", type(exc).__name__)
         return None
 
 
@@ -175,6 +203,15 @@ def enrich_stations_with_osrm(
         gas_lon = row_wgs84.geometry.x
         gas_lat = row_wgs84.geometry.y
         origin_lon, origin_lat = rutas_origen_dict[idx]
+
+        # Both legs already cached: answer without the courtesy pauses meant for OSRM.
+        cached_in = _leg_cache.get(_leg_key(origin_lon, origin_lat, gas_lon, gas_lat))
+        cached_out = _leg_cache.get(_leg_key(gas_lon, gas_lat, origin_lon, origin_lat))
+        if cached_in is not None and cached_out is not None:
+            return idx, {
+                "distance_km": cached_in["distance_km"] + cached_out["distance_km"],
+                "duration_min": cached_in["duration_min"] + cached_out["duration_min"],
+            }
 
         max_retries = 3
         # Jitter aleatorio para desincronizar los workers y evitar picos de peticiones
@@ -211,8 +248,27 @@ def enrich_stations_with_osrm(
                 result_idx, result = future.result()
                 yield result_idx, result
             except Exception as e:
-                print(f"[OSRM] Fallo fatal concurrente en idx {idx}: {e}")
+                logger.error("OSRM detour failed for station %s: %s", idx, e)
                 yield idx, None
+
+
+def compute_detours(track: LineString, stations_lonlat: list[tuple[float, float]]) -> list[dict | None]:
+    """
+    Desvío real por carretera (ida desde la ruta + vuelta) para cada gasolinera, en el mismo orden.
+
+    Cada elemento es ``{"distance_km", "duration_min"}`` o ``None`` si OSRM no respondió para esa
+    gasolinera (degradación elegante: el resto de resultados siguen siendo válidos).
+    """
+    if not stations_lonlat:
+        return []
+    gdf = gpd.GeoDataFrame(
+        geometry=gpd.points_from_xy([p[0] for p in stations_lonlat], [p[1] for p in stations_lonlat]), crs=CRS_WGS84
+    )
+    position = {idx: i for i, idx in enumerate(gdf.index)}
+    results: list[dict | None] = [None] * len(stations_lonlat)
+    for idx, result in enrich_stations_with_osrm(gdf, track_original=track):
+        results[position[idx]] = result
+    return results
 
 
 def enrich_gpx_with_stops(

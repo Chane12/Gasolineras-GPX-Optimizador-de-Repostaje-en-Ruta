@@ -181,3 +181,41 @@ class SearchResponse(BaseModel):
     autonomy: list[AutonomySegment] | None = Field(
         default=None, description="Radar de autonomía (solo si autonomy_km > 0)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Detours
+# ---------------------------------------------------------------------------
+
+MAX_DETOUR_STATIONS = 30
+
+
+class StationPoint(BaseModel):
+    id: str | None = Field(default=None, description="El mismo id que devolvió /search, para casar resultados")
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class DetoursRequest(BaseModel):
+    track: LineStringGeometry
+    stations: list[StationPoint] = Field(min_length=1, max_length=MAX_DETOUR_STATIONS)
+
+    @field_validator("track")
+    @classmethod
+    def _track_size(cls, value: LineStringGeometry) -> LineStringGeometry:
+        if not 2 <= len(value.coordinates) <= MAX_TRACK_POINTS:
+            raise ValueError(f"El track debe tener entre 2 y {MAX_TRACK_POINTS} puntos")
+        return value
+
+
+class Detour(BaseModel):
+    id: str | None = None
+    lat: float
+    lon: float
+    detour_km: float | None = Field(description="Ida desde la ruta + vuelta, por carretera; null si OSRM no respondió")
+    detour_min: float | None = None
+
+
+class DetoursResponse(BaseModel):
+    detours: list[Detour] = Field(description="En el mismo orden que la petición")
+    complete: bool = Field(description="false si alguna gasolinera se quedó sin desvío (servicio de rutas saturado)")

@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from gasolineras_api.catalogue import PriceCatalogue
-from gasolineras_api.routers import route, search
+from gasolineras_api.routers import detours, route, search
 from gasolineras_api.routers.search import get_catalogue
 from gasolineras_api.schemas import PricesStatus
 
@@ -59,6 +59,7 @@ def create_app(catalogue: PriceCatalogue | None = None, warm_up: bool = True) ->
 
     app.include_router(route.router)
     app.include_router(search.router)
+    app.include_router(detours.router)
     return app
 
 
