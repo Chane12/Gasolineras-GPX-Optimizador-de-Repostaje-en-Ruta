@@ -22,8 +22,8 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 | `core/` | Motor geoespacial `gasolineras_core` (lógica de negocio, sin UI) | Activo |
 | `legacy/streamlit/` | App Streamlit actual, **en producción** (Streamlit Community Cloud) | Congelada: solo bugs |
 | `api/` | FastAPI sobre `core` (`gasolineras_api`); contrato en `api/openapi.json` | Activo (sin desplegar hasta la Fase 3) |
-| `web/` | Next.js | Fase 2 (no existe aún) |
-| `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs) | |
+| `web/` | Next.js — plan en `docs/web/plan.md`, diseño en `docs/web/diseno.md` | Fase 2 (planificada; aún no existe) |
+| `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs), `web/` (plan, sistema de diseño y maquetas de la web) | |
 | `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py` | |
 | `.claude/` | Hooks (formateo automático) y skills del proyecto | |
 
