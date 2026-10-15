@@ -40,7 +40,7 @@ uv run uvicorn gasolineras_api.main:app --reload  # API en local (http://127.0.0
 ./scripts/export-legacy-requirements.sh           # tras cambiar dependencias de core o legacy
 ```
 
-Dependencias: **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nunca pip ni requirements a mano. Después de cambiar dependencias, regenera `legacy/streamlit/requirements.txt` con el script.
+Dependencias: **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nunca pip ni requirements a mano. Después de cambiar dependencias **o el core**, regenera `legacy/streamlit/requirements.txt` con el script: lleva una huella de `core/src` para que Streamlit Cloud reinicie la app con el core nuevo (`verify.sh` lo regenera y avisa).
 
 ## Invariantes (no romper)
 

@@ -67,6 +67,6 @@ gh pr merge <n> --merge --delete-branch
 git checkout main && git pull --ff-only
 ```
 
-Si el PR llega a producción (toca `core/`, `legacy/` o las dependencias), espera 2–3 minutos a que Streamlit Cloud se redespliegue y comprueba: `uvx --from playwright python scripts/check_prod.py`. Si falla, arréglalo de inmediato con un PR `fix/...`, o revierte con `gh pr create` sobre un `git revert`.
+Si el PR llega a producción (toca `core/`, `legacy/` o las dependencias), espera a que Streamlit Cloud se redespliegue y comprueba: `uvx --from playwright python scripts/check_prod.py`. Si el PR tocó el core, la app se reinstala y reinicia, lo que lleva unos minutos; debe acabar mostrando "Precios MITECO actualizados ahora mismo" o pocos minutos. Si muestra "El MITECO no responde", investiga: es el síntoma de que la app no obtiene precios. Si falla, arréglalo de inmediato con un PR `fix/...`, o revierte con `gh pr create` sobre un `git revert`.
 
 `main` está protegida (PR obligatorio, CI en verde, rama al día con `main`). Si GitHub pide actualizar la rama: `gh pr update-branch <n>` y espera de nuevo al CI. Nunca desactives la protección para fusionar.

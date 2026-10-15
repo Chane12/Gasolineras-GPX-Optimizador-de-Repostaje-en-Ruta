@@ -1,4 +1,5 @@
 # GENERADO por scripts/export-legacy-requirements.sh — no editar a mano.
+# core/src: 9330637d103fe095 (si cambia, Streamlit Cloud reinicia la app con el core nuevo)
 altair==5.5.0
     # via
     #   gasolineras-streamlit
