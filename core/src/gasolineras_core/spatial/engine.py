@@ -7,11 +7,15 @@ and spatial join (R-Tree accelerated).
 
 from __future__ import annotations
 
+import logging
+
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import LineString
 
 from gasolineras_core.config import CRS_UTM30N, CRS_WGS84
+
+logger = logging.getLogger(__name__)
 
 
 def build_route_buffer(
@@ -43,10 +47,7 @@ def build_route_buffer(
 
     gdf_buffer = gdf_track_utm.copy()
     gdf_buffer["geometry"] = track_simplified.buffer(buffer_meters, resolution=3)
-    print(
-        f"[Buffer] Buffer de {buffer_meters:.0f}m aplicado sobre track simplificado "
-        f"(Area aprox: {gdf_buffer.geometry.area.iloc[0] / 1e6:.1f} km2)"
-    )
+    logger.debug("Route buffer of %.0f m applied", buffer_meters)
     return gdf_buffer
 
 
@@ -72,8 +73,8 @@ def build_stations_geodataframe(df: pd.DataFrame) -> gpd.GeoDataFrame:
     gdf_stations = gpd.GeoDataFrame(df.copy(), geometry=geometry, crs=CRS_WGS84)
     gdf_stations_utm = gdf_stations.to_crs(CRS_UTM30N)
 
-    print(f"[Estaciones] GeoDataFrame en {CRS_UTM30N}: {len(gdf_stations_utm)} estaciones")
-    print(f"[Estaciones] Índice espacial R-Tree: {gdf_stations_utm.sindex}")
+    _ = gdf_stations_utm.sindex  # build the R-tree now, not during the first search
+    logger.info("Stations GeoDataFrame in %s: %d stations, R-tree built", CRS_UTM30N, len(gdf_stations_utm))
 
     return gdf_stations_utm
 
@@ -111,5 +112,5 @@ def spatial_join_within_buffer(
         predicate="within",
     )
     gdf_joined = gpd.GeoDataFrame(gdf_joined.drop_duplicates(subset=["geometry"]), crs=gdf_stations.crs)
-    print(f"[SpatialJoin] Gasolineras dentro del buffer: {len(gdf_joined)}")
+    logger.debug("Stations inside the buffer: %d", len(gdf_joined))
     return gdf_joined

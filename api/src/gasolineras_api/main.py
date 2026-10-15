@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from gasolineras_api.catalogue import PriceCatalogue
+from gasolineras_api.logging_config import configure_logging
 from gasolineras_api.ratelimit import RateLimiter
 from gasolineras_api.routers import detours, export, route, search
 from gasolineras_api.routers.search import get_catalogue
@@ -43,6 +44,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        configure_logging()
         if warm_up:
             # Cold starts (ADR 0002): answer requests at once; prices load in the background.
             threading.Thread(target=app.state.catalogue.warm_up, name="miteco-warm-up", daemon=True).start()
