@@ -58,7 +58,7 @@ Dependencias: **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nun
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`).
 - Una rama + un PR por tarea (`feat/...`, `fix/...`, `chore/...`). Nunca commitear directamente a `main`.
 - Formateo: lo hace un hook automáticamente al editar (ruff). No discutas estilo; ruff manda.
-- Tipos: anota funciones nuevas; pyright debe seguir en 0 errores.
+- Tipos: anota funciones nuevas; pyright (modo `standard`, sobre `core/` y `api/`, código y tests) debe seguir en 0 errores.
 
 ## Definición de "hecho"
 

@@ -16,7 +16,7 @@ Estructura, documentación y barreras de calidad. Sin cambios visibles para el u
 - [x] Monorepo con workspace uv: `core/` (paquete) + `legacy/streamlit/` — ADR 0003
 - [x] `CLAUDE.md` raíz y por carpeta; ADRs 0001–0005
 - [x] Tests offline del MITECO con snapshot; 32 tests sin red
-- [x] pyright (modo `basic`) en 0 errores
+- [x] pyright en 0 errores (modo `standard` desde la Fase 1, también sobre los tests)
 - [x] `scripts/verify.sh` + CI en GitHub Actions
 - [x] Hook de formateo automático + skills `/verificar` y `/nueva-funcionalidad`
 - [x] Streamlit Cloud apunta a `legacy/streamlit/app.py`
@@ -77,7 +77,6 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | UTM 30N en Canarias | Distorsión del 2–3 % en distancias (Canarias está en el huso 28) | Cuando haya usuarios allí |
 | `folium_map.py` en `core` | Es presentación, no lógica; desaparece con Streamlit | Fase 3 |
 | `print()` como log | Ya no queda en el camino de búsqueda de la API; sí en `cli.py` y `folium_map.py` (se van con Streamlit) | Continuo |
-| pyright en modo `basic` | Subir a `standard` (~120 avisos, sobre todo tipos de pandas) | Fase 1 |
 | PWA de Streamlit | `.streamlit/static/` no se sirve (falta `enableStaticServing` y la carpeta `static/` junto al script) | No arreglar: la PWA se hace en `web/` |
 | `uv.lock` único compartido | Las dependencias de `api/` (y las de desarrollo) pueden mover versiones de la app legacy en producción (p. ej. pydantic 2.14 → `typing-extensions` 4.16; `httpx2` → `idna` 3.20). Revisar el diff de `legacy/streamlit/requirements.txt` en cada PR y pasar `--smoke` | Hasta retirar Streamlit (Fase 3) |
 | `km_ruta` con dos métodos (solo Streamlit) | La API ya usa un único método (`route_positions_km`: ruta original, longitud geodésica). Streamlit sigue midiendo el ranking sobre el track simplificado (~2,5 % menos) | Se va con Streamlit (Fase 3) |

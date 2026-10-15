@@ -64,8 +64,8 @@ markers = [
 ]
 
 [tool.pyright]
-include = ["core/src", "api/src", "api/tests"]
+include = ["core/src", "core/tests", "api/src", "api/tests"]
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"

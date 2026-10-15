@@ -76,7 +76,7 @@ class TestSpatialEngineModular:
         gdf_buf = build_route_buffer(sample_track, buffer_meters=5000)
         assert isinstance(gdf_buf, gpd.GeoDataFrame)
         assert len(gdf_buf) == 1
-        assert gdf_buf.crs.to_epsg() == 25830
+        assert gdf_buf.crs is not None and gdf_buf.crs.to_epsg() == 25830
 
     def test_buffer_area_increases_with_radius(self, sample_track: LineString):
         buf_1k = build_route_buffer(sample_track, buffer_meters=1000)
@@ -86,7 +86,7 @@ class TestSpatialEngineModular:
     def test_build_stations_geodataframe_crs(self, fake_stations_df):
         gdf = build_stations_geodataframe(fake_stations_df)
         assert isinstance(gdf, gpd.GeoDataFrame)
-        assert gdf.crs.to_epsg() == 25830
+        assert gdf.crs is not None and gdf.crs.to_epsg() == 25830
         assert len(gdf) == 5
 
     def test_build_stations_geodataframe_has_sindex(self, fake_stations_df):
@@ -222,10 +222,10 @@ class TestPipelineSnapshotModular:
         assert isinstance(track_simp, LineString)
 
         gdf_buf = build_route_buffer(track_simp, buffer_meters=10_000)
-        assert gdf_buf.crs.to_epsg() == 25830
+        assert gdf_buf.crs is not None and gdf_buf.crs.to_epsg() == 25830
 
         gdf_stations = build_stations_geodataframe(fake_stations_df)
-        assert gdf_stations.crs.to_epsg() == 25830
+        assert gdf_stations.crs is not None and gdf_stations.crs.to_epsg() == 25830
 
         gdf_within = spatial_join_within_buffer(gdf_stations, gdf_buf)
         assert isinstance(gdf_within, gpd.GeoDataFrame)
