@@ -1,39 +1,21 @@
-[project]
-name = "gasolineras-ruta"
-version = "1.0.0"
-description = "Optimizador geoespacial de repostaje en ruta — España"
-readme = "README.md"
-license = { text = "EUPL-1.2" }
-requires-python = ">=3.11"
+# Raíz del monorepo: workspace uv (sin paquete propio).
+# Cada pieza Python es un miembro con su propio pyproject.toml y un único uv.lock compartido.
+# Ver docs/decisions/0003-monorepo-uv-workspace.md
 
-dependencies = [
-    "geopandas>=0.14.0",
-    "shapely>=2.0.0",
-    "folium>=0.15.0",
-    "requests>=2.31.0",
-    "gpxpy>=1.6.0",
-    "pyproj>=3.6.0",
-    "pandas>=2.0.0",
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
-    "streamlit>=1.35.0",
-    "streamlit-folium>=0.21.0",
-    "streamlit-javascript>=0.1.5",
-    "altair>=4.0.0,<6.0.0",
-]
-
-[project.scripts]
-gasolineras = "main:main"
+[tool.uv.workspace]
+members = ["core", "legacy/streamlit"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.11.0",
+    "pyright>=1.1.390",
 ]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+extend-exclude = [".venv", "web"]
 
 [tool.ruff.lint]
 select = [
@@ -54,20 +36,35 @@ ignore = [
     "B904",  # raise without from (too noisy on existing code)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# sys.path shim para Streamlit Cloud antes de importar el motor
+"legacy/streamlit/app.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gasolineras_core"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["core/tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
+    "--import-mode=importlib",
 ]
 markers = [
     "network: tests that require internet access (deselect with '-m not network')",
     "slow: tests that take >10s (deselect with '-m not slow')",
 ]
+
+[tool.pyright]
+include = ["core/src"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"

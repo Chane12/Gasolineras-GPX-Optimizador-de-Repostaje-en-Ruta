@@ -1,6 +1,6 @@
 """
-src/ingestion/miteco.py
-=======================
+gasolineras_core.ingestion.miteco
+=================================
 Data acquisition from the MITECO API (Ministerio para la Transición Ecológica).
 Downloads the complete catalogue of Spanish fuel stations and cleans the data.
 """
@@ -15,9 +15,17 @@ from datetime import UTC, datetime
 import pandas as pd
 import requests
 
-from src.config import COORD_COLUMNS, MITECO_API_URL, PRICE_COLUMNS, PROJECT_ROOT
+from gasolineras_core.config import COORD_COLUMNS, DATA_DIR, MITECO_API_URL, PRICE_COLUMNS
 
-FALLBACK_FILE = PROJECT_ROOT / "fallback_miteco.parquet"
+FALLBACK_FILE = DATA_DIR / "fallback_miteco.parquet"
+
+# Combustibles sin tope superior de precio (se venden por kg, no por litro)
+_FUELS_NO_UPPER_BOUND = {
+    "Precio Hidrogeno",
+    "Precio Gas Natural Comprimido",
+    "Precio Gas Natural Licuado",
+}
+_MAX_PRICE_EUR_L = 5.0
 
 
 @dataclass(frozen=True)
@@ -132,39 +140,8 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
 
         raise ValueError("La API del MITECO no devolvió registros. Comprueba el endpoint.")
 
-    df = pd.DataFrame(records)
-    print(f"[MITECO] Registros descargados: {len(df)}")
-
-    # --- Limpieza de campos numéricos (coma → punto) ---
-    for col in PRICE_COLUMNS:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.replace(",", ".", regex=False).str.strip()
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-            _FUELS_SPECIAL = {
-                "Precio Hidrogeno",
-                "Precio Gas Natural Comprimido",
-                "Precio Gas Natural Licuado",
-            }
-            if col in _FUELS_SPECIAL:
-                df[col] = df[col].where((df[col].isna()) | (df[col] > 0.0), pd.NA)
-            else:
-                df[col] = df[col].where((df[col].isna()) | ((df[col] > 0.0) & (df[col] < 5.0)), pd.NA)
-
-    for col in COORD_COLUMNS:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.replace(",", ".", regex=False).str.strip()
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # --- Eliminar filas sin coordenadas ---
-    lat_col = "Latitud"
-    lon_col = "Longitud (WGS84)"
-    filas_antes = len(df)
-    df = df.dropna(subset=[lat_col, lon_col])
-    df = df[(df[lat_col] != 0.0) & (df[lon_col] != 0.0)]
-    print(f"[MITECO] Filas eliminadas por falta de coordenadas: {filas_antes - len(df)} -- Válidas: {len(df)}")
-
-    df = df.reset_index(drop=True)
+    print(f"[MITECO] Registros descargados: {len(records)}")
+    df = parse_miteco_records(records)
 
     # Guardar fallback local
     try:
@@ -173,3 +150,34 @@ def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
         print(f"[MITECO] Aviso silencioso: No se pudo guardar el fallback parquet: {e}")
 
     return MitecoResult(df=df, fetched_at=datetime.now(UTC))
+
+
+def parse_miteco_records(records: list[dict]) -> pd.DataFrame:
+    """
+    Limpia los registros crudos de `ListaEESSPrecio` (función pura, sin red).
+
+    - Precios y coordenadas: coma decimal → punto, a float.
+    - Precios fuera de rango (<= 0, o >= 5 €/L salvo combustibles por kg) → NA.
+    - Descarta estaciones sin coordenadas o con coordenadas 0.
+    """
+    df = pd.DataFrame(records)
+
+    for col in PRICE_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", ".", regex=False).str.strip(), errors="coerce")
+            if col in _FUELS_NO_UPPER_BOUND:
+                df[col] = df[col].where(df[col].isna() | (df[col] > 0.0), pd.NA)
+            else:
+                df[col] = df[col].where(df[col].isna() | ((df[col] > 0.0) & (df[col] < _MAX_PRICE_EUR_L)), pd.NA)
+
+    for col in COORD_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", ".", regex=False).str.strip(), errors="coerce")
+
+    lat_col, lon_col = COORD_COLUMNS
+    filas_antes = len(df)
+    df = df.dropna(subset=[lat_col, lon_col])
+    df = df.loc[(df[lat_col] != 0.0) & (df[lon_col] != 0.0)]
+    print(f"[MITECO] Filas eliminadas por falta de coordenadas: {filas_antes - len(df)} -- Válidas: {len(df)}")
+
+    return df.reset_index(drop=True)

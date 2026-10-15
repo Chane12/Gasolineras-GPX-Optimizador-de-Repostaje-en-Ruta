@@ -1,11 +1,11 @@
 """
-main.py
-=======
+gasolineras_core.cli
+====================
 CLI entrypoint — pure orchestrator. No business logic.
 
 Usage:
-    uv run python main.py
-    uv run python main.py --gpx ruta.gpx --fuel "Precio Gasolina 95 E5" --buffer 3000 --top 10
+    uv run gasolineras
+    uv run gasolineras --gpx ruta.gpx --fuel "Precio Gasolina 95 E5" --buffer 3000 --top 10
 """
 
 from __future__ import annotations
@@ -14,14 +14,13 @@ import argparse
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 
-from src.config import CRS_UTM30N, CRS_WGS84, PROJECT_ROOT
-from src.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
-from src.ingestion.miteco import fetch_gasolineras
-from src.optimizer.cheapest import filter_cheapest_stations
-from src.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
-from src.visualization.folium_map import generate_map
+from gasolineras_core.config import CRS_UTM30N, CRS_WGS84, DEMO_GPX_PATH
+from gasolineras_core.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
+from gasolineras_core.ingestion.miteco import fetch_gasolineras
+from gasolineras_core.optimizer.cheapest import filter_cheapest_stations
+from gasolineras_core.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
+from gasolineras_core.visualization.folium_map import generate_map
 
 
 def main() -> None:
@@ -30,12 +29,12 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Ejemplos:
-  uv run python main.py --gpx sierra_gredos.gpx
-  uv run python main.py --gpx ruta.gpx --fuel "Precio Gasolina 95 E5" --top 10
-  uv run python main.py --gpx ruta.gpx --buffer 3000 --segment-km 50
+  uv run gasolineras                      (ruta de demo: Sierra de Gredos)
+  uv run gasolineras --gpx ruta.gpx --fuel "Precio Gasolina 95 E5" --top 10
+  uv run gasolineras --gpx ruta.gpx --buffer 3000 --segment-km 50
         """,
     )
-    parser.add_argument("--gpx", type=str, default="sierra_gredos.gpx", help="Ruta al archivo .gpx")
+    parser.add_argument("--gpx", type=str, default=None, help="Ruta al archivo .gpx (por defecto, la demo)")
     parser.add_argument("--fuel", type=str, default="Precio Gasoleo A", help="Columna de precio de fuel")
     parser.add_argument("--buffer", type=float, default=5000.0, help="Radio del buffer en metros")
     parser.add_argument("--top", type=int, default=5, help="Número de gasolineras más baratas")
@@ -49,18 +48,13 @@ Ejemplos:
     print(" OPTIMIZADOR DE GASOLINERAS EN RUTA — España")
     print("=" * 60)
 
-    # --- Resolve GPX path relative to project root ---
-    gpx_path = Path(args.gpx)
-    if not gpx_path.is_absolute():
-        gpx_path = PROJECT_ROOT / gpx_path
-
+    gpx_path = Path(args.gpx) if args.gpx else DEMO_GPX_PATH
     if not gpx_path.exists():
         print(f"\n[ERROR] No se encontró '{gpx_path}'.")
         return
 
     # 1. Ingesta MITECO
-    res = fetch_gasolineras()
-    df_gasolineras = res if isinstance(res, pd.DataFrame) else getattr(res, "df", res)
+    df_gasolineras = fetch_gasolineras().df
 
     # 2. Cargar y procesar GPX
     track_original = load_gpx_track(gpx_path)

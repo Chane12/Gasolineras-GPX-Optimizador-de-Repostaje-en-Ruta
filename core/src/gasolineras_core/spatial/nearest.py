@@ -1,20 +1,20 @@
 """
-src/spatial/nearest.py
-======================
+gasolineras_core.spatial.nearest
+================================
 KD-Tree based nearest-neighbor utilities for spatial queries.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 
 
 def build_kdtree_from_points(
     points: list[tuple[float, float]],
-) -> cKDTree:
+) -> KDTree:
     """
-    Build a cKDTree from a list of (x, y) coordinate tuples.
+    Build a KDTree from a list of (x, y) coordinate tuples.
 
     Parameters
     ----------
@@ -23,14 +23,14 @@ def build_kdtree_from_points(
 
     Returns
     -------
-    cKDTree
+    KDTree
         Scipy KD-Tree for O(log N) nearest-neighbor queries.
     """
-    return cKDTree(np.array(points))
+    return KDTree(np.array(points))
 
 
 def query_nearest(
-    tree: cKDTree,
+    tree: KDTree,
     query_point: tuple[float, float],
 ) -> tuple[float, int]:
     """
@@ -38,7 +38,7 @@ def query_nearest(
 
     Parameters
     ----------
-    tree : cKDTree
+    tree : KDTree
         Pre-built KD-Tree.
     query_point : tuple[float, float]
         (x, y) coordinates of the query point.

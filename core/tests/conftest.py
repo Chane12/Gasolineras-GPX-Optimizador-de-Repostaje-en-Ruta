@@ -28,7 +28,7 @@ def sample_gpx_path() -> Path:
 @pytest.fixture
 def sample_track() -> LineString:
     """LineString parsed from the sample GPX via the monolith."""
-    from src.ingestion.gpx_parser import load_gpx_track
+    from gasolineras_core.ingestion.gpx_parser import load_gpx_track
 
     return load_gpx_track(SAMPLE_GPX)
 

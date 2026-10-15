@@ -1,6 +1,6 @@
 """
-src/optimizer/autonomy.py
-=========================
+gasolineras_core.optimizer.autonomy
+===================================
 Autonomy radar calculation — analysis of gaps between fuel stations
 relative to vehicle range.
 """

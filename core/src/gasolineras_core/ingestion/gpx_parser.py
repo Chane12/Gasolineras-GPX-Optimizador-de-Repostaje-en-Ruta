@@ -1,6 +1,6 @@
 """
-src/ingestion/gpx_parser.py
-===========================
+gasolineras_core.ingestion.gpx_parser
+=====================================
 GPX file loading, validation, and track simplification.
 """
 
@@ -11,7 +11,7 @@ from pathlib import Path
 import gpxpy
 from shapely.geometry import LineString
 
-from src.config import BBOX_SPAIN, MAX_TRACK_POINTS
+from gasolineras_core.config import BBOX_SPAIN, MAX_TRACK_POINTS
 
 
 def load_gpx_track(gpx_path: str | Path) -> LineString:
@@ -122,6 +122,8 @@ def simplify_track(track: LineString, tolerance_deg: float = 0.0005) -> LineStri
         LineString simplificado.
     """
     simplified = track.simplify(tolerance_deg, preserve_topology=True)
+    if not isinstance(simplified, LineString):
+        raise ValueError(f"La simplificación del track produjo una geometría inesperada: {simplified.geom_type}")
     print(
         f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} "
         f"(tolerancia={tolerance_deg} deg)"

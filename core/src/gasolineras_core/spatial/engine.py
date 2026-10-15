@@ -1,6 +1,6 @@
 """
-src/spatial/engine.py
-=====================
+gasolineras_core.spatial.engine
+===============================
 Core GIS operations: route buffer, station GeoDataFrame construction,
 and spatial join (R-Tree accelerated).
 """
@@ -11,7 +11,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import LineString
 
-from src.config import CRS_UTM30N, CRS_WGS84
+from gasolineras_core.config import CRS_UTM30N, CRS_WGS84
 
 
 def build_route_buffer(
@@ -108,10 +108,10 @@ def spatial_join_within_buffer(
 
     gdf_joined = gpd.sjoin(
         gdf_stations,
-        gdf_buffer[["geometry"]],
+        gpd.GeoDataFrame(geometry=gdf_buffer.geometry, crs=gdf_buffer.crs),
         how="inner",
         predicate="within",
     )
-    gdf_joined = gdf_joined.drop_duplicates(subset=["geometry"])
+    gdf_joined = gpd.GeoDataFrame(gdf_joined.drop_duplicates(subset=["geometry"]), crs=gdf_stations.crs)
     print(f"[SpatialJoin] Gasolineras dentro del buffer: {len(gdf_joined)}")
     return gdf_joined

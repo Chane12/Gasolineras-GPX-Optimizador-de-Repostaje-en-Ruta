@@ -1,6 +1,6 @@
 """
-src/ingestion/geocoder.py
-=========================
+gasolineras_core.ingestion.geocoder
+===================================
 Geocoding (Nominatim/Photon) and OSRM routing for text-based route input.
 """
 
@@ -12,7 +12,7 @@ import time
 import requests
 from shapely.geometry import LineString
 
-from src.config import NOMINATIM_HEADERS, NOMINATIM_URL, OSRM_BASE_URL
+from gasolineras_core.config import NOMINATIM_HEADERS, NOMINATIM_URL, OSRM_BASE_URL
 
 
 class RouteTextError(ValueError):
@@ -79,13 +79,12 @@ def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
             resp.raise_for_status()
             results = resp.json()
 
-            lat, lon = None, None
             if ep["type"] == "nominatim":
                 if not results:
                     raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
                 lat = float(results[0]["lat"])
                 lon = float(results[0]["lon"])
-            elif ep["type"] == "photon":
+            else:  # photon
                 if not results.get("features"):
                     raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
                 coords = results["features"][0]["geometry"]["coordinates"]

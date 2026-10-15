@@ -1,6 +1,6 @@
 """
-src/optimizer/export.py
-=======================
+gasolineras_core.optimizer.export
+=================================
 Export utilities: Google Maps URL generation, GPX enrichment with stops,
 OSRM detour calculation, and trip plan GeoDataFrame preparation.
 """
@@ -17,10 +17,10 @@ import gpxpy
 import gpxpy.gpx as _gpx
 import pandas as pd
 import requests
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString
 
-from src.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL
-from src.spatial.nearest import build_kdtree_from_points, query_nearest
+from gasolineras_core.config import GMAPS_MAX_WAYPOINTS, OSRM_BASE_URL
+from gasolineras_core.spatial.nearest import build_kdtree_from_points, query_nearest
 
 
 def prepare_export_gdf(
@@ -39,7 +39,7 @@ def prepare_export_gdf(
     if "Km en Ruta" in df_plan.columns:
         df_plan = df_plan.sort_values("Km en Ruta").reset_index(drop=True)
 
-    geometrias = [Point(row["_geom_x"], row["_geom_y"]) for _, row in df_plan.iterrows()]
+    geometrias = gpd.points_from_xy(df_plan["_geom_x"], df_plan["_geom_y"])
     gdf_export = gpd.GeoDataFrame(df_plan, geometry=geometrias, crs="EPSG:4326")
 
     if "Marca" in gdf_export.columns:
@@ -246,9 +246,9 @@ def enrich_gpx_with_stops(
         lon = row.geometry.x
 
         rotulo = row.get("Rótulo", f"Gasolinera #{i}")
-        litros = row.get("litros_a_repostar", 0.0)
-        coste = row.get("coste_parada_eur", 0.0)
-        precio = row.get(fuel_column, 0.0) if fuel_column else 0.0
+        litros = float(row.get("litros_a_repostar") or 0.0)
+        coste = float(row.get("coste_parada_eur") or 0.0)
+        precio = float(row.get(fuel_column) or 0.0) if fuel_column else 0.0
 
         nombre_wpt = (
             f"⛽ {i}. {rotulo} | {litros:.1f} L @ {precio:.3f} €/L = {coste:.2f} €"

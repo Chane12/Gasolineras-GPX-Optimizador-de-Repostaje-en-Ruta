@@ -1,6 +1,6 @@
 """
-src/optimizer/cheapest.py
-=========================
+gasolineras_core.optimizer.cheapest
+===================================
 Fuel station filtering logic: Top-N cheapest, segment-based, and España Vaciada mode.
 """
 
@@ -14,7 +14,12 @@ import shapely
 import shapely.ops
 from shapely.geometry import LineString
 
-from src.config import PRICE_COLUMNS
+from gasolineras_core.config import PRICE_COLUMNS
+
+
+def _numeric_prices(gdf: gpd.GeoDataFrame, fuel_column: str) -> pd.Series:
+    """Precios del combustible como Serie float (no numéricos → NaN), alineada con el índice de `gdf`."""
+    return pd.Series(pd.to_numeric(gdf[fuel_column], errors="coerce"), index=gdf.index, dtype="float64")
 
 
 def filter_cheapest_stations(
@@ -55,7 +60,7 @@ def filter_cheapest_stations(
         )
 
     # 1. Crear una Serie de coerción numérica para evaluar precios sin tocar el DataFrame padre
-    precios_num = pd.to_numeric(gdf[fuel_column], errors="coerce")
+    precios_num = _numeric_prices(gdf, fuel_column)
     mask_precios = precios_num.notna() & (precios_num > 0)
 
     if not mask_precios.any():
@@ -66,7 +71,7 @@ def filter_cheapest_stations(
     top_indices = set()
 
     # 2. Obtenemos los N índices globales más baratos
-    global_indices = precios_num[mask_precios].nsmallest(top_n).index
+    global_indices = precios_num.loc[mask_precios].nsmallest(top_n).index
     top_indices.update(global_indices)
 
     # 3. Búsqueda iterativa aprovechando la pre-existencia del R-Tree en `gdf` inmutable
@@ -126,7 +131,7 @@ def filter_all_stations_on_route(
     if fuel_column not in gdf.columns:
         return gpd.GeoDataFrame(columns=gdf.columns, crs=gdf.crs)
 
-    precios_num = pd.to_numeric(gdf[fuel_column], errors="coerce")
+    precios_num = _numeric_prices(gdf, fuel_column)
     mask_precios = precios_num.notna() & (precios_num > 0)
 
     # Única copia de los elementos validados de la criba

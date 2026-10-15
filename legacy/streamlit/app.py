@@ -1,41 +1,49 @@
 """
-app.py
-======
+legacy/streamlit/app.py
+=======================
 Interfaz web (Streamlit) para el Optimizador de Gasolineras en Ruta.
+CONGELADA: solo correcciones de bugs hasta que la web nueva la sustituya.
 
-Cómo ejecutar:
-    streamlit run app.py
+Cómo ejecutar (desde la raíz del repo):
+    uv run streamlit run legacy/streamlit/app.py
 """
 
+import sys
 import tempfile
 import urllib.parse
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+# Streamlit Community Cloud instala solo requirements.txt (no el workspace uv), así que
+# el motor no está instalado como paquete allí: lo hacemos importable desde el árbol de fuentes.
+_CORE_SRC = Path(__file__).resolve().parents[2] / "core" / "src"
+if _CORE_SRC.is_dir() and str(_CORE_SRC) not in sys.path:
+    sys.path.insert(0, str(_CORE_SRC))
+
 import geopandas as gpd
 import pandas as pd
 import shapely
 import streamlit as st
 import streamlit_javascript as st_js
+import ui_components
 from streamlit_folium import st_folium
 
-import ui_components
-from src.config import CRS_UTM30N, CRS_WGS84
-from src.config import GMAPS_MAX_WAYPOINTS as _GMAPS_MAX_WAYPOINTS
-from src.ingestion.geocoder import RouteTextError, get_route_from_text
-from src.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
-from src.ingestion.miteco import fetch_gasolineras
-from src.optimizer.autonomy import calculate_autonomy_radar
-from src.optimizer.cheapest import filter_all_stations_on_route, filter_cheapest_stations
-from src.optimizer.export import (
+from gasolineras_core.config import CRS_UTM30N, CRS_WGS84, DEMO_GPX_PATH
+from gasolineras_core.config import GMAPS_MAX_WAYPOINTS as _GMAPS_MAX_WAYPOINTS
+from gasolineras_core.ingestion.geocoder import RouteTextError, get_route_from_text
+from gasolineras_core.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
+from gasolineras_core.ingestion.miteco import fetch_gasolineras
+from gasolineras_core.optimizer.autonomy import calculate_autonomy_radar
+from gasolineras_core.optimizer.cheapest import filter_all_stations_on_route, filter_cheapest_stations
+from gasolineras_core.optimizer.export import (
     enrich_gpx_with_stops,
     enrich_stations_with_osrm,
     generate_google_maps_url,
     prepare_export_gdf,
 )
-from src.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
-from src.visualization.folium_map import generate_map
+from gasolineras_core.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
+from gasolineras_core.visualization.folium_map import generate_map
 
 
 @dataclass(frozen=True)
@@ -805,7 +813,7 @@ if _pipeline_active:
                 st.stop()
     else:
         if _using_demo:
-            demo_gpx_path = Path(__file__).parent / "sierra_gredos.gpx"
+            demo_gpx_path = DEMO_GPX_PATH
             if not demo_gpx_path.exists():
                 st.error("⚠️ No se encontró el archivo de demo.")
                 st.stop()

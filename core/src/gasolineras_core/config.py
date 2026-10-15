@@ -1,18 +1,25 @@
 """
-src/config.py
-=============
+gasolineras_core.config
+=======================
 Centralized configuration and constants for the Gasolineras en Ruta project.
 All modules import shared constants from here — single source of truth.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Project root (resolved dynamically — never hardcoded)
+# Paths
 # ---------------------------------------------------------------------------
-PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+# Datos empaquetados con el motor (viajan con el paquete, sea cual sea el cwd).
+PACKAGE_DATA_DIR: Path = Path(__file__).resolve().parent / "data"
+DEMO_GPX_PATH: Path = PACKAGE_DATA_DIR / "sierra_gredos.gpx"
+
+# Datos de ejecución (caché/fallback del MITECO). Configurable para despliegues
+# (p. ej. un volumen o /tmp en contenedores); por defecto, el directorio de trabajo.
+DATA_DIR: Path = Path(os.environ.get("GASOLINERAS_DATA_DIR", Path.cwd()))
 
 # ---------------------------------------------------------------------------
 # Coordinate Reference Systems

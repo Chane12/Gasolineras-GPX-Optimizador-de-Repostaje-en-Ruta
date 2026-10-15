@@ -1,6 +1,6 @@
 """
-src/visualization/folium_map.py
-===============================
+gasolineras_core.visualization.folium_map
+=========================================
 Folium map generation for the route and fuel stations.
 """
 
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import Any, cast
 
 import folium
 import geopandas as gpd
@@ -16,7 +17,15 @@ import pandas as pd
 from pyproj import Geod
 from shapely.geometry import LineString
 
-from src.config import CRS_WGS84
+from gasolineras_core.config import CRS_WGS84
+
+
+def _as_float(value: Any) -> float:
+    """Convierte a float; None, NA o valores no numéricos → NaN."""
+    try:
+        return float(value) if pd.notna(value) else math.nan
+    except (TypeError, ValueError):
+        return math.nan
 
 
 def generate_map(
@@ -92,7 +101,7 @@ def generate_map(
             if gdf_for_danger.crs and gdf_for_danger.crs.to_epsg() != 4326:
                 gdf_for_danger = gdf_for_danger.to_crs(CRS_WGS84)
             if "km_ruta" in gdf_for_danger.columns:
-                station_km_list = sorted(gdf_for_danger["km_ruta"].dropna().tolist())
+                station_km_list = sorted(float(k) for k in gdf_for_danger["km_ruta"] if pd.notna(k))
 
         if station_km_list:
             _geod = Geod(ellps="WGS84")
@@ -182,7 +191,7 @@ def generate_map(
         rank_visual = int(row["_rank_temp"])
         lat = row.geometry.y
         lon = row.geometry.x
-        precio = row.get("precio_seleccionado", float("nan"))
+        precio = _as_float(row.get("precio_seleccionado"))
         nombre = row.get("Rótulo", "Sin nombre")
         municipio = row.get("Municipio", "")
         provincia = row.get("Provincia", "")
@@ -190,12 +199,9 @@ def generate_map(
         horario = row.get("Horario", "")
         color = price_to_hex_color(precio)
 
-        osrm_dist = row.get("osrm_distance_km", float("nan"))
-        osrm_dur = row.get("osrm_duration_min", float("nan"))
-        try:
-            _osrm_ok = not math.isnan(osrm_dist) and not math.isnan(osrm_dur)
-        except TypeError:
-            _osrm_ok = False
+        osrm_dist = _as_float(row.get("osrm_distance_km"))
+        osrm_dur = _as_float(row.get("osrm_duration_min"))
+        _osrm_ok = not math.isnan(osrm_dist) and not math.isnan(osrm_dur)
         osrm_line = (
             f'<div class="popup-osrm-box">&#128652; <b>Desvío real:</b> {osrm_dist:.1f} km &nbsp;·&nbsp; {osrm_dur:.0f} min</div>'
             if _osrm_ok
@@ -289,7 +295,8 @@ def generate_map(
         </div>
     </div>
     """
-    mapa.get_root().html.add_child(folium.Element(legend_html))
+    root = cast(folium.Figure, mapa.get_root())
+    root.html.add_child(folium.Element(legend_html))
 
     dark_mode_css = """
     <style>
@@ -310,7 +317,7 @@ def generate_map(
     }
     </style>
     """
-    mapa.get_root().html.add_child(folium.Element(dark_mode_css))
+    root.html.add_child(folium.Element(dark_mode_css))
     folium.LayerControl().add_to(mapa)
 
     if output_path is not None:

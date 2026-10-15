@@ -16,13 +16,13 @@ from shapely.geometry import LineString, Point
 # ---------------------------------------------------------------------------
 # Import from the MODULAR package (src/)
 # ---------------------------------------------------------------------------
-from src.config import CRS_UTM30N, CRS_WGS84
-from src.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
-from src.optimizer.autonomy import calculate_autonomy_radar
-from src.optimizer.cheapest import filter_all_stations_on_route, filter_cheapest_stations
-from src.optimizer.export import generate_google_maps_url
-from src.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
-from src.spatial.nearest import build_kdtree_from_points, query_nearest
+from gasolineras_core.config import CRS_UTM30N, CRS_WGS84
+from gasolineras_core.ingestion.gpx_parser import load_gpx_track, simplify_track, validate_gpx_track
+from gasolineras_core.optimizer.autonomy import calculate_autonomy_radar
+from gasolineras_core.optimizer.cheapest import filter_all_stations_on_route, filter_cheapest_stations
+from gasolineras_core.optimizer.export import generate_google_maps_url
+from gasolineras_core.spatial.engine import build_route_buffer, build_stations_geodataframe, spatial_join_within_buffer
+from gasolineras_core.spatial.nearest import build_kdtree_from_points, query_nearest
 
 # ===================================================================
 # 1. INGESTION — GPX parsing (via src.ingestion.gpx_parser)
