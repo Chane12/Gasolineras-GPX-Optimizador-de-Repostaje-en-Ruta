@@ -83,9 +83,7 @@ class TestParseMitecoRecords:
 
 
 class TestFetchGasolineras:
-    def test_direct_success_returns_fresh_result_and_saves_fallback(
-        self, miteco_payload, fallback_file, monkeypatch
-    ):
+    def test_direct_success_returns_fresh_result_and_saves_fallback(self, miteco_payload, fallback_file, monkeypatch):
         monkeypatch.setattr(miteco.requests, "get", lambda *a, **k: _FakeResponse(miteco_payload))
 
         result = miteco.fetch_gasolineras()

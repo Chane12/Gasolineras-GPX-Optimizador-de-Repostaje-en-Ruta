@@ -124,8 +124,5 @@ def simplify_track(track: LineString, tolerance_deg: float = 0.0005) -> LineStri
     simplified = track.simplify(tolerance_deg, preserve_topology=True)
     if not isinstance(simplified, LineString):
         raise ValueError(f"La simplificación del track produjo una geometría inesperada: {simplified.geom_type}")
-    print(
-        f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} "
-        f"(tolerancia={tolerance_deg} deg)"
-    )
+    print(f"[Simplify] Vertices: {len(track.coords)} --> {len(simplified.coords)} (tolerancia={tolerance_deg} deg)")
     return simplified

@@ -54,10 +54,7 @@ def filter_cheapest_stations(
     """
     if fuel_column not in gdf.columns:
         available = [c for c in PRICE_COLUMNS if c in gdf.columns]
-        raise ValueError(
-            f"Columna '{fuel_column}' no encontrada.\n"
-            f"Columnas de precio disponibles: {available}"
-        )
+        raise ValueError(f"Columna '{fuel_column}' no encontrada.\nColumnas de precio disponibles: {available}")
 
     # 1. Crear una Serie de coerción numérica para evaluar precios sin tocar el DataFrame padre
     precios_num = _numeric_prices(gdf, fuel_column)

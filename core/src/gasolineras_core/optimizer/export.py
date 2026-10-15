@@ -185,7 +185,7 @@ def enrich_stations_with_osrm(
 
             d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
             if d_ida is not None:
-                time.sleep(0.2) # Pausa mínima entre ida y vuelta
+                time.sleep(0.2)  # Pausa mínima entre ida y vuelta
                 d_vuelta = get_real_distance_osrm(gas_lon, gas_lat, origin_lon, origin_lat)
                 if d_vuelta is not None:
                     return idx, {
@@ -201,10 +201,7 @@ def enrich_stations_with_osrm(
     # max_workers=3 es conservador para la API pública de OSRM perdiendo latencia general
     # pero manteniendo fiabilidad frente a cuelgues, tal y como se requiere.
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {
-            executor.submit(process_station, idx, row): idx
-            for idx, row in gdf_wgs84.iterrows()
-        }
+        futures = {executor.submit(process_station, idx, row): idx for idx, row in gdf_wgs84.iterrows()}
 
         # as_completed permite que main thread vaya haciendo el progresivo yield
         # a Streamlit conforme terminan, no esperando a todos al final.
@@ -286,11 +283,13 @@ def enrich_gpx_with_stops(
         if tree is not None:
             _, idx_kdtree = query_nearest(tree, (parada["lon"], parada["lat"]))
             closest_idx = indices[idx_kdtree]
-            split_points.append({
-                "idx": closest_idx,
-                "station_lon": parada["lon"],
-                "station_lat": parada["lat"],
-            })
+            split_points.append(
+                {
+                    "idx": closest_idx,
+                    "station_lon": parada["lon"],
+                    "station_lat": parada["lat"],
+                }
+            )
 
     split_points.sort(key=lambda x: (x["idx"][0], x["idx"][1], x["idx"][2]), reverse=True)
 

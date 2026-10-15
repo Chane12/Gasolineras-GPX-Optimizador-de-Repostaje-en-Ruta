@@ -78,9 +78,7 @@ def calculate_autonomy_radar(
             nombre_destino = gdf_top.sort_values("km_ruta").iloc[0].get("Rótulo", f"Gasolinera #{j + 1}")
         elif j == len(checkpoints) - 2 and station_km_list:
             nombre_origen = (
-                gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}")
-                if j > 0
-                else "Inicio"
+                gdf_top.sort_values("km_ruta").iloc[j - 1].get("Rótulo", f"Gasolinera #{j}") if j > 0 else "Inicio"
             )
             nombre_destino = "Fin de ruta"
         elif station_km_list and 0 < j < len(station_km_list):
