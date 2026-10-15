@@ -1,13 +1,13 @@
 ---
 name: nueva-funcionalidad
-description: Flujo completo para implementar una tarea (funcionalidad, corrección o refactor) en este repo — rama, plan, tests, implementación, verificación, roadmap y PR. Úsala cuando el usuario pida construir, añadir, cambiar o arreglar algo, o "sigue con la siguiente tarea del roadmap".
+description: Flujo completo para implementar una tarea (funcionalidad, corrección o refactor) en este repo — rama, plan, tests, implementación, verificación, roadmap, PR y fusión. Úsala cuando el usuario pida construir, añadir, cambiar o arreglar algo, o "sigue con la siguiente tarea del roadmap".
 ---
 
 # Nueva funcionalidad / tarea
 
 ## 1. Situarse
 
-- Lee `docs/ROADMAP.md`. Si el usuario no ha dicho qué hacer, propón la siguiente tarea sin marcar de la fase actual y confírmala.
+- Lee `docs/ROADMAP.md`. Si el usuario no ha dicho qué hacer, coge la siguiente tarea sin marcar de la fase actual y empieza. Pide confirmación solo si implica una decisión de producto o de coste.
 - Lee el `CLAUDE.md` de las carpetas que vas a tocar y los ADRs relacionados en `docs/decisions/`.
 - Comprueba que no estás en `main`: `git status -sb`.
 
@@ -53,4 +53,18 @@ git push -u origin HEAD
 gh pr create --fill
 ```
 
-En la descripción del PR: qué cambia, cómo se verificó, qué no se pudo verificar y cualquier acción manual necesaria (p. ej. en Streamlit Cloud o Vercel). **No fusiones tú el PR** salvo que el usuario lo pida expresamente: `main` despliega a producción.
+En la descripción del PR: qué cambia, cómo se verificó, qué no se pudo verificar y cualquier acción manual necesaria (p. ej. en Streamlit Cloud o Vercel).
+
+## 9. Fusionar (lo hace el agente)
+
+El propietario delega la fusión: **fusiona tú** cuando se cumpla todo esto:
+- El CI del PR está en verde: `gh pr checks <n> --watch`.
+- Si el PR toca `core/`, `legacy/` o las dependencias, has pasado `./scripts/verify.sh --smoke`, porque `main` despliega a producción.
+- El PR no incluye ninguna decisión de producto que el propietario no haya aprobado.
+
+```bash
+gh pr merge <n> --merge --delete-branch
+git checkout main && git pull --ff-only
+```
+
+`main` está protegida (PR obligatorio, CI en verde, rama al día con `main`). Si GitHub pide actualizar la rama: `gh pr update-branch <n>` y espera de nuevo al CI. Nunca desactives la protección para fusionar.

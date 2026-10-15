@@ -5,6 +5,8 @@ version = "0.1.0"
 description = "API HTTP de Gasolineras en Ruta sobre gasolineras_core"
 readme = "CLAUDE.md"
 requires-python = ">=3.11"
+license = "LicenseRef-Proprietary"
+classifiers = ["Private :: Do Not Upload"]
 dependencies = [
     "gasolineras-core",
     "fastapi>=0.115.0",

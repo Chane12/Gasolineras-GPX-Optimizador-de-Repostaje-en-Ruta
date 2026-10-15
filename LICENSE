@@ -1,10 +1,35 @@
-Creative Commons Attribution-NonCommercial 4.0 International Public License
+Copyright (c) 2026 Carlos Chañe (Chane12). Todos los derechos reservados.
 
-Por la presente, se otorga permiso para copiar y redistribuir el material en cualquier medio o formato, así como para remediar, transformar y construir sobre el material, bajo los siguientes términos:
+Este repositorio (código fuente, documentación, diseño y demás contenidos, salvo
+los de terceros indicados más abajo) es software propietario.
 
-1. Atribución — Usted debe dar crédito de manera adecuada, brindar un enlace a la licencia, e indicar si se han realizado cambios. 
-2. NoComercial — Usted no puede hacer uso del material con fines comerciales.
+El código se muestra públicamente solo para su consulta. No se concede ninguna
+licencia ni derecho de uso, ni de forma expresa ni implícita. Sin el permiso
+previo y por escrito del titular, queda prohibido:
 
-Texto completo de la licencia: https://creativecommons.org/licenses/by-nc/4.0/legalcode.es
+  - copiar, reproducir o modificar el código, en todo o en parte;
+  - distribuirlo, publicarlo, sublicenciarlo o venderlo;
+  - desplegarlo u ofrecerlo como servicio, con o sin ánimo de lucro;
+  - usarlo para crear obras derivadas.
 
-Copyright (c) 2026 Carlos - Proyecto Gasolineras GPX
+Lo único permitido es ver el repositorio y bifurcarlo (fork) dentro de GitHub, en
+los términos que exigen sus Condiciones de Servicio. Bifurcarlo no da ningún
+derecho de uso.
+
+Para solicitar permisos, abre un issue en el repositorio de GitHub.
+
+Contenidos de terceros (se rigen por sus propias licencias, no por esta):
+
+  - Datos de precios de carburantes: © Ministerio para la Transición Ecológica y
+    el Reto Demográfico (MITECO), reutilizados conforme a su aviso legal.
+  - Mapas, geocodificación y rutas: © colaboradores de OpenStreetMap (ODbL).
+  - Bibliotecas de software de las que depende el proyecto: cada una con su
+    propia licencia.
+
+Las versiones del repositorio publicadas antes del 2026-10-15 se distribuyeron
+bajo la licencia Creative Commons Attribution-NonCommercial 4.0 International;
+esa licencia sigue aplicándose a las copias obtenidas de esas versiones.
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
+IMPLÍCITA. LOS PRECIOS MOSTRADOS SON ORIENTATIVOS Y PUEDEN NO COINCIDIR CON LOS
+DEL SURTIDOR.

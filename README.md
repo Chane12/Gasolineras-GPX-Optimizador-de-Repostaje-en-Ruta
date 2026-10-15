@@ -45,4 +45,4 @@ El proyecto se desarrolla con ayuda de IA (Claude Code): las instrucciones para 
 
 ## Licencia
 
-Ver [`LICENSE`](LICENSE). Datos de precios: © Ministerio para la Transición Ecológica y el Reto Demográfico. Mapas y rutas: © colaboradores de OpenStreetMap.
+Software propietario, todos los derechos reservados: el código se publica solo para su consulta. Ver [`LICENSE`](LICENSE) y el [ADR 0006](docs/decisions/0006-licencia-propietaria.md). Datos de precios: © Ministerio para la Transición Ecológica y el Reto Demográfico. Mapas y rutas: © colaboradores de OpenStreetMap.

@@ -9,6 +9,7 @@ Cada archivo explica **una** decisión: el contexto, qué se decidió y sus cons
 | [0003](0003-monorepo-uv-workspace.md) | Monorepo con workspace uv y `core` sin UI | Aceptada |
 | [0004](0004-convencion-idioma.md) | Inglés en el código, español en interfaz y docs | Aceptada |
 | [0005](0005-servicios-externos.md) | Uso responsable de MITECO, OSRM y Nominatim | Aceptada (implementación en Fase 1) |
+| [0006](0006-licencia-propietaria.md) | Licencia propietaria (todos los derechos reservados) | Aceptada |
 
 ## Cuándo escribir un ADR
 

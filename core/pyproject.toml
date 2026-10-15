@@ -4,6 +4,8 @@ version = "1.0.0"
 description = "Motor geoespacial de repostaje en ruta (España): ingesta MITECO, GPX, corredor espacial, optimizador."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "LicenseRef-Proprietary"
+classifiers = ["Private :: Do Not Upload"]
 
 dependencies = [
     "geopandas>=0.14.0",
