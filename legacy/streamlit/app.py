@@ -8,6 +8,7 @@ Cómo ejecutar (desde la raíz del repo):
     uv run streamlit run legacy/streamlit/app.py
 """
 
+import os
 import sys
 import tempfile
 import urllib.parse
@@ -20,6 +21,12 @@ from pathlib import Path
 _CORE_SRC = Path(__file__).resolve().parents[2] / "core" / "src"
 if _CORE_SRC.is_dir() and str(_CORE_SRC) not in sys.path:
     sys.path.insert(0, str(_CORE_SRC))
+# Streamlit solo vigila (y recarga al cambiar) los módulos de la carpeta del script y los del
+# PYTHONPATH. Sin esto, tras un despliegue los cambios del core no se aplicaban hasta reiniciar la app,
+# y una app.py nueva podía convivir con un core viejo.
+_pythonpath = os.environ.get("PYTHONPATH", "")
+if _CORE_SRC.is_dir() and str(_CORE_SRC) not in _pythonpath.split(os.pathsep):
+    os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(_CORE_SRC), _pythonpath) if p)
 
 import geopandas as gpd
 import pandas as pd
