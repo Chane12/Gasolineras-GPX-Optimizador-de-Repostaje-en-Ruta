@@ -6,6 +6,7 @@ GPX file loading, validation, and track simplification.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import gpxpy
@@ -13,54 +14,57 @@ from shapely.geometry import LineString
 
 from gasolineras_core.config import BBOX_SPAIN, MAX_TRACK_POINTS
 
+logger = logging.getLogger(__name__)
+
+
+def parse_gpx_track(data: bytes | str, name: str = "GPX") -> LineString:
+    """
+    Extrae el track principal de un GPX en memoria como un LineString de Shapely (WGS84, lon/lat).
+
+    Acumula en orden los puntos de todos los tracks y segmentos; si no hay tracks, usa las rutas.
+
+    Raises
+    ------
+    ValueError
+        Si no es un GPX válido o tiene menos de 2 puntos.
+    """
+    if isinstance(data, bytes):
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = data.decode("latin-1")
+    else:
+        text = data
+
+    try:
+        gpx = gpxpy.parse(text)
+    except Exception as exc:  # gpxpy raises several exception types for malformed XML/GPX
+        raise ValueError(f"El archivo «{name}» no es un GPX válido.") from exc
+
+    coords: list[tuple[float, float]] = [
+        (point.longitude, point.latitude)
+        for track in gpx.tracks
+        for segment in track.segments
+        for point in segment.points
+    ]
+    if not coords:
+        coords = [(point.longitude, point.latitude) for route in gpx.routes for point in route.points]
+
+    if len(coords) < 2:
+        raise ValueError(f"El GPX «{name}» debe contener al menos 2 puntos de track.")
+
+    logger.info("GPX %s: %d track points", name, len(coords))
+    return LineString(coords)
+
 
 def load_gpx_track(gpx_path: str | Path) -> LineString:
     """
-    Lee un archivo GPX y extrae el track principal como un LineString de Shapely.
-
-    Itera sobre todos los tracks y segmentos del archivo GPX, acumulando
-    los puntos en orden. Requiere que el GPX tenga al menos un track con
-    al menos dos puntos.
-
-    Parameters
-    ----------
-    gpx_path : str | Path
-        Ruta al archivo .gpx.
-
-    Returns
-    -------
-    LineString
-        Geometría de la ruta en coordenadas WGS84 (longitud, latitud).
+    Lee un archivo GPX y extrae el track principal como un LineString de Shapely (ver ``parse_gpx_track``).
     """
     gpx_path = Path(gpx_path)
     if not gpx_path.exists():
         raise FileNotFoundError(f"No se encuentra el archivo GPX: {gpx_path}")
-
-    try:
-        with open(gpx_path, encoding="utf-8") as f:
-            gpx = gpxpy.parse(f)
-    except UnicodeDecodeError:
-        with open(gpx_path, encoding="latin-1") as f:
-            gpx = gpxpy.parse(f)
-
-    coords: list[tuple[float, float]] = []
-
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                coords.append((point.longitude, point.latitude))
-
-    # Fallback: routes
-    if not coords:
-        for route in gpx.routes:
-            for point in route.points:
-                coords.append((point.longitude, point.latitude))
-
-    if len(coords) < 2:
-        raise ValueError(f"El GPX '{gpx_path.name}' debe contener al menos 2 puntos de track.")
-
-    print(f"[GPX] Puntos cargados del track: {len(coords)}")
-    return LineString(coords)
+    return parse_gpx_track(gpx_path.read_bytes(), name=gpx_path.name)
 
 
 def validate_gpx_track(track: LineString) -> None:

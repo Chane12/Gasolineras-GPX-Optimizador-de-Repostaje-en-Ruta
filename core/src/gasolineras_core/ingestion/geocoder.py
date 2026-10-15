@@ -1,112 +1,234 @@
 """
 gasolineras_core.ingestion.geocoder
 ===================================
-Geocoding (Nominatim/Photon) and OSRM routing for text-based route input.
+Geocoding (Nominatim, with Photon as fallback) and OSRM routing for text-based route input.
+
+Polite use of OSM services (ADR 0005): identifiable User-Agent, at most one request per second
+to each geocoder (process-wide) and caching of places and routes.
 """
 
 from __future__ import annotations
 
-import random
-import time
+import logging
+from dataclasses import dataclass
+from typing import Any
 
 import requests
 from shapely.geometry import LineString
 
-from gasolineras_core.config import NOMINATIM_HEADERS, NOMINATIM_URL, OSRM_BASE_URL
+from gasolineras_core.config import (
+    BBOX_SPAIN,
+    GEOCODE_CACHE_MAX_ITEMS,
+    GEOCODE_CACHE_TTL_S,
+    GEOCODER_HEADERS,
+    GEOCODER_MAX_WAIT_S,
+    GEOCODER_MIN_INTERVAL_S,
+    NOMINATIM_URL,
+    OSRM_BASE_URL,
+    OSRM_FALLBACK_URL,
+    PHOTON_URL,
+    ROUTE_CACHE_MAX_ITEMS,
+    ROUTE_CACHE_TTL_S,
+    USER_AGENT,
+)
+from gasolineras_core.http_utils import RateLimitBusyError, RateLimiter, TTLCache
+
+logger = logging.getLogger(__name__)
+
+LatLon = tuple[float, float]
 
 
 class RouteTextError(ValueError):
     """Se lanza cuando no es posible trazar la ruta entre los puntos de texto dados."""
 
 
-def _geocode(lugar: str, timeout: float = 5.0) -> tuple[float, float]:
+class PlaceNotFoundError(RouteTextError):
+    """El geocodificador respondió, pero no conoce el lugar indicado."""
+
+
+class NoRouteError(RouteTextError):
+    """OSRM respondió, pero no hay ruta por carretera entre los puntos."""
+
+
+class RoutingServiceError(RouteTextError):
+    """Los servicios externos (geocodificación u OSRM) no están disponibles o están saturados."""
+
+
+@dataclass(frozen=True)
+class GeocodedPlace:
+    query: str
+    lat: float
+    lon: float
+    source: str  # "nominatim" | "photon"
+
+
+_nominatim_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
+_photon_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
+_geocode_cache: TTLCache[GeocodedPlace] = TTLCache(GEOCODE_CACHE_MAX_ITEMS, GEOCODE_CACHE_TTL_S)
+_route_cache: TTLCache[LineString] = TTLCache(ROUTE_CACHE_MAX_ITEMS, ROUTE_CACHE_TTL_S)
+
+_SERVICE_UNAVAILABLE_MSG = (
+    "El servicio de búsqueda de lugares no está disponible ahora mismo. Inténtalo de nuevo en unos minutos."
+)
+_ROUTING_UNAVAILABLE_MSG = (
+    "El servicio de rutas por carretera no está disponible ahora mismo. Inténtalo de nuevo en unos minutos."
+)
+
+
+def clear_caches() -> None:
+    """Vacía las cachés de lugares y rutas (útil en tests)."""
+    _geocode_cache.clear()
+    _route_cache.clear()
+
+
+def normalize_place(place: str) -> str:
+    """Clave de caché: sin espacios sobrantes y sin distinguir mayúsculas."""
+    return " ".join(place.split()).casefold()
+
+
+def _with_country(place: str) -> str:
+    lowered = place.lower()
+    if "españa" in lowered or "spain" in lowered:
+        return place
+    return f"{place}, España"
+
+
+def _parse_nominatim(results: Any) -> LatLon | None:
+    if not results:
+        return None
+    return float(results[0]["lat"]), float(results[0]["lon"])
+
+
+def _parse_photon(results: Any) -> LatLon | None:
+    features = results.get("features") if isinstance(results, dict) else None
+    if not features:
+        return None
+    lon, lat = features[0]["geometry"]["coordinates"][:2]
+    return float(lat), float(lon)
+
+
+def geocode_place(place: str, timeout: float = 5.0) -> GeocodedPlace:
     """
-    Geocodifica un nombre de lugar usando Nominatim (OSM) y Photon (Komoot).
+    Convierte un nombre de lugar de España en coordenadas WGS84.
 
-    Parameters
-    ----------
-    lugar : str
-        Nombre del lugar a geocodificar.
-    timeout : float
-        Tiempo máximo de espera en segundos.
-
-    Returns
-    -------
-    tuple[float, float]
-        (latitud, longitud) en WGS84.
+    Usa Nominatim y, si está caído o saturado, Photon. Los resultados se cachean.
 
     Raises
     ------
-    RouteTextError
-        Si no se devuelven resultados o la llamada falla.
+    PlaceNotFoundError
+        Si el lugar está vacío o el geocodificador no lo encuentra.
+    RoutingServiceError
+        Si ningún geocodificador está disponible.
     """
-    user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
-        "GasolinerasRutaApp/1.0",
-    ]
+    key = normalize_place(place)
+    if not key:
+        raise PlaceNotFoundError("Indica un lugar de origen y otro de destino.")
+    cached = _geocode_cache.get(key)
+    if cached is not None:
+        return cached
 
-    headers = NOMINATIM_HEADERS.copy()
-
+    query = _with_country(" ".join(place.split()))
+    bb = BBOX_SPAIN
     endpoints = [
-        {"url": NOMINATIM_URL, "type": "nominatim"},
-        {"url": "https://photon.komoot.io/api", "type": "photon"},
+        (
+            "nominatim",
+            NOMINATIM_URL,
+            {"q": query, "format": "json", "limit": 1, "countrycodes": "es"},
+            _nominatim_limiter,
+            timeout,
+            _parse_nominatim,
+        ),
+        (
+            "photon",
+            PHOTON_URL,
+            {"q": query, "limit": 1, "bbox": f"{bb['min_lon']},{bb['min_lat']},{bb['max_lon']},{bb['max_lat']}"},
+            _photon_limiter,
+            timeout * 2,  # Photon is slower; it is only the fallback
+            _parse_photon,
+        ),
     ]
 
-    last_err = None
-
-    for attempt, ep in enumerate(endpoints):
-        headers["User-Agent"] = random.choice(user_agents)
+    for source, url, params, limiter, ep_timeout, parse in endpoints:
         try:
-            if attempt > 0:
-                time.sleep(2)  # Cooldown básico solo entre alternancia de endpoints principales
-
-            query_lugar = lugar
-            if "españa" not in lugar.lower() and "spain" not in lugar.lower():
-                query_lugar = f"{lugar}, España"
-
-            if ep["type"] == "nominatim":
-                params = {"q": query_lugar, "format": "json", "limit": 1, "countrycodes": "es"}
-            else:
-                params = {"q": query_lugar, "limit": 1}
-
-            resp = requests.get(
-                ep["url"],
-                params=params,
-                headers=headers,
-                timeout=timeout,
-            )
+            limiter.wait()
+            resp = requests.get(url, params=params, headers=GEOCODER_HEADERS, timeout=ep_timeout)
             resp.raise_for_status()
-            results = resp.json()
-
-            if ep["type"] == "nominatim":
-                if not results:
-                    raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
-                lat = float(results[0]["lat"])
-                lon = float(results[0]["lon"])
-            else:  # photon
-                if not results.get("features"):
-                    raise RouteTextError(f"No encontramos la ubicación «{lugar}».")
-                coords = results["features"][0]["geometry"]["coordinates"]
-                lon, lat = float(coords[0]), float(coords[1])
-
-            print(f"[Geocode] «{lugar}» -> ({lat:.5f}, {lon:.5f}) via {ep['url']}")
-            return lat, lon
-
-        except RouteTextError:
-            raise
-        except requests.exceptions.HTTPError:
-            last_err = resp.status_code
-            if resp.status_code in (429, 403):
-                print(f"[Geocode] Rate limit/Forbidden en {ep['url']}, intentando alternativa...")
-                continue
-            raise RouteTextError(f"Error HTTP al geocodificar «{lugar}»: {resp.status_code}") from None
-        except Exception as exc:
-            last_err = exc
-            print(f"[Geocode] Error en {ep['url']}: {exc}")
+            latlon = parse(resp.json())
+        except (RateLimitBusyError, requests.RequestException, ValueError, KeyError, IndexError) as exc:
+            logger.warning("Geocoder %s failed for %r: %s", source, place, exc)
             continue
 
-    raise RouteTextError(f"Error al geocodificar «{lugar}» tras intentar varios servidores. Último error: {last_err}")
+        if latlon is None:
+            raise PlaceNotFoundError(f"No encontramos la ubicación «{place.strip()}».")
+        result = GeocodedPlace(query=place.strip(), lat=latlon[0], lon=latlon[1], source=source)
+        _geocode_cache.set(key, result)
+        logger.info("Geocoded %r -> (%.5f, %.5f) via %s", place, result.lat, result.lon, source)
+        return result
+
+    raise RoutingServiceError(_SERVICE_UNAVAILABLE_MSG)
+
+
+def fetch_road_route(origin: LatLon, destination: LatLon, timeout: float = 12.0) -> LineString:
+    """
+    Pide a OSRM la ruta por carretera entre dos puntos (lat, lon) y la devuelve en EPSG:4326.
+
+    Raises
+    ------
+    NoRouteError
+        Si no existe ruta por carretera entre los puntos.
+    RoutingServiceError
+        Si ningún servidor OSRM está disponible.
+    """
+    key = (round(origin[0], 5), round(origin[1], 5), round(destination[0], 5), round(destination[1], 5))
+    cached = _route_cache.get(key)
+    if cached is not None:
+        return cached
+
+    coords_path = f"{origin[1]},{origin[0]};{destination[1]},{destination[0]}"
+    common = "geometries=geojson&alternatives=false&steps=false"
+    urls = [
+        f"{OSRM_BASE_URL}/{coords_path}?overview=full&{common}",
+        f"{OSRM_BASE_URL}/{coords_path}?overview=simplified&{common}",
+        f"{OSRM_FALLBACK_URL}/{coords_path}?overview=simplified&{common}",
+    ]
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+
+    data: dict[str, Any] | None = None
+    for url in urls:
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code == 400:
+                # OSRM answers 400 {"code": "NoRoute"/"NoSegment"} when the points are not connected by road.
+                code = resp.json().get("code")
+                if code in ("NoRoute", "NoSegment"):
+                    raise NoRouteError(
+                        "No hay ruta por carretera entre esos dos puntos. Comprueba que ambos sean accesibles en coche."
+                    )
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except NoRouteError:
+            raise
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("OSRM request failed (%s): %s", url.split("/route/")[0], exc)
+
+    if data is None:
+        raise RoutingServiceError(_ROUTING_UNAVAILABLE_MSG)
+
+    routes = data.get("routes") or []
+    if not routes:
+        raise NoRouteError("No hay ruta por carretera entre esos dos puntos.")
+    try:
+        coords = routes[0]["geometry"]["coordinates"]
+    except (KeyError, TypeError) as exc:
+        raise RoutingServiceError(_ROUTING_UNAVAILABLE_MSG) from exc
+    if len(coords) < 2:
+        raise NoRouteError("La ruta devuelta es demasiado corta: el origen y el destino están casi en el mismo punto.")
+
+    track = LineString(coords)
+    _route_cache.set(key, track)
+    logger.info("OSRM route: %d points", len(coords))
+    return track
 
 
 def get_route_from_text(origen: str, destino: str) -> LineString:
@@ -114,74 +236,16 @@ def get_route_from_text(origen: str, destino: str) -> LineString:
     Obtiene la ruta por carretera entre dos puntos descritos en texto plano
     y la devuelve como un LineString de Shapely en EPSG:4326.
 
-    Parameters
-    ----------
-    origen : str
-        Nombre del punto de partida.
-    destino : str
-        Nombre del destino.
-
-    Returns
-    -------
-    LineString
-        Ruta en EPSG:4326.
-
     Raises
     ------
     RouteTextError
-        Ante cualquier fallo de geocodificación o de la API OSRM.
+        Ante cualquier fallo (sus subclases distinguen la causa).
     """
-    lat_o, lon_o = _geocode(origen)
-    lat_d, lon_d = _geocode(destino)
-
-    user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    ]
-    headers = {"User-Agent": random.choice(user_agents)}
-
-    endpoints = [
-        f"{OSRM_BASE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=full&geometries=geojson&alternatives=false&steps=false",
-        f"{OSRM_BASE_URL}/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false",
-        f"http://router.project-osrm.org/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}?overview=simplified&geometries=geojson&alternatives=false&steps=false",
-    ]
-
-    data = None
-    last_err = None
-
-    for url in endpoints:
-        try:
-            print("[Ruta] Intentando OSRM endpoint...")
-            resp = requests.get(url, headers=headers, timeout=12.0)
-            if resp.status_code == 429:
-                last_err = "El servicio de enrutamiento está saturado (rate-limit)."
-                continue
-            resp.raise_for_status()
-            data = resp.json()
-            break
-        except Exception as exc:
-            last_err = str(exc)
-            data = None
-
-    if data is None:
-        raise RouteTextError(f"No se pudo contactar con ningún servicio de OSRM. Último error: {last_err}")
-
+    o = geocode_place(origen)
+    d = geocode_place(destino)
     try:
-        routes = data.get("routes", [])
-        if not routes:
-            raise RouteTextError(
-                f"OSRM no encontró ruta entre «{origen}» y «{destino}». "
-                "Comprueba que ambos puntos sean accesibles por carretera."
-            )
-        coords = routes[0]["geometry"]["coordinates"]
-        if len(coords) < 2:
-            raise RouteTextError("La ruta devuelta por OSRM es demasiado corta.")
-        track = LineString(coords)
-        dist_km = routes[0]["legs"][0]["distance"] / 1000.0
-        print(f"[OSRM] Ruta «{origen}» -> «{destino}»: {dist_km:.1f} km, {len(coords)} puntos.")
-        return track
-    except RouteTextError:
-        raise
-    except Exception as exc:
-        raise RouteTextError(f"Error al procesar la geometría de la ruta: {exc}") from exc
+        return fetch_road_route((o.lat, o.lon), (d.lat, d.lon))
+    except NoRouteError:
+        raise NoRouteError(
+            f"No hay ruta por carretera entre «{o.query}» y «{d.query}». Comprueba que ambos sean accesibles en coche."
+        ) from None

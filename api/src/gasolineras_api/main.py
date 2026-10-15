@@ -9,6 +9,8 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from gasolineras_api.routers import route
+
 API_VERSION = version("gasolineras-api")
 
 
@@ -30,6 +32,7 @@ def create_app() -> FastAPI:
     def health() -> HealthResponse:
         return HealthResponse(status="ok", version=API_VERSION)
 
+    app.include_router(route.router)
     return app
 
 
