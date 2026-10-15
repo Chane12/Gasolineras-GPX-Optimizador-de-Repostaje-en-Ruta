@@ -24,7 +24,7 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 | `api/` | FastAPI sobre `core` (`gasolineras_api`) | Fase 1 (esqueleto) |
 | `web/` | Next.js | Fase 2 (no existe aún) |
 | `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs) | |
-| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `smoke_legacy.py` | |
+| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `smoke_legacy.py`, `check_prod.py` | |
 | `.claude/` | Hooks (formateo automático) y skills del proyecto | |
 
 ## Comandos
@@ -71,5 +71,6 @@ Si algo no se pudo verificar (p. ej. requiere el móvil o el despliegue), dilo e
 
 ## Despliegue actual
 
-- `main` se despliega solo en Streamlit Community Cloud (archivo principal: `legacy/streamlit/app.py`). Todo lo que entra en `main` llega a producción: por eso PR + CI.
+- `main` se despliega solo en Streamlit Community Cloud (archivo principal: `legacy/streamlit/app.py`): https://gasolineras-gpx-optimizador-de-repostaje-en-ruta.streamlit.app/
+- Comprobar producción tras fusionar: `uvx --from playwright python scripts/check_prod.py` (usa el Chrome del sistema; da tiempo a que la app despierte si estaba dormida). Todo lo que entra en `main` llega a producción: por eso PR + CI.
 - Streamlit Cloud instala `legacy/streamlit/requirements.txt` y la app importa el core desde `core/src` (shim de `sys.path` en `app.py`). No quitar ese shim mientras exista el despliegue.
