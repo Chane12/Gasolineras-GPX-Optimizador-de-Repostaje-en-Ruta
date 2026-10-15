@@ -11,7 +11,7 @@ src/gasolineras_core/
 ├── cli.py              # CLI `gasolineras` (orquestador, sin lógica propia)
 ├── data/               # Datos empaquetados (GPX de demo Sierra de Gredos)
 ├── ingestion/
-│   ├── miteco.py       # Descarga del catálogo MITECO (+ proxies + fallback parquet) y limpieza
+│   ├── miteco.py       # Descarga del MITECO (TLS ADR 0007, proxies opcionales, fallback parquet), limpieza y antigüedad
 │   ├── gpx_parser.py   # GPX (archivo o bytes) → track, validación (España, nº de puntos) y simplificación RDP
 │   └── geocoder.py     # geocode_place (Nominatim → Photon, ≤1 pet./s, caché) y fetch_road_route (OSRM, caché)
 ├── spatial/
@@ -27,7 +27,7 @@ src/gasolineras_core/
 
 ## Flujo del pipeline
 
-1. `fetch_gasolineras()` → `MitecoResult(df, fetched_at, from_fallback)`
+1. `fetch_gasolineras(use_proxies=...)` → `MitecoResult(df, fetched_at, from_fallback)`; `price_freshness()` → fresh / stale / very_stale
 2. `load_gpx_track()` / `parse_gpx_track()` / `get_route_from_text()` → `LineString` WGS84 → `validate_gpx_track()` → `simplify_track()`
 3. `build_route_buffer()` + `build_stations_geodataframe()` → `spatial_join_within_buffer()` (todo en EPSG:25830)
 4. `filter_cheapest_stations()` / `filter_all_stations_on_route()` → añade `precio_seleccionado`, `combustible`, `km_ruta`

@@ -5,13 +5,16 @@ Nunca tocan la red: `requests.get` se sustituye por un doble de pruebas.
 
 import json
 import os
-from datetime import UTC, datetime
+import socket
+import ssl
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
 import pytest
 import requests
 
+from gasolineras_core.config import MITECO_API_URL, USER_AGENT
 from gasolineras_core.ingestion import miteco
 
 FIXTURE = Path(__file__).parent / "fixtures" / "miteco_sample.json"
@@ -82,9 +85,28 @@ class TestParseMitecoRecords:
 # ---------------------------------------------------------------------------
 
 
+class FakeNetwork:
+    """Replaces both the MITECO session (direct download) and requests.get (proxies). Records the calls."""
+
+    def __init__(self, monkeypatch, direct, proxies=_always_fail) -> None:
+        self.direct_calls: list[dict] = []
+        self.proxy_calls: list[str] = []
+
+        def fake_direct(url, **kwargs):
+            self.direct_calls.append({"url": url, **kwargs})
+            return direct(url, **kwargs)
+
+        def fake_proxy(url, **kwargs):
+            self.proxy_calls.append(url)
+            return proxies(url, **kwargs)
+
+        monkeypatch.setattr(miteco._SESSION, "get", fake_direct)
+        monkeypatch.setattr(miteco.requests, "get", fake_proxy)
+
+
 class TestFetchGasolineras:
     def test_direct_success_returns_fresh_result_and_saves_fallback(self, miteco_payload, fallback_file, monkeypatch):
-        monkeypatch.setattr(miteco.requests, "get", lambda *a, **k: _FakeResponse(miteco_payload))
+        net = FakeNetwork(monkeypatch, direct=lambda *a, **k: _FakeResponse(miteco_payload))
 
         result = miteco.fetch_gasolineras()
 
@@ -92,12 +114,39 @@ class TestFetchGasolineras:
         assert result.from_fallback is False
         assert (datetime.now(UTC) - result.fetched_at).total_seconds() < 60
         assert fallback_file.exists()
+        assert net.proxy_calls == []
+
+    def test_direct_download_identifies_itself(self, miteco_payload, fallback_file, monkeypatch):
+        net = FakeNetwork(monkeypatch, direct=lambda *a, **k: _FakeResponse(miteco_payload))
+
+        miteco.fetch_gasolineras()
+
+        headers = net.direct_calls[0]["headers"]
+        assert headers["User-Agent"] == USER_AGENT
+        assert net.direct_calls[0]["timeout"] is not None
+
+    def test_proxies_are_tried_when_direct_fails(self, miteco_payload, fallback_file, monkeypatch):
+        net = FakeNetwork(monkeypatch, direct=_always_fail, proxies=lambda *a, **k: _FakeResponse(miteco_payload))
+
+        result = miteco.fetch_gasolineras()
+
+        assert result.from_fallback is False
+        assert len(net.proxy_calls) == 1
+
+    def test_without_proxies_goes_straight_to_fallback(self, miteco_payload, fallback_file, monkeypatch):
+        miteco.parse_miteco_records(miteco_payload["ListaEESSPrecio"]).to_parquet(fallback_file)
+        net = FakeNetwork(monkeypatch, direct=_always_fail, proxies=lambda *a, **k: _FakeResponse(miteco_payload))
+
+        result = miteco.fetch_gasolineras(use_proxies=False)
+
+        assert result.from_fallback is True
+        assert net.proxy_calls == []
 
     def test_all_sources_down_uses_fallback_with_its_real_age(self, miteco_payload, fallback_file, monkeypatch):
         miteco.parse_miteco_records(miteco_payload["ListaEESSPrecio"]).to_parquet(fallback_file)
         two_hours_ago = datetime.now(UTC).timestamp() - 2 * 3600
         os.utime(fallback_file, (two_hours_ago, two_hours_ago))
-        monkeypatch.setattr(miteco.requests, "get", _always_fail)
+        FakeNetwork(monkeypatch, direct=_always_fail)
 
         result = miteco.fetch_gasolineras()
 
@@ -107,15 +156,74 @@ class TestFetchGasolineras:
         assert age_h == pytest.approx(2, abs=0.1)
 
     def test_all_sources_down_without_fallback_raises(self, fallback_file, monkeypatch):
-        monkeypatch.setattr(miteco.requests, "get", _always_fail)
+        FakeNetwork(monkeypatch, direct=_always_fail)
 
         with pytest.raises(ConnectionError, match="MITECO"):
             miteco.fetch_gasolineras()
 
     def test_empty_api_response_uses_fallback(self, miteco_payload, fallback_file, monkeypatch):
         miteco.parse_miteco_records(miteco_payload["ListaEESSPrecio"]).to_parquet(fallback_file)
-        monkeypatch.setattr(miteco.requests, "get", lambda *a, **k: _FakeResponse({"ListaEESSPrecio": []}))
+        FakeNetwork(monkeypatch, direct=lambda *a, **k: _FakeResponse({"ListaEESSPrecio": []}))
 
         result = miteco.fetch_gasolineras()
 
         assert result.from_fallback is True
+
+    def test_empty_api_response_without_fallback_raises_value_error(self, fallback_file, monkeypatch):
+        FakeNetwork(monkeypatch, direct=lambda *a, **k: _FakeResponse({"ListaEESSPrecio": []}))
+
+        with pytest.raises(ValueError, match="no devolvió registros"):
+            miteco.fetch_gasolineras(use_proxies=False)
+
+
+# ---------------------------------------------------------------------------
+# TLS con el MITECO (ADR 0007)
+# ---------------------------------------------------------------------------
+
+
+class TestMitecoTLS:
+    def test_context_adds_the_miteco_cipher_and_keeps_verification(self):
+        ctx = miteco.miteco_ssl_context()
+
+        names = {c["name"] for c in ctx.get_ciphers()}
+        assert "AES256-GCM-SHA384" in names
+        assert "ECDHE-RSA-AES256-GCM-SHA384" in names  # modern defaults are kept
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+
+    def test_session_uses_the_tls_adapter_only_for_the_miteco_host(self):
+        miteco_adapter = miteco._SESSION.get_adapter(MITECO_API_URL)
+        other_adapter = miteco._SESSION.get_adapter("https://corsproxy.io/")
+        assert isinstance(miteco_adapter, miteco._MitecoTLSAdapter)
+        assert not isinstance(other_adapter, miteco._MitecoTLSAdapter)
+
+    @pytest.mark.network
+    def test_real_tls_handshake_with_miteco(self):
+        host = MITECO_API_URL.split("/")[2]
+        with (
+            socket.create_connection((host, 443), timeout=15) as sock,
+            miteco.miteco_ssl_context().wrap_socket(sock, server_hostname=host) as tls,
+        ):
+            assert tls.version() is not None
+
+
+# ---------------------------------------------------------------------------
+# Antigüedad de los precios
+# ---------------------------------------------------------------------------
+
+
+class TestPriceFreshness:
+    NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
+
+    @pytest.mark.parametrize(
+        ("age", "expected"),
+        [
+            (timedelta(minutes=0), miteco.PriceFreshness.FRESH),
+            (timedelta(minutes=30), miteco.PriceFreshness.FRESH),
+            (timedelta(minutes=31), miteco.PriceFreshness.STALE),
+            (timedelta(hours=24), miteco.PriceFreshness.STALE),
+            (timedelta(hours=24, minutes=1), miteco.PriceFreshness.VERY_STALE),
+        ],
+    )
+    def test_thresholds(self, age, expected):
+        assert miteco.price_freshness(self.NOW - age, now=self.NOW) == expected

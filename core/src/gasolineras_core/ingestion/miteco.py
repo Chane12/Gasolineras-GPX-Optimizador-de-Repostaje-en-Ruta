@@ -8,14 +8,31 @@ Downloads the complete catalogue of Spanish fuel stations and cleans the data.
 from __future__ import annotations
 
 import json
+import logging
+import ssl
 import urllib.parse
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 
-from gasolineras_core.config import COORD_COLUMNS, DATA_DIR, MITECO_API_URL, PRICE_COLUMNS
+from gasolineras_core.config import (
+    COORD_COLUMNS,
+    DATA_DIR,
+    MITECO_API_URL,
+    MITECO_EXTRA_TLS_CIPHERS,
+    MITECO_HOST_PREFIX,
+    PRICE_COLUMNS,
+    PRICES_FRESH_MAX_AGE_S,
+    PRICES_STRONG_WARNING_AGE_S,
+    USER_AGENT,
+)
+
+logger = logging.getLogger(__name__)
 
 FALLBACK_FILE = DATA_DIR / "fallback_miteco.parquet"
 
@@ -27,6 +44,12 @@ _FUELS_NO_UPPER_BOUND = {
 }
 _MAX_PRICE_EUR_L = 5.0
 
+_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-ES,es;q=0.9",
+}
+
 
 @dataclass(frozen=True)
 class MitecoResult:
@@ -35,6 +58,45 @@ class MitecoResult:
     df: pd.DataFrame
     fetched_at: datetime
     from_fallback: bool = False
+
+
+class PriceFreshness(StrEnum):
+    FRESH = "fresh"  # <= 30 min
+    STALE = "stale"  # <= 24 h: aviso visible
+    VERY_STALE = "very_stale"  # > 24 h: aviso fuerte
+
+
+def price_freshness(fetched_at: datetime, now: datetime | None = None) -> PriceFreshness:
+    """Clasifica la antigüedad de los precios según la decisión de producto (ver config.py)."""
+    age_s = ((now or datetime.now(UTC)) - fetched_at).total_seconds()
+    if age_s <= PRICES_FRESH_MAX_AGE_S:
+        return PriceFreshness.FRESH
+    if age_s <= PRICES_STRONG_WARNING_AGE_S:
+        return PriceFreshness.STALE
+    return PriceFreshness.VERY_STALE
+
+
+def miteco_ssl_context() -> ssl.SSLContext:
+    """Contexto TLS por defecto (verifica certificado y host) más el único cifrado que acepta el MITECO."""
+    ctx = ssl.create_default_context()
+    default_ciphers = ":".join(c["name"] for c in ctx.get_ciphers())
+    ctx.set_ciphers(f"{default_ciphers}:{MITECO_EXTRA_TLS_CIPHERS}")
+    return ctx
+
+
+class _MitecoTLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["ssl_context"] = miteco_ssl_context()
+        super().init_poolmanager(*args, **kwargs)
+
+
+def _build_session() -> requests.Session:
+    session = requests.Session()
+    session.mount(MITECO_HOST_PREFIX, _MitecoTLSAdapter())
+    return session
+
+
+_SESSION = _build_session()
 
 
 def _load_fallback() -> MitecoResult | None:
@@ -50,102 +112,79 @@ def _load_fallback() -> MitecoResult | None:
         fetched_at = datetime.fromtimestamp(FALLBACK_FILE.stat().st_mtime, tz=UTC)
         return MitecoResult(df=df, fetched_at=fetched_at, from_fallback=True)
     except Exception as e:
-        print(f"[MITECO] Error leyendo el fallback local: {e}")
+        logger.warning("Could not read the MITECO fallback file: %s", e)
         return None
 
 
-def fetch_gasolineras(timeout: int = 30) -> MitecoResult:
+def _fetch_via_proxies(timeout: float) -> dict | None:
+    """Proxies públicos de terceros. Solo los usa la app Streamlit; la API no (ADR 0005)."""
+    encoded_url = urllib.parse.quote(MITECO_API_URL, safe="")
+    proxy_candidates = [
+        f"https://corsproxy.io/?{encoded_url}",
+        f"https://api.allorigins.win/get?url={encoded_url}",
+        f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
+    ]
+    for proxy_url in proxy_candidates:
+        proxy_name = proxy_url.split("//")[1].split("/")[0]
+        try:
+            resp = requests.get(proxy_url, headers=_HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            data = json.loads(resp.json()["contents"]) if "allorigins.win/get" in proxy_url else resp.json()
+            logger.info("MITECO data obtained via proxy %s", proxy_name)
+            return data
+        except (requests.exceptions.RequestException, json.decoder.JSONDecodeError, KeyError) as exc:
+            logger.warning("MITECO proxy %s failed: %s", proxy_name, exc)
+    return None
+
+
+def fetch_gasolineras(timeout: int = 30, use_proxies: bool = True) -> MitecoResult:
     """
     Descarga el catálogo completo de gasolineras desde la API REST del MITECO.
-    Retorna un MitecoResult con el DataFrame y la hora de descarga.
+
+    Si la conexión directa falla, prueba los proxies públicos (si ``use_proxies``) y, por último,
+    la copia local (``from_fallback=True``, con su antigüedad real).
+
+    Raises
+    ------
+    ConnectionError
+        Si no se puede descargar y no hay copia local.
+    ValueError
+        Si la API responde sin registros y no hay copia local.
     """
-    print("[MITECO] Descargando datos via requests...")
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "es-ES,es;q=0.9",
-    }
-
-    # ----------------------------------------------------------------
-    # Intento 1 — conexión directa al MITECO
-    # ----------------------------------------------------------------
     data = None
-    _err_direct: Exception | None = None
+    err_direct: Exception | None = None
     try:
-        response = requests.get(MITECO_API_URL, headers=headers, timeout=timeout)
+        response = _SESSION.get(MITECO_API_URL, headers=_HEADERS, timeout=timeout)
         response.raise_for_status()
         data = response.json()
-        print("[MITECO] Conexión directa exitosa.")
+        logger.info("MITECO direct download OK")
     except (requests.exceptions.RequestException, json.decoder.JSONDecodeError) as exc:
-        _err_direct = exc
-        print(f"[MITECO] Conexión directa falló ({type(_err_direct).__name__}). Probando proxies públicos...")
+        err_direct = exc
+        logger.warning("MITECO direct download failed: %s", exc)
 
-    # ----------------------------------------------------------------
-    # Intentos 2-4 — proxies de paso en cascada
-    # ----------------------------------------------------------------
-    if data is None:
-        encoded_url = urllib.parse.quote(MITECO_API_URL, safe="")
-        proxy_candidates = [
-            f"https://corsproxy.io/?{encoded_url}",
-            f"https://api.allorigins.win/get?url={encoded_url}",
-            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
-        ]
+    if data is None and use_proxies:
+        data = _fetch_via_proxies(timeout=5)
 
-        last_proxy_err: Exception | None = None
-        for proxy_url in proxy_candidates:
-            proxy_name = proxy_url.split("//")[1].split("/")[0]
-            try:
-                print(f"[MITECO] Intentando proxy: {proxy_name}...")
-                resp = requests.get(proxy_url, headers=headers, timeout=5)  # Timeout estricto reducido a 5s
-                resp.raise_for_status()
-
-                if "allorigins.win/get" in proxy_url:
-                    wrapper = resp.json()
-                    data = json.loads(wrapper["contents"])
-                else:
-                    data = resp.json()
-
-                print(f"[MITECO] Datos obtenidos via {proxy_name}.")
-                break
-            except (requests.exceptions.RequestException, json.decoder.JSONDecodeError) as exc:
-                last_proxy_err = exc
-                print(f"[MITECO] Proxy {proxy_name} falló: {exc}")
-
-        if data is None:
-            print("[MITECO] Todas las conexiones fallaron. Intentando cargar fallback parquet...")
-            fallback = _load_fallback()
-            if fallback is not None:
-                return fallback
-
-            raise ConnectionError(
-                "No se pudo conectar con la API del MITECO ni directamente "
-                "ni mediante ningún proxy. Comprueba tu conexión a Internet.\n"
-                f"Error directo: {_err_direct}\n"
-                f"Último error de proxy: {last_proxy_err}"
-            )
-
-    records = data.get("ListaEESSPrecio", [])
+    records = data.get("ListaEESSPrecio", []) if isinstance(data, dict) else []
     if not records:
-        print("[MITECO] La API no devolvió registros. Intentando cargar fallback parquet...")
         fallback = _load_fallback()
         if fallback is not None:
+            logger.warning("Using the MITECO fallback file from %s", fallback.fetched_at.isoformat())
             return fallback
+        if data is None:
+            raise ConnectionError(
+                "No se pudo conectar con la API del MITECO y no hay copia local de los precios. "
+                f"Error de la conexión directa: {err_direct}"
+            )
+        raise ValueError("La API del MITECO no devolvió registros y no hay copia local de los precios.")
 
-        raise ValueError("La API del MITECO no devolvió registros. Comprueba el endpoint.")
-
-    print(f"[MITECO] Registros descargados: {len(records)}")
+    logger.info("MITECO records downloaded: %d", len(records))
     df = parse_miteco_records(records)
 
-    # Guardar fallback local
     try:
         df.to_parquet(FALLBACK_FILE)
     except Exception as e:
-        print(f"[MITECO] Aviso silencioso: No se pudo guardar el fallback parquet: {e}")
+        logger.warning("Could not save the MITECO fallback file: %s", e)
 
     return MitecoResult(df=df, fetched_at=datetime.now(UTC))
 
