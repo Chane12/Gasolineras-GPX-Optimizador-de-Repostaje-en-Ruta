@@ -2,7 +2,7 @@
 
 Objetivo: convertir la app Streamlit en una **web profesional** (FastAPI + Next.js) sin perder funcionalidad, con coste de alojamiento 0 € hasta tener un plan de monetización.
 
-**Fase actual: 1 — API** · Última actualización: 2026-10-15
+**Fase actual: 2 — Web** · Última actualización: 2026-10-15
 
 > Cómo usar este archivo: cada sesión empieza leyendo la fase actual y termina marcando lo hecho y anotando la deuda nueva. Las decisiones de arquitectura van en `docs/decisions/`, no aquí.
 
@@ -23,12 +23,12 @@ Estructura, documentación y barreras de calidad. Sin cambios visibles para el u
 - [x] Protección de `main` en GitHub: PR obligatorio, CI "Lint, tipos y tests" en verde, rama al día; también para administradores
 - [x] Licencia propietaria (todos los derechos reservados), alineada en `LICENSE` y `pyproject.toml` — ADR 0006
 
-## Fase 1 — API (FastAPI)
+## Fase 1 — API (FastAPI) ✅ (2026-10-15; sin desplegar hasta la Fase 3)
 
 Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de la app actual y tiene tests.
 
 - [x] `api/` como miembro del workspace; `api/CLAUDE.md` (esqueleto con `create_app()` y `GET /health` básico)
-- [ ] Contrato: esquemas Pydantic de petición/respuesta; OpenAPI publicado (en curso: `schemas.py` crece con cada endpoint)
+- [x] Contrato: esquemas Pydantic de petición/respuesta (`schemas.py`); OpenAPI en `/openapi.json` y `/docs`, y versionado en `api/openapi.json` (el CI falla si no está al día)
 - [x] `POST /route/text` (origen/destino → track), `POST /route/gpx` (subida) — track en GeoJSON; errores 400/413/503
 - [x] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía) y `GET /fuels` — lógica en `core/optimizer/search.py`; mismas gasolineras y precios que Streamlit en la demo de Gredos (comprobado con datos reales)
 - [x] `POST /detours` (desvíos OSRM, con límite de concurrencia): máx. 3 peticiones simultáneas a OSRM en todo el proceso, caché de 24 h, resultados parciales con `complete: false` si OSRM se satura
@@ -36,7 +36,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
 - [x] Límite de peticiones por cliente en la API: 10/min en lo que usa OSM (`/route/text`, `/detours`, `/export/gpx`) y 60/min en el resto; 429 con `Retry-After`. IP real tras proxies con `GASOLINERAS_TRUSTED_PROXY_HOPS`
-- [ ] Tests de la API (TestClient) sin red
+- [x] Tests de la API (TestClient) sin red: 62 tests; el core, 85 (sin red) + 1 con red
 - [x] Dockerfile de la API (multi-etapa con uv, usuario sin privilegios, `PORT` configurable); el CI construye la imagen y comprueba `/health` en cada PR
 
 ## Fase 2 — Web (Next.js)
@@ -44,7 +44,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 Hecho cuando iguala la funcionalidad de la app Streamlit.
 
 - [ ] `web/` con Next.js + TypeScript estricto; `web/CLAUDE.md`
-- [ ] Tipos TypeScript generados desde el OpenAPI de la API (nunca escritos a mano)
+- [ ] Tipos TypeScript generados desde `api/openapi.json` (nunca escritos a mano)
 - [ ] Formulario de ruta (texto / GPX / demo) y parámetros del vehículo
 - [ ] Mapa (MapLibre) con ruta, estaciones coloreadas por precio y zonas de riesgo
 - [ ] Ranking / tarjetas móviles, plan de viaje, exportación Maps/GPX, radar de autonomía

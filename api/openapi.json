@@ -1,0 +1,1366 @@
+{
+  "components": {
+    "schemas": {
+      "AutonomySegment": {
+        "properties": {
+          "autonomy_ratio": {
+            "description": "gap_km / autonomía",
+            "title": "Autonomy Ratio",
+            "type": "number"
+          },
+          "end_km": {
+            "title": "End Km",
+            "type": "number"
+          },
+          "from_name": {
+            "title": "From Name",
+            "type": "string"
+          },
+          "gap_km": {
+            "title": "Gap Km",
+            "type": "number"
+          },
+          "level": {
+            "description": "safe · warning: > 80 % de la autonomía · critical: supera la autonomía",
+            "enum": [
+              "safe",
+              "warning",
+              "critical"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "start_km": {
+            "title": "Start Km",
+            "type": "number"
+          },
+          "to_name": {
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_km",
+          "end_km",
+          "gap_km",
+          "level",
+          "autonomy_ratio",
+          "from_name",
+          "to_name"
+        ],
+        "title": "AutonomySegment",
+        "type": "object"
+      },
+      "Body_route_from_gpx_route_gpx_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Archivo .gpx con el track",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_route_from_gpx_route_gpx_post",
+        "type": "object"
+      },
+      "Detour": {
+        "properties": {
+          "detour_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ida desde la ruta + vuelta, por carretera; null si OSRM no respondió",
+            "title": "Detour Km"
+          },
+          "detour_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detour Min"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lon",
+          "detour_km"
+        ],
+        "title": "Detour",
+        "type": "object"
+      },
+      "DetoursRequest": {
+        "properties": {
+          "stations": {
+            "items": {
+              "$ref": "#/components/schemas/StationPoint"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Stations",
+            "type": "array"
+          },
+          "track": {
+            "$ref": "#/components/schemas/LineStringGeometry"
+          }
+        },
+        "required": [
+          "track",
+          "stations"
+        ],
+        "title": "DetoursRequest",
+        "type": "object"
+      },
+      "DetoursResponse": {
+        "properties": {
+          "complete": {
+            "description": "false si alguna gasolinera se quedó sin desvío (servicio de rutas saturado)",
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "detours": {
+            "description": "En el mismo orden que la petición",
+            "items": {
+              "$ref": "#/components/schemas/Detour"
+            },
+            "title": "Detours",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detours",
+          "complete"
+        ],
+        "title": "DetoursResponse",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Error explained for the end user, in Spanish.",
+        "properties": {
+          "detail": {
+            "examples": [
+              "No encontramos la ubicación «Villarriba»."
+            ],
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "Fuel": {
+        "properties": {
+          "id": {
+            "enum": [
+              "gasolina_95",
+              "gasolina_95_premium",
+              "gasolina_98",
+              "diesel",
+              "diesel_premium",
+              "glp",
+              "gnc",
+              "gnl",
+              "gasoil_b",
+              "gasolina_95_e10",
+              "gasolina_98_e10",
+              "hidrogeno"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "Nombre para mostrar, en español",
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Fuel",
+        "type": "object"
+      },
+      "GmapsUrlRequest": {
+        "properties": {
+          "destination": {
+            "description": "[lon, lat] del final de la ruta",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Destination",
+            "type": "array"
+          },
+          "origin": {
+            "description": "[lon, lat] del inicio de la ruta",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Origin",
+            "type": "array"
+          },
+          "stops": {
+            "description": "En orden de ruta",
+            "items": {
+              "$ref": "#/components/schemas/StationPoint"
+            },
+            "maxItems": 20,
+            "title": "Stops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "title": "GmapsUrlRequest",
+        "type": "object"
+      },
+      "GmapsUrlResponse": {
+        "properties": {
+          "truncated": {
+            "description": "Paradas omitidas: Google Maps admite como máximo 9 intermedias",
+            "title": "Truncated",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "truncated"
+        ],
+        "title": "GmapsUrlResponse",
+        "type": "object"
+      },
+      "GpxExportRequest": {
+        "properties": {
+          "name": {
+            "default": "Ruta con gasolineras",
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/GpxStop"
+            },
+            "maxItems": 10,
+            "title": "Stops",
+            "type": "array"
+          },
+          "track": {
+            "$ref": "#/components/schemas/LineStringGeometry"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "title": "GpxExportRequest",
+        "type": "object"
+      },
+      "GpxStop": {
+        "properties": {
+          "cost": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Coste previsto de la parada (€)",
+            "title": "Cost"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "liters": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Litros previstos en esta parada",
+            "title": "Liters"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "€/L, para la descripción del waypoint",
+            "title": "Price"
+          }
+        },
+        "required": [
+          "name",
+          "lat",
+          "lon"
+        ],
+        "title": "GpxStop",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Liveness check plus the age of the price data. Never triggers a download.",
+        "properties": {
+          "prices": {
+            "$ref": "#/components/schemas/PricesStatus"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "prices"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "LineStringGeometry": {
+        "description": "GeoJSON LineString in WGS84. Coordinates are ``[lon, lat]`` (GeoJSON order).",
+        "properties": {
+          "coordinates": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Coordinates",
+            "type": "array"
+          },
+          "type": {
+            "const": "LineString",
+            "default": "LineString",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coordinates"
+        ],
+        "title": "LineStringGeometry",
+        "type": "object"
+      },
+      "Place": {
+        "description": "A geocoded place.",
+        "properties": {
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "query": {
+            "description": "Texto tal como lo escribió el usuario",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "lat",
+          "lon"
+        ],
+        "title": "Place",
+        "type": "object"
+      },
+      "PricesStatus": {
+        "description": "Age of the MITECO prices. The web must show a warning unless ``status`` is ``fresh``.",
+        "properties": {
+          "age_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Minutes"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Momento de la descarga de los precios (UTC)",
+            "title": "Fetched At"
+          },
+          "from_fallback": {
+            "default": false,
+            "description": "Copia local porque el MITECO no respondía",
+            "title": "From Fallback",
+            "type": "boolean"
+          },
+          "station_count": {
+            "default": 0,
+            "title": "Station Count",
+            "type": "integer"
+          },
+          "status": {
+            "description": "fresh: ≤ 30 min · stale: ≤ 24 h (mostrar aviso) · very_stale: > 24 h (aviso fuerte) · loading: primera descarga en curso · unavailable: sin datos",
+            "enum": [
+              "fresh",
+              "stale",
+              "very_stale",
+              "loading",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "PricesStatus",
+        "type": "object"
+      },
+      "RouteResponse": {
+        "description": "A validated route in Spain, ready to search for petrol stations along it.",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Place"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Solo en rutas calculadas desde texto"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Place"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Solo en rutas calculadas desde texto"
+          },
+          "point_count": {
+            "description": "Número de puntos del track",
+            "title": "Point Count",
+            "type": "integer"
+          },
+          "track": {
+            "$ref": "#/components/schemas/LineStringGeometry"
+          }
+        },
+        "required": [
+          "track",
+          "point_count"
+        ],
+        "title": "RouteResponse",
+        "type": "object"
+      },
+      "RouteTextRequest": {
+        "properties": {
+          "destination": {
+            "examples": [
+              "Segovia"
+            ],
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Destination",
+            "type": "string"
+          },
+          "origin": {
+            "examples": [
+              "Ávila"
+            ],
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Origin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "title": "RouteTextRequest",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "properties": {
+          "all_on_route": {
+            "default": false,
+            "description": "Modo España Vaciada: añade todas las gasolineras a ≤ 500 m de la ruta, sean o no baratas",
+            "title": "All On Route",
+            "type": "boolean"
+          },
+          "autonomy_km": {
+            "default": 0,
+            "description": "Autonomía del vehículo; 0 desactiva el radar",
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Autonomy Km",
+            "type": "integer"
+          },
+          "fuel": {
+            "default": "gasolina_95",
+            "enum": [
+              "gasolina_95",
+              "gasolina_95_premium",
+              "gasolina_98",
+              "diesel",
+              "diesel_premium",
+              "glp",
+              "gnc",
+              "gnl",
+              "gasoil_b",
+              "gasolina_95_e10",
+              "gasolina_98_e10",
+              "hidrogeno"
+            ],
+            "title": "Fuel",
+            "type": "string"
+          },
+          "max_detour_km": {
+            "default": 5,
+            "description": "Distancia máxima a la ruta (km)",
+            "maximum": 15.0,
+            "minimum": 1.0,
+            "title": "Max Detour Km",
+            "type": "integer"
+          },
+          "only_24h": {
+            "default": false,
+            "description": "Solo gasolineras abiertas 24 h",
+            "title": "Only 24H",
+            "type": "boolean"
+          },
+          "segment_km": {
+            "default": 50,
+            "description": "Añade la más barata de cada tramo de esta longitud (10–300 km); 0 lo desactiva",
+            "title": "Segment Km",
+            "type": "integer"
+          },
+          "top_n": {
+            "default": 5,
+            "description": "Cuántas de las más baratas mostrar",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top N",
+            "type": "integer"
+          },
+          "track": {
+            "$ref": "#/components/schemas/LineStringGeometry",
+            "description": "Ruta devuelta por /route/text o /route/gpx"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "properties": {
+          "autonomy": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AutonomySegment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Radar de autonomía (solo si autonomy_km > 0)",
+            "title": "Autonomy"
+          },
+          "corridor_station_count": {
+            "description": "Gasolineras en el corredor, vendan o no este combustible",
+            "title": "Corridor Station Count",
+            "type": "integer"
+          },
+          "fuel": {
+            "$ref": "#/components/schemas/Fuel"
+          },
+          "max_price_in_corridor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Price In Corridor"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/PricesStatus"
+          },
+          "route_km": {
+            "description": "Longitud de la ruta (km)",
+            "title": "Route Km",
+            "type": "number"
+          },
+          "stations": {
+            "description": "Gasolineras sugeridas, ordenadas por km en ruta",
+            "items": {
+              "$ref": "#/components/schemas/Station"
+            },
+            "title": "Stations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prices",
+          "fuel",
+          "route_km",
+          "corridor_station_count",
+          "stations"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "Station": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Identificador del MITECO (IDEESS)",
+            "title": "Id"
+          },
+          "km_on_route": {
+            "description": "Kilómetro de la ruta a la altura de la gasolinera",
+            "title": "Km On Route",
+            "type": "number"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "name": {
+            "description": "Rótulo",
+            "title": "Name",
+            "type": "string"
+          },
+          "open_24h": {
+            "title": "Open 24H",
+            "type": "boolean"
+          },
+          "postal_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postal Code"
+          },
+          "price": {
+            "description": "Precio del combustible elegido (€/L; €/kg en GNC, GNL e hidrógeno)",
+            "title": "Price",
+            "type": "number"
+          },
+          "province": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Province"
+          },
+          "savings_vs_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ahorro por litro frente a la más cara del corredor (≥ 0)",
+            "title": "Savings Vs Max"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Horario tal como lo publica el MITECO",
+            "title": "Schedule"
+          },
+          "town": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Town"
+          }
+        },
+        "required": [
+          "name",
+          "open_24h",
+          "lat",
+          "lon",
+          "price",
+          "km_on_route"
+        ],
+        "title": "Station",
+        "type": "object"
+      },
+      "StationPoint": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El mismo id que devolvió /search, para casar resultados",
+            "title": "Id"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lon"
+        ],
+        "title": "StationPoint",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Optimizador de repostaje en ruta para España con precios oficiales del MITECO.",
+    "title": "Gasolineras en Ruta API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/detours": {
+      "post": {
+        "description": "Calcula el desvío real por carretera (ida y vuelta desde la ruta) hasta cada gasolinera.\n\nSi el servicio de rutas falla para alguna, su desvío llega a null y ``complete`` es false:\nel resto de resultados siguen siendo válidos.",
+        "operationId": "detours_detours_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetoursRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetoursResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          }
+        },
+        "summary": "Detours",
+        "tags": [
+          "búsqueda"
+        ]
+      }
+    },
+    "/export/gmaps-url": {
+      "post": {
+        "description": "Enlace de Google Maps con la ruta y las paradas de repostaje (máximo 9 intermedias).",
+        "operationId": "gmaps_url_export_gmaps_url_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GmapsUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmapsUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          }
+        },
+        "summary": "Gmaps Url",
+        "tags": [
+          "exportación"
+        ]
+      }
+    },
+    "/export/gpx": {
+      "post": {
+        "description": "GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).\n\nSi el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera.",
+        "operationId": "gpx_export_gpx_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpxExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/gpx+xml": {}
+            },
+            "description": "Archivo GPX"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          }
+        },
+        "summary": "Gpx",
+        "tags": [
+          "exportación"
+        ]
+      }
+    },
+    "/fuels": {
+      "get": {
+        "description": "Combustibles disponibles, en el orden en que se muestran en la interfaz.",
+        "operationId": "list_fuels_fuels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Fuel"
+                  },
+                  "title": "Response List Fuels Fuels Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Fuels",
+        "tags": [
+          "búsqueda"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "sistema"
+        ]
+      }
+    },
+    "/route/gpx": {
+      "post": {
+        "description": "Lee la ruta de un archivo GPX subido por el usuario.",
+        "operationId": "route_from_gpx_route_gpx_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_route_from_gpx_route_gpx_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Lugar, ruta o GPX no válidos"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Archivo demasiado grande"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Servicio externo no disponible"
+          }
+        },
+        "summary": "Route From Gpx",
+        "tags": [
+          "ruta"
+        ]
+      }
+    },
+    "/route/text": {
+      "post": {
+        "description": "Calcula la ruta por carretera entre un origen y un destino escritos en texto.",
+        "operationId": "route_from_text_route_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Lugar, ruta o GPX no válidos"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Servicio externo no disponible"
+          }
+        },
+        "summary": "Route From Text",
+        "tags": [
+          "ruta"
+        ]
+      }
+    },
+    "/search": {
+      "post": {
+        "description": "Busca las gasolineras más baratas a lo largo de la ruta y, opcionalmente, el radar de autonomía.",
+        "operationId": "search_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Ruta no válida"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Precios no disponibles"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "búsqueda"
+        ]
+      }
+    }
+  }
+}
