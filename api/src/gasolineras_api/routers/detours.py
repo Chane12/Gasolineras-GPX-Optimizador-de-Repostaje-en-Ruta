@@ -2,9 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from shapely.geometry import LineString
 
+from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import Detour, DetoursRequest, DetoursResponse
 from gasolineras_core.optimizer import export
 
@@ -13,7 +14,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["búsqueda"])
 
 
-@router.post("/detours", response_model=DetoursResponse)
+@router.post(
+    "/detours",
+    response_model=DetoursResponse,
+    responses=RATE_LIMIT_RESPONSE,
+    dependencies=[Depends(rate_limited("external"))],
+)
 def detours(body: DetoursRequest) -> DetoursResponse:
     """Calcula el desvío real por carretera (ida y vuelta desde la ruta) hasta cada gasolinera.
 

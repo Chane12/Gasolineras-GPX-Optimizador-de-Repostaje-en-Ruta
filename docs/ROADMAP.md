@@ -35,7 +35,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] `POST /export/gpx` y `POST /export/gmaps-url` (POST en vez de GET: así las coordenadas no van en la URL de la API) — GPX con waypoints y track desviado por cada parada (OSRM, bajo el límite global)
 - [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
 - [x] Uso honesto de Nominatim/OSRM: User-Agent identificable, caché de geocodificación y de rutas, ≤1 pet./s a Nominatim y Photon — ADR 0005 (en el core: también lo usa Streamlit)
-- [ ] Límite de peticiones por cliente en la API (que un solo usuario no agote el cupo de Nominatim/OSRM de todos)
+- [x] Límite de peticiones por cliente en la API: 10/min en lo que usa OSM (`/route/text`, `/detours`, `/export/gpx`) y 60/min en el resto; 429 con `Retry-After`. IP real tras proxies con `GASOLINERAS_TRUSTED_PROXY_HOPS`
 - [ ] Tests de la API (TestClient) sin red
 - [ ] Dockerfile de la API
 
