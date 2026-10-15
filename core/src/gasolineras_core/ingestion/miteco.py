@@ -24,6 +24,7 @@ from gasolineras_core.config import (
     COORD_COLUMNS,
     DATA_DIR,
     MITECO_API_URL,
+    MITECO_COLUMN_ALIASES,
     MITECO_EXTRA_TLS_CIPHERS,
     MITECO_HOST_PREFIX,
     PRICE_COLUMNS,
@@ -197,7 +198,7 @@ def parse_miteco_records(records: list[dict]) -> pd.DataFrame:
     - Precios fuera de rango (<= 0, o >= 5 €/L salvo combustibles por kg) → NA.
     - Descarta estaciones sin coordenadas o con coordenadas 0.
     """
-    df = pd.DataFrame(records)
+    df = pd.DataFrame(records).rename(columns=MITECO_COLUMN_ALIASES)
 
     for col in PRICE_COLUMNS:
         if col in df.columns:
