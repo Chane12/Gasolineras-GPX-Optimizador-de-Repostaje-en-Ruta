@@ -1,0 +1,77 @@
+{
+  "Fecha": "15/10/2026 20:00:00",
+  "ResultadoConsulta": "OK",
+  "Nota": "Snapshot reducido con el mismo formato que la API real (coma decimal, precios vacíos como cadena vacía).",
+  "ListaEESSPrecio": [
+    {
+      "C.P.": "05001",
+      "Dirección": "CARRETERA N-110 KM 5",
+      "Horario": "L-D: 24H",
+      "Latitud": "40,665000",
+      "Longitud (WGS84)": "-4,660000",
+      "Municipio": "Ávila",
+      "Provincia": "ÁVILA",
+      "Rótulo": "REPSOL",
+      "Precio Gasoleo A": "1,459",
+      "Precio Gasolina 95 E5": "1,559",
+      "Precio Hidrogeno": "",
+      "Precio Gas Natural Comprimido": ""
+    },
+    {
+      "C.P.": "40100",
+      "Dirección": "AVENIDA DE SEGOVIA 12",
+      "Horario": "L-S: 07:00-22:00",
+      "Latitud": "40,740000",
+      "Longitud (WGS84)": "-4,500000",
+      "Municipio": "Villacastín",
+      "Provincia": "SEGOVIA",
+      "Rótulo": "BP",
+      "Precio Gasoleo A": "",
+      "Precio Gasolina 95 E5": "1,619",
+      "Precio Hidrogeno": "",
+      "Precio Gas Natural Comprimido": "1,299"
+    },
+    {
+      "C.P.": "28001",
+      "Dirección": "CALLE DE PRUEBA 1",
+      "Horario": "L-D: 24H",
+      "Latitud": "40,420000",
+      "Longitud (WGS84)": "-3,700000",
+      "Municipio": "Madrid",
+      "Provincia": "MADRID",
+      "Rótulo": "HIDROGENERA",
+      "Precio Gasoleo A": "0,000",
+      "Precio Gasolina 95 E5": "9,999",
+      "Precio Hidrogeno": "12,500",
+      "Precio Gas Natural Comprimido": ""
+    },
+    {
+      "C.P.": "00000",
+      "Dirección": "SIN COORDENADAS",
+      "Horario": "L-D: 24H",
+      "Latitud": "",
+      "Longitud (WGS84)": "-3,000000",
+      "Municipio": "Desconocido",
+      "Provincia": "DESCONOCIDA",
+      "Rótulo": "FANTASMA",
+      "Precio Gasoleo A": "1,400",
+      "Precio Gasolina 95 E5": "1,500",
+      "Precio Hidrogeno": "",
+      "Precio Gas Natural Comprimido": ""
+    },
+    {
+      "C.P.": "00000",
+      "Dirección": "COORDENADAS A CERO",
+      "Horario": "L-D: 24H",
+      "Latitud": "0,000000",
+      "Longitud (WGS84)": "0,000000",
+      "Municipio": "Null Island",
+      "Provincia": "DESCONOCIDA",
+      "Rótulo": "CERO",
+      "Precio Gasoleo A": "1,400",
+      "Precio Gasolina 95 E5": "1,500",
+      "Precio Hidrogeno": "",
+      "Precio Gas Natural Comprimido": ""
+    }
+  ]
+}

@@ -83,10 +83,11 @@ output_*.html
 # =============================================================================
 # DIRECTORIOS DE DATOS Y OUTPUT
 # =============================================================================
-data/
-output/
-maps/
-cache/
+# Anclados a la raíz: core/src/gasolineras_core/data/ (datos del paquete) SÍ va al repo
+/data/
+/output/
+/maps/
+/cache/
 
 # =============================================================================
 # TESTING Y LINTING
@@ -137,11 +138,11 @@ desktop.ini
 # EXCEPCIONES — archivos que SÍ deben entrar al repo
 # =============================================================================
 
-# El GPX demo que incluye la app
-!sierra_gredos.gpx
+# Datos empaquetados con el motor (GPX de demo, etc.)
+!core/src/gasolineras_core/data/**
 
-# El fixture de test (GPX mínimo para regresión)
-!tests/fixtures/sample_track.gpx
+# Fixtures de test (GPX mínimo, snapshot JSON del MITECO)
+!core/tests/fixtures/**
 
 # uv.lock DEBE estar en el repo (determinismo de dependencias)
 # pyproject.toml DEBE estar en el repo

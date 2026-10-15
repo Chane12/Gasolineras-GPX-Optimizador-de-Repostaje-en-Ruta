@@ -5,7 +5,7 @@
     "codespaces": {
       "openFiles": [
         "README.md",
-        "app.py"
+        "legacy/streamlit/app.py"
       ]
     },
     "vscode": {
@@ -16,9 +16,9 @@
       ]
     }
   },
-  "updateContentCommand": "pip3 install --user uv && uv sync && echo '✅ Entorno uv sincronizado'",
+  "updateContentCommand": "pip3 install --user uv && uv sync --all-packages && echo '✅ Entorno uv sincronizado'",
   "postAttachCommand": {
-    "server": "uv run streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
+    "server": "uv run streamlit run legacy/streamlit/app.py --server.enableCORS false --server.enableXsrfProtection false"
   },
   "portsAttributes": {
     "8501": {

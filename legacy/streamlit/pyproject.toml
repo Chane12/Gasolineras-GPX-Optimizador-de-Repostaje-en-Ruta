@@ -1,0 +1,20 @@
+# App Streamlit original, en producción en Streamlit Community Cloud hasta el lanzamiento de la web.
+# CONGELADA: solo correcciones de bugs. Ver legacy/streamlit/CLAUDE.md.
+[project]
+name = "gasolineras-streamlit"
+version = "1.0.0"
+description = "App Streamlit legacy de Gasolineras en Ruta"
+requires-python = ">=3.11"
+dependencies = [
+    "gasolineras-core",
+    "streamlit>=1.35.0",
+    "streamlit-folium>=0.21.0",
+    "streamlit-javascript>=0.1.5",
+    "altair>=4.0.0,<6.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+gasolineras-core = { workspace = true }
