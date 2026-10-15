@@ -3,7 +3,6 @@ name = "gasolineras-core"
 version = "1.0.0"
 description = "Motor geoespacial de repostaje en ruta (España): ingesta MITECO, GPX, corredor espacial, optimizador."
 readme = "README.md"
-license = { text = "EUPL-1.2" }
 requires-python = ">=3.11"
 
 dependencies = [
