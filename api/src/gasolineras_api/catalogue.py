@@ -12,8 +12,11 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+import geopandas as gpd
+
 from gasolineras_core.config import PRICES_FRESH_MAX_AGE_S
 from gasolineras_core.ingestion.miteco import MitecoResult, fetch_gasolineras
+from gasolineras_core.spatial.engine import build_stations_geodataframe
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,8 @@ class PriceCatalogue:
         self._result: MitecoResult | None = None
         self._last_failure: float | None = None
         self._refresh_lock = threading.Lock()
+        self._stations: tuple[MitecoResult, gpd.GeoDataFrame] | None = None
+        self._stations_lock = threading.Lock()
 
     @property
     def current(self) -> MitecoResult | None:
@@ -82,10 +87,18 @@ class PriceCatalogue:
             raise CatalogueUnavailableError("Los precios del MITECO no están disponibles ahora mismo.")
         return self._result
 
+    def get_stations(self) -> tuple[MitecoResult, gpd.GeoDataFrame]:
+        """Current prices plus their spatial index (EPSG:25830), built once per catalogue version."""
+        result = self.get()
+        with self._stations_lock:
+            if self._stations is None or self._stations[0] is not result:
+                self._stations = (result, build_stations_geodataframe(result.df))
+            return self._stations
+
     def warm_up(self) -> None:
         """First download at startup (run it in a background thread so the API starts at once)."""
         try:
-            self.get()
+            self.get_stations()
         except CatalogueUnavailableError:
             logger.error("MITECO catalogue unavailable at startup")
 

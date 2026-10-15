@@ -58,6 +58,26 @@ MITECO_COLUMN_ALIASES: dict[str, str] = {
     "Precio Gases licuados del petroleo": "Precio Gases licuados del petróleo",
 }
 
+# Combustibles que ofrece la app: identificador estable (contrato de la API) → (nombre en la UI, columna MITECO).
+# El orden es el de los selectores de la interfaz.
+FUEL_TYPES: dict[str, tuple[str, str]] = {
+    "gasolina_95": ("Gasolina 95", "Precio Gasolina 95 E5"),
+    "gasolina_95_premium": ("Gasolina 95 Premium", "Precio Gasolina 95 E5 Premium"),
+    "gasolina_98": ("Gasolina 98", "Precio Gasolina 98 E5"),
+    "diesel": ("Diésel (Gasoil A)", "Precio Gasoleo A"),
+    "diesel_premium": ("Diésel Premium", "Precio Gasoleo Premium"),
+    "glp": ("GLP / Autogas", "Precio Gases licuados del petróleo"),
+    "gnc": ("Gas Natural Comprimido (GNC)", "Precio Gas Natural Comprimido"),
+    "gnl": ("Gas Natural Licuado (GNL)", "Precio Gas Natural Licuado"),
+    "gasoil_b": ("Gasoil B (agrícola/industrial)", "Precio Gasoleo B"),
+    "gasolina_95_e10": ("Gasolina 95 E10", "Precio Gasolina 95 E10"),
+    "gasolina_98_e10": ("Gasolina 98 E10", "Precio Gasolina 98 E10"),
+    "hidrogeno": ("Hidrógeno", "Precio Hidrogeno"),
+}
+
+# Modo España Vaciada: corredor estricto a cada lado de la ruta.
+ALL_ON_ROUTE_BUFFER_M: float = 500.0
+
 # El servidor del MITECO solo negocia TLS 1.2 con AES256-GCM-SHA384 (intercambio de claves RSA, sin
 # secreto hacia adelante). Python >= 3.10 excluye esos cifrados por defecto y la conexión directa fallaba
 # siempre. Se añade solo ese cifrado y solo para este host; el certificado se sigue verificando. ADR 0007.

@@ -30,7 +30,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 - [x] `api/` como miembro del workspace; `api/CLAUDE.md` (esqueleto con `create_app()` y `GET /health` básico)
 - [ ] Contrato: esquemas Pydantic de petición/respuesta; OpenAPI publicado (en curso: `schemas.py` crece con cada endpoint)
 - [x] `POST /route/text` (origen/destino → track), `POST /route/gpx` (subida) — track en GeoJSON; errores 400/413/503
-- [ ] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía)
+- [x] `POST /search` (track + combustible + filtros → estaciones, radar de autonomía) y `GET /fuels` — lógica en `core/optimizer/search.py`; mismas gasolineras y precios que Streamlit en la demo de Gredos (comprobado con datos reales)
 - [ ] `POST /detours` (desvíos OSRM, con límite de concurrencia)
 - [ ] `POST /export/gpx` y `GET /export/gmaps-url`
 - [x] Caché del catálogo MITECO en memoria (TTL 30 min, descarga inicial en segundo plano, sin proxies) + `GET /health` con antigüedad de los datos (fresh / stale > 30 min / very_stale > 24 h)
@@ -81,4 +81,6 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | pyright en modo `basic` | Subir a `standard` (~120 avisos, sobre todo tipos de pandas) | Fase 1 |
 | PWA de Streamlit | `.streamlit/static/` no se sirve (falta `enableStaticServing` y la carpeta `static/` junto al script) | No arreglar: la PWA se hace en `web/` |
 | `uv.lock` único compartido | Las dependencias de `api/` (y las de desarrollo) pueden mover versiones de la app legacy en producción (p. ej. pydantic 2.14 → `typing-extensions` 4.16; `httpx2` → `idna` 3.20). Revisar el diff de `legacy/streamlit/requirements.txt` en cada PR y pasar `--smoke` | Hasta retirar Streamlit (Fase 3) |
-| `km_ruta` con dos métodos | Ranking: longitud UTM del track simplificado; radar: geodésica del original | Unificar en la API |
+| `km_ruta` con dos métodos (solo Streamlit) | La API ya usa un único método (`route_positions_km`: ruta original, longitud geodésica). Streamlit sigue midiendo el ranking sobre el track simplificado (~2,5 % menos) | Se va con Streamlit (Fase 3) |
+| Lógica de búsqueda duplicada | `search_stations` (core) replica el pipeline de `legacy/streamlit/app.py`; Streamlit no se migra por estar congelada | Se va con Streamlit (Fase 3) |
+| Tramos de 0 km en el radar | Gasolineras contiguas generan tramos de 0 km (igual que en Streamlit). La web puede agruparlos al pintarlos | Fase 2 |

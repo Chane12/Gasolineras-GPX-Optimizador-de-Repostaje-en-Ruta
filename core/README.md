@@ -20,6 +20,7 @@ src/gasolineras_core/
 ├── optimizer/
 │   ├── cheapest.py     # Top-N más baratas, más barata por tramo, modo España Vaciada
 │   ├── autonomy.py     # Radar de autonomía: tramos entre gasolineras vs. autonomía del vehículo
+│   ├── search.py       # search_stations(): búsqueda completa (corredor → filtros → baratas → España Vaciada → radar)
 │   └── export.py       # URL de Google Maps, GPX con paradas (track splicing OSRM), desvíos OSRM
 └── visualization/
     └── folium_map.py   # Mapa Folium (lo usan Streamlit y la CLI; la web nueva no)
@@ -31,6 +32,8 @@ src/gasolineras_core/
 2. `load_gpx_track()` / `parse_gpx_track()` / `get_route_from_text()` → `LineString` WGS84 → `validate_gpx_track()` → `simplify_track()`
 3. `build_route_buffer()` + `build_stations_geodataframe()` → `spatial_join_within_buffer()` (todo en EPSG:25830)
 4. `filter_cheapest_stations()` / `filter_all_stations_on_route()` → añade `precio_seleccionado`, `combustible`, `km_ruta`
+La API hace los pasos 3–4 y el radar con `search_stations()` (`optimizer/search.py`), que además calcula `km_ruta` con un único método (`route_positions_km`).
+
 5. Opcional: `enrich_stations_with_osrm()`, `calculate_autonomy_radar()`, `generate_google_maps_url()`, `enrich_gpx_with_stops()`
 
 ## Uso
