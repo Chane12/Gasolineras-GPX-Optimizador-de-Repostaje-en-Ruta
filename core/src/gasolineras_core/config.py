@@ -128,6 +128,11 @@ GEOCODE_CACHE_TTL_S: float = 7 * 24 * 3600  # los lugares no se mueven
 GEOCODE_CACHE_MAX_ITEMS: int = 2048
 ROUTE_CACHE_TTL_S: float = 24 * 3600
 ROUTE_CACHE_MAX_ITEMS: int = 512
+# Peticiones simultáneas a OSRM como máximo en todo el proceso (desvíos y GPX con paradas); servidor de demostración.
+OSRM_MAX_CONCURRENCY: int = 3
+# Desvíos (ida y vuelta a una gasolinera) cacheados por coordenadas redondeadas.
+DETOUR_CACHE_TTL_S: float = 24 * 3600
+DETOUR_CACHE_MAX_ITEMS: int = 4096
 
 # ---------------------------------------------------------------------------
 # Google Maps export
