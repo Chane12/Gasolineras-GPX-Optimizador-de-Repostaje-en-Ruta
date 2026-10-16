@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { plateTones, stationKey, trackBounds } from "./geo";
+import { overlappingPlates, plateTones, stationKey, trackBounds } from "./geo";
 
 describe("trackBounds", () => {
   it("returns west-south and east-north corners of the track", () => {
@@ -46,5 +46,27 @@ describe("plateTones", () => {
 
   it("handles no stations", () => {
     expect(plateTones([])).toEqual([]);
+  });
+});
+
+describe("overlappingPlates", () => {
+  it("keeps the most important plate where two would overlap", () => {
+    const hidden = overlappingPlates([
+      { key: "expensive", x: 100, y: 100, priority: 5 },
+      { key: "cheapest", x: 110, y: 104, priority: 1 },
+      { key: "far", x: 400, y: 100, priority: 6 },
+    ]);
+
+    expect([...hidden]).toEqual(["expensive"]);
+  });
+
+  it("does not hide plates that only touch", () => {
+    expect(
+      overlappingPlates([
+        { key: "a", x: 100, y: 100, priority: 1 },
+        { key: "b", x: 162, y: 100, priority: 2 },
+        { key: "c", x: 100, y: 130, priority: 3 },
+      ]).size,
+    ).toBe(0);
   });
 });

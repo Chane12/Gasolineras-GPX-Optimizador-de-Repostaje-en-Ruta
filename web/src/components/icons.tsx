@@ -118,3 +118,9 @@ export const PinIcon = (p: IconProps) => (
     <circle cx="12" cy="9" r="2.5" />
   </Icon>
 );
+
+export const MinusIcon = (p: IconProps) => (
+  <Icon strokeWidth={2.6} {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+);

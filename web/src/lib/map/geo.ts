@@ -34,6 +34,40 @@ export function stationKey(station: Pick<Station, "id" | "lat" | "lon">): string
   return station.id ?? `${station.lat.toFixed(5)},${station.lon.toFixed(5)}`;
 }
 
+/** Una placa en pantalla: el punto (px) al que apunta su piquito y su prioridad (menor = más importante). */
+export interface PlacedPlate {
+  key: string;
+  x: number;
+  y: number;
+  priority: number;
+}
+
+/** Tamaño de una placa en pantalla (px), con margen: el piquito apunta al centro del borde inferior. */
+export const PLATE_BOX = { width: 62, height: 30 } as const;
+
+/**
+ * Placas que se taparían con otra más importante: se dejan como punto. Se colocan por prioridad (paradas y
+ * resaltada primero, después la más barata y por precio), y cada una solo si no pisa a las ya colocadas.
+ */
+export function overlappingPlates(plates: readonly PlacedPlate[], box = PLATE_BOX): Set<string> {
+  const placed: { left: number; right: number; top: number; bottom: number }[] = [];
+  const hidden = new Set<string>();
+  for (const plate of [...plates].sort((a, b) => a.priority - b.priority)) {
+    const rect = {
+      left: plate.x - box.width / 2,
+      right: plate.x + box.width / 2,
+      top: plate.y - box.height,
+      bottom: plate.y,
+    };
+    const clash = placed.some(
+      (p) => rect.left < p.right && rect.right > p.left && rect.top < p.bottom && rect.bottom > p.top,
+    );
+    if (clash) hidden.add(plate.key);
+    else placed.push(rect);
+  }
+  return hidden;
+}
+
 /** Diferencia mínima (€/L) para considerar caras a algunas: por debajo, todas son «sugeridas». */
 const MIN_SPREAD = 0.01;
 

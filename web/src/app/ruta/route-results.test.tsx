@@ -191,6 +191,20 @@ describe("RouteResults", () => {
     expect(mapProps.last?.focusedKey).toBe("1");
   });
 
+  it("shows the rest of the corridor as dots, and gives a plate to the one picked from the list", async () => {
+    const user = userEvent.setup();
+    renderAt("?origen=Madrid&destino=Valencia", api().client);
+
+    await loaded();
+    expect(mapProps.last?.otherStations?.map((s) => s.id)).toEqual(["3", "4"]);
+
+    await user.click(screen.getByRole("button", { name: "Ver las 4 gasolineras de la ruta" }));
+    await user.click(screen.getByRole("button", { name: "Cepsa, ver en el mapa" }));
+    expect(mapProps.last?.focusedKey).toBe("3");
+    expect(mapProps.last?.stations.map((s) => s.id)).toEqual(["1", "2", "3"]);
+    expect(mapProps.last?.otherStations?.map((s) => s.id)).toEqual(["4"]);
+  });
+
   it("highlights the plate of the row under the pointer", async () => {
     const user = userEvent.setup();
     renderAt("?origen=Madrid&destino=Valencia", api().client);
