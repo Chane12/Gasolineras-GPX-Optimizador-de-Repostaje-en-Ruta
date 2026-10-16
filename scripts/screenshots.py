@@ -24,7 +24,21 @@ SCHEMES = ("light", "dark")
 PAGES = {
     "inicio": ("/", "Organiza tu ruta"),
     "ruta": ("/ruta?demo=true", "Elige tus paradas"),
+    # La hoja de ruta se abre desde la ruta de ejemplo, eligiendo antes dos paradas (ver open_roadbook).
+    "hoja": ("/ruta?demo=true", "Repostar"),
 }
+
+
+def open_roadbook(page) -> None:
+    """Desde la ruta de ejemplo: añade dos paradas y abre la hoja de ruta."""
+    page.get_by_text("Elige tus paradas").first.wait_for(timeout=LOAD_TIMEOUT_MS)
+    page.get_by_text("MÁS BARATA").first.wait_for(timeout=LOAD_TIMEOUT_MS)
+    for _ in range(2):
+        page.get_by_role("button", name="Añadir").first.click()
+        page.wait_for_timeout(300)
+    page.get_by_role("link", name="Hoja de ruta").click()
+
+
 LOAD_TIMEOUT_MS = 120_000  # la API gratuita puede tardar en despertar
 SETTLE_MS = 5_000  # teselas del mapa
 
@@ -52,6 +66,8 @@ def main() -> int:
                     target = args.out / f"{name}-{size_name}-{scheme}.png"
                     try:
                         page.goto(args.base_url + path, wait_until="domcontentloaded")
+                        if name == "hoja":
+                            open_roadbook(page)
                         page.get_by_text(ready_text).first.wait_for(timeout=LOAD_TIMEOUT_MS)
                         page.wait_for_timeout(SETTLE_MS)
                         page.screenshot(path=target)

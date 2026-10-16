@@ -97,7 +97,10 @@ function RouteBand({ stops, routeKm }: { stops: readonly Station[]; routeKm: num
         <span
           key={stationKey(s)}
           className="absolute top-0"
-          style={{ left: `calc(${Math.min(100, (s.km_on_route / (routeKm || 1)) * 100)}% - 15px)` }}
+          // Sin tapar la salida ni la llegada: a una distancia mínima de los extremos.
+          style={{
+            left: `clamp(12px, calc(${Math.min(100, (s.km_on_route / (routeKm || 1)) * 100)}% - 15px), calc(100% - 44px))`,
+          }}
         >
           <Hito km={s.km_on_route} size="sm" />
         </span>
