@@ -44,7 +44,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funciona sin conexión. **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-> **Retomar aquí (2026-10-16)**: estructura y sistema de diseño en código hechos. Siguiente tarea: el punto 5 (inicio y formulario). El punto 1 sigue esperando la cuenta de Render del propietario.
+> **Retomar aquí (2026-10-16)**: estructura y sistema de diseño en código hechos. Siguiente tarea: el punto 6 (mapa). Para la ruta de ejemplo de Gredos hará falta un endpoint en la API (`/route/demo`): se añade con el punto 7. El punto 1 sigue esperando la cuenta de Render del propietario.
 
 - [x] Planificación con el propietario: disposición, alcance, estilo y API en Render (`docs/web/plan.md`)
 - [x] Dirección visual aprobada (mezcla de A y C, sin pastel, paradas en el centro y autonomía opcional) y maquetas en `docs/web/maquetas/`
@@ -53,7 +53,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funci
 - [x] 2. `web/` con Next.js 16 + TypeScript 6 estricto + pnpm 12; Node 24 propio en `.tools/` (`scripts/setup-node.sh`, `scripts/pnpm`); `web/CLAUDE.md`; `verify.sh` y CI cubren la web (lint, tipos, formato, tests, build); dependencias con ≥ 7 días de antigüedad y scripts de instalación bloqueados
 - [x] 3. Sistema de diseño en código: tokens claro/oscuro en `globals.css` (paleta de Tailwind desactivada; un test impide colores sueltos), fuentes con `next/font`, componentes base (botones, hito, placa de precio, fila de gasolinera, resumen, frescura de precios), formato en español y catálogo en `/diseno`
 - [x] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en `verify.sh`), `openapi-fetch` + TanStack Query (reintenta solo fallos transitorios), errores en español y aviso de servidor despertando / no disponible con "Reintentar"
-- [ ] 5. Inicio y formulario (texto / GPX / demo, combustible, "Más opciones") con la búsqueda en la URL
+- [x] 5. Inicio y formulario según la maqueta: origen/destino (intercambiar) o GPX (guardado en IndexedDB), combustibles desde `/fuels`, "Más opciones" plegado con la autonomía opcional; la búsqueda pasa a la URL de `/ruta` (nuqs, nombres en español). `/ruta` es provisional hasta los puntos 6–7
 - [ ] 6. Mapa: MapLibre + OpenFreeMap con estilo propio, ruta, placas de precio e hitos
 - [ ] 7. Resultados: hoja deslizable, lista y orden, resumen, desvíos en segundo plano y ficha de gasolinera
 - [ ] 8. Hoja de ruta: paradas en IndexedDB, barra "Tu ruta", roadbook, exportar a Maps/GPX y autonomía opcional
