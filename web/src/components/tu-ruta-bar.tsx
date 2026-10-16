@@ -57,7 +57,8 @@ export function TuRutaBar({
               key={stop.key}
               className="absolute top-0 h-4 w-3 overflow-hidden rounded-t-[6px] rounded-b-[1px] bg-hito-body"
               style={{
-                left: `calc(${Math.min(100, Math.max(0, (stop.kmOnRoute / (routeKm || 1)) * 100))}% - 6px)`,
+                // Sin tapar la salida ni la llegada: a una distancia mínima de los extremos.
+                left: `clamp(14px, calc(${Math.min(100, Math.max(0, (stop.kmOnRoute / (routeKm || 1)) * 100))}% - 6px), calc(100% - 26px))`,
               }}
             >
               <span className="block h-[5px] bg-hito-red" />
