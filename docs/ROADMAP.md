@@ -64,9 +64,15 @@ Hecho cuando iguala la funcionalidad de la app Streamlit **con el mismo acabado 
 - [x] 7. (resumen) Resultados en los dos tamaños: panel + mapa en el ordenador (`D-Escritorio`), hoja deslizable en el móvil (`D-Resultados`), pestañas de orden, resumen, lista ↔ mapa con ratón, teclado y toque; script de capturas (390 × 844 y 1440 × 900, claro y oscuro)
 - [ ] 8. Desvíos en segundo plano y ficha de gasolinera (diseñar antes la versión de ordenador)
 - [ ] 9. Hoja de ruta: paradas en IndexedDB, "Tu ruta", roadbook, imprimir o PDF, exportar a Maps/GPX y autonomía opcional (diseñar antes la versión de ordenador)
-- [ ] 10. Inicio a dos columnas en el ordenador, "Editar" con el formulario relleno, y revisión visual completa (los dos tamaños, claro y oscuro)
-- [ ] 11. Páginas legales (aviso legal, privacidad, fuentes) y SEO
-- [ ] 12. Cierre: e2e Playwright de la demo en los dos tamaños, axe, presupuesto de rendimiento y lista de paridad completa
+- [ ] 10. **Opciones avanzadas** (aprobadas por el propietario el 2026-10-16): sección plegada "Opciones avanzadas" junto a los filtros, recordada en el dispositivo y con una etiqueta discreta si hay algo activo. Una idea por PR:
+  - [ ] 10a. Planificar mis repostajes: con la autonomía (o depósito y consumo), con cuánto se sale y la reserva mínima, propone las paradas más baratas sin bajar nunca de la reserva y las pone en "Tu ruta" (editables)
+  - [ ] 10b. "Abierta cuando pases": con la hora de salida y los tiempos de OSRM, marca las que estarán cerradas al pasar (mejor que "Solo 24 h")
+  - [ ] 10c. Mis descuentos: el usuario escribe sus descuentos por marca (cént/L o %); se ordena y recomienda por el precio que pagará. Sin inventar descuentos oficiales
+  - [ ] 10d. "Solo las de mi lado": lado de la carretera según el sentido de la marcha, calculado con la geometría de la ruta (el campo `Margen` del MITECO va según el kilometraje de la carretera). Validar con casos reales antes de mostrarlo
+  - [ ] 10e. Pequeñas: excluir marcas, número de recomendadas y GPX con waypoints detallados (precio y horario)
+- [ ] 11. Inicio: "Editar" con el formulario relleno, y revisión visual completa (los dos tamaños, claro y oscuro)
+- [ ] 12. Páginas legales (aviso legal, privacidad, fuentes) y SEO
+- [ ] 13. Cierre: e2e Playwright de la demo en los dos tamaños, axe, presupuesto de rendimiento y lista de paridad completa
 - [x] **Acción del propietario**: cuenta de Vercel y app de Vercel en GitHub (2026-10-16). Web de pruebas en https://gasolineras-web.vercel.app (sin indexar): `main` se publica solo y cada PR tiene vista previa (`web/vercel.json`, `web/CLAUDE.md`)
 
 ## Fase 3 — Lanzamiento
