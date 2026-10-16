@@ -53,7 +53,7 @@ export function ButtonLink({ variant, size, block, className, ...props }: Button
   );
 }
 
-type IconButtonTone = "outline" | "filled" | "plain";
+type IconButtonTone = "outline" | "filled" | "plain" | "floating";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   /** Obligatorio: es lo que oye un lector de pantalla. */
@@ -66,6 +66,8 @@ const iconTones: Record<IconButtonTone, string> = {
   outline: "border-[1.5px] border-accent text-accent bg-surface hover:bg-rule-soft",
   filled: "bg-accent text-on-accent hover:bg-accent-strong",
   plain: "text-muted bg-transparent hover:text-ink hover:bg-rule-soft",
+  /** Sobre el mapa, como las tarjetas flotantes. */
+  floating: "border border-rule bg-surface text-ink shadow-float hover:bg-rule-soft",
 };
 
 /** Botón cuadrado de 44 px (objetivo táctil mínimo) con solo un icono. */

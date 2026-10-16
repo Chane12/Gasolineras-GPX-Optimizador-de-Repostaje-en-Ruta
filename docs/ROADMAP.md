@@ -44,8 +44,8 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funciona sin conexión. **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-> **Retomar aquí (2026-10-16, fin de sesión)**: hechos los puntos 1–5. La API está en Render (https://gasolineras-api-kwnx.onrender.com) y la web tiene inicio, formulario y búsqueda en la URL; `/ruta` aún es provisional. **Siguiente tarea: el punto 6 (mapa con MapLibre + OpenFreeMap, estilo propio según `docs/web/diseno.md` y la maqueta `D-Resultados`).** Notas para los puntos 6–7:
-> - La ruta de ejemplo de Gredos ya tiene su endpoint: `GET /route/demo`.
+> **Retomar aquí (2026-10-16)**: hechos los puntos 1–6. La API está en Render (https://gasolineras-api-kwnx.onrender.com). La web tiene inicio, formulario, búsqueda en la URL y `/ruta` con el mapa (ruta, placas de precio, hitos de las paradas y centrar o encuadrar), más una lista provisional abajo. **Siguiente tarea: el punto 7 (hoja deslizable con Vaul, pestañas de orden, resumen, desvíos en segundo plano y ficha), según la maqueta `D-Resultados`.** Notas para el punto 7:
+> - La lista provisional está en `web/src/app/ruta/route-results.tsx`; las paradas viven solo en memoria hasta el punto 8. El mapa (`web/src/components/route-map/`) recibe `padding` con lo que tapan la tarjeta y la hoja, y encuadra la ruta en el hueco que queda.
 > - El OSRM público a veces limita las peticiones desde Render: `/detours` devuelve `complete: false`. La web debe volver a pedir solo los desvíos que falten, tras una pausa.
 > - Para probar la web contra la API publicada: `NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C web dev`.
 
@@ -57,7 +57,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funci
 - [x] 3. Sistema de diseño en código: tokens claro/oscuro en `globals.css` (paleta de Tailwind desactivada; un test impide colores sueltos), fuentes con `next/font`, componentes base (botones, hito, placa de precio, fila de gasolinera, resumen, frescura de precios), formato en español y catálogo en `/diseno`
 - [x] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en `verify.sh`), `openapi-fetch` + TanStack Query (reintenta solo fallos transitorios), errores en español y aviso de servidor despertando / no disponible con "Reintentar"
 - [x] 5. Inicio y formulario según la maqueta: origen/destino (intercambiar) o GPX (guardado en IndexedDB), combustibles desde `/fuels`, "Más opciones" plegado con la autonomía opcional; la búsqueda pasa a la URL de `/ruta` (nuqs, nombres en español). `/ruta` es provisional hasta los puntos 6–7
-- [ ] 6. Mapa: MapLibre + OpenFreeMap con estilo propio, ruta, placas de precio e hitos
+- [x] 6. Mapa: MapLibre + OpenFreeMap con estilo propio a partir de los tokens (claro/oscuro), ruta con halo, origen/destino, placas de precio en tres tonos, hitos de las paradas, centrar desde la lista y "Ver toda la ruta"; carga diferida. `/ruta` ya pide la ruta (texto, GPX o demo con el nuevo `GET /route/demo`) y la búsqueda
 - [ ] 7. Resultados: hoja deslizable, lista y orden, resumen, desvíos en segundo plano y ficha de gasolinera
 - [ ] 8. Hoja de ruta: paradas en IndexedDB, barra "Tu ruta", roadbook, exportar a Maps/GPX y autonomía opcional
 - [ ] 9. Escritorio y modo noche; revisión visual contra las maquetas
@@ -97,5 +97,9 @@ Anotar aquí todo lo que se detecte y no se arregle en el momento.
 | Lógica de búsqueda duplicada | `search_stations` (core) replica el pipeline de `legacy/streamlit/app.py`; Streamlit no se migra por estar congelada | Se va con Streamlit (Fase 3) |
 | GPX exportado sin altitud ni horas | `/route/gpx` solo devuelve lon/lat, así que el GPX exportado pierde la altitud y los tiempos del original | Si los usuarios lo piden: guardar el GPX original o devolver la altitud |
 | TypeScript 7 (nativo) | La web usa TypeScript 6.0: Next.js aún no tiene probado TS 7. Revisar cuando Next lo soporte oficialmente | Fase 2–3 |
+| Placas de precio solapadas | Con muchas gasolineras juntas (p. ej. a la salida de una ciudad), las placas del mapa se tapan entre sí. Valorar agruparlas o esconder las caras según el zoom | Punto 7 o 9 |
+| Nombres del MITECO en mayúsculas | El rótulo llega como "BALLENOIL", "E.S GREDOS"… Valorar normalizarlo a "Ballenoil" (con cuidado con siglas) | Punto 7 |
+| "Editar" no rellena el formulario | Desde `/ruta`, "Editar" vuelve al inicio con el formulario vacío; debería traer la búsqueda de la URL | Punto 7 |
+| Horario en la lista | La lista solo dice "24 h"; el horario del MITECO ("L-D: 07:00-22:00") está sin formatear | Punto 7 |
 | Tamaño máximo del cuerpo JSON | La API no limita el tamaño de las peticiones JSON (el track admite hasta 50.000 puntos). Cloud Run corta en 32 MB; en otro alojamiento habría que limitarlo | Fase 3 |
 | Tramos de 0 km en el radar | Gasolineras contiguas generan tramos de 0 km (igual que en Streamlit). La web puede agruparlos al pintarlos | Fase 2 |

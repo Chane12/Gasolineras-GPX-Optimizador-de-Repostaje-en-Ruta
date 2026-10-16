@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeOptions, serializeSearch } from "./search-params";
+import { normalizeOptions, routeSourceFrom, searchOptionsFrom, serializeSearch } from "./search-params";
 
 describe("search params", () => {
   it("writes a readable URL and leaves defaults out", () => {
@@ -42,6 +42,55 @@ describe("search params", () => {
       top: 5,
       tramo: 0,
       autonomia: 0,
+    });
+  });
+});
+
+describe("routeSourceFrom", () => {
+  const empty = { demo: false, gpx: false, origen: null, destino: null };
+
+  it("prefers the demo, then the GPX, then origin and destination", () => {
+    expect(routeSourceFrom({ ...empty, demo: true, origen: "Madrid", destino: "Valencia" })).toEqual({
+      kind: "demo",
+    });
+    expect(routeSourceFrom({ ...empty, gpx: true })).toEqual({ kind: "gpx" });
+    expect(routeSourceFrom({ ...empty, origen: " Madrid ", destino: "Valencia" })).toEqual({
+      kind: "text",
+      origin: "Madrid",
+      destination: "Valencia",
+    });
+  });
+
+  it("is null when the route is incomplete", () => {
+    expect(routeSourceFrom(empty)).toBeNull();
+    expect(routeSourceFrom({ ...empty, origen: "Madrid", destino: "  " })).toBeNull();
+  });
+});
+
+describe("searchOptionsFrom", () => {
+  it("maps the URL to the /search request, fixing out-of-range values", () => {
+    expect(
+      searchOptionsFrom({
+        origen: "Madrid",
+        destino: "Valencia",
+        gpx: false,
+        demo: false,
+        combustible: "diesel",
+        radio: 99,
+        top: 5,
+        tramo: 0,
+        abierta24h: true,
+        vaciada: false,
+        autonomia: 250,
+      }),
+    ).toEqual({
+      fuel: "diesel",
+      max_detour_km: 15,
+      top_n: 5,
+      segment_km: 0,
+      only_24h: true,
+      all_on_route: false,
+      autonomy_km: 250,
     });
   });
 });

@@ -104,3 +104,10 @@ export const WarningIcon = (p: IconProps) => (
     <path d="M12 10v5M12 18v.5" />
   </Icon>
 );
+
+/** Encuadrar: ver toda la ruta en el mapa. */
+export const FitIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Icon>
+);

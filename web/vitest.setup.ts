@@ -11,3 +11,13 @@ vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Red desactivada en lo
 afterEach(() => {
   cleanup();
 });
+
+// jsdom no mide la maquetación: ResizeObserver existe pero nunca avisa.
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
