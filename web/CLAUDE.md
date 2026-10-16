@@ -30,6 +30,7 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
   - Las llamadas van con `unwrap(api.GET(...))`: devuelve los datos o lanza un `ApiError` con un mensaje en español, listo para mostrar.
   - Los datos se cargan con TanStack Query (`src/lib/api/queries.ts`), que solo reintenta los fallos transitorios.
   - La URL de la API sale de `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:8000`, la API en local con uvicorn; la API ya permite el origen `localhost:3000`).
+- **Ordenador y móvil valen lo mismo** (decisión del propietario): cada pantalla se hace para los dos tamaños en el mismo PR y se revisa con capturas a 390 × 844 y 1440 × 900, en claro y en oscuro. Ver "Listón de calidad" en `docs/web/plan.md`.
 - **Diseño**: solo los tokens de `diseno.md`, a través del tema de Tailwind. Nada de colores, fuentes o radios sueltos. Nada de pastel, degradados ni emojis. El azul (`accent`) es el único color de acción y el rojo, solo el del hito.
 - **Accesibilidad**:
   - `<button>` y `<a href>` reales, con `aria-label` en los botones de solo icono.
