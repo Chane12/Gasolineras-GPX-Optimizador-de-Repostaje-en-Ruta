@@ -2,6 +2,7 @@
 
 import { keepPreviousData, QueryClient, useQuery } from "@tanstack/react-query";
 
+import { routeInBrowser } from "@/lib/browser-routing";
 import { loadGpx } from "@/lib/gpx-store";
 
 import { api, type ApiClient, ApiError, type Schemas, unwrap } from "./client";
@@ -73,16 +74,22 @@ export class MissingGpxError extends Error {
 async function fetchRoute(client: ApiClient, source: RouteSource) {
   switch (source.kind) {
     case "text":
-      return unwrap(
-        client.POST("/route/text", {
-          body: {
-            origin: source.origin,
-            destination: source.destination,
-            origin_point: source.originPoint ?? null,
-            destination_point: source.destinationPoint ?? null,
-          },
-        }),
-      );
+      try {
+        return await unwrap(
+          client.POST("/route/text", {
+            body: {
+              origin: source.origin,
+              destination: source.destination,
+              origin_point: source.originPoint ?? null,
+              destination_point: source.destinationPoint ?? null,
+            },
+          }),
+        );
+      } catch (error) {
+        // El servidor no consigue ruta (OSRM o Nominatim no le responden): plan B desde el navegador.
+        if (!(error instanceof ApiError) || error.status !== 503) throw error;
+        return routeWithoutServer(client, source, error);
+      }
     case "demo":
       return unwrap(client.GET("/route/demo"));
     case "gpx": {
@@ -96,6 +103,46 @@ async function fetchRoute(client: ApiClient, source: RouteSource) {
   }
 }
 
+/** Primer lugar sugerido para un nombre (el exacto si lo hay), para el plan B de la ruta. */
+async function placeFor(client: ApiClient, text: string): Promise<{ lat: number; lon: number }> {
+  const places = await unwrap(client.GET("/places/suggest", { params: { query: { q: text } } }))
+    .then((r) => r.places)
+    .catch(() => []);
+  const wanted = normalizePlace(text);
+  const place =
+    places.find((p) => p.name.split(" / ").some((n) => normalizePlace(n) === wanted)) ?? places[0];
+  if (!place) throw new ApiError(`No encontramos la ubicación «${text}».`, 400);
+  return place;
+}
+
+/**
+ * Plan B: la ruta se calcula en el navegador (OSRM directo) con los puntos elegidos o, si se escribieron a
+ * mano, con el primer lugar sugerido. Si tampoco así, se muestra el error original del servidor.
+ */
+async function routeWithoutServer(
+  client: ApiClient,
+  source: Extract<RouteSource, { kind: "text" }>,
+  serverError: ApiError,
+) {
+  try {
+    const origin = source.originPoint ?? (await placeFor(client, source.origin));
+    const destination = source.destinationPoint ?? (await placeFor(client, source.destination));
+    const route = await routeInBrowser([
+      [origin.lon, origin.lat],
+      [destination.lon, destination.lat],
+    ]);
+    return {
+      track: { type: "LineString" as const, coordinates: route.coordinates },
+      point_count: route.coordinates.length,
+      origin: { query: source.origin, lat: origin.lat, lon: origin.lon },
+      destination: { query: source.destination, lat: destination.lat, lon: destination.lon },
+    };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 400) throw error;
+    throw serverError;
+  }
+}
+
 /** Ruta validada por la API. No caduca: el mismo origen y destino dan la misma ruta en la sesión. */
 export function useRoute(source: RouteSource | null, client: ApiClient = api) {
   return useQuery({
@@ -103,7 +150,12 @@ export function useRoute(source: RouteSource | null, client: ApiClient = api) {
     queryFn: () => fetchRoute(client, source as RouteSource),
     enabled: source !== null,
     staleTime: Infinity,
-    retry: (count, error) => !(error instanceof MissingGpxError) && shouldRetry(count, error),
+    retry: (count, error) => {
+      if (error instanceof MissingGpxError) return false;
+      // Un 503 ya probó el plan B en el navegador: un solo reintento, para no hacer esperar con un error.
+      if (error instanceof ApiError && error.status === 503) return count < 1;
+      return shouldRetry(count, error);
+    },
   });
 }
 
