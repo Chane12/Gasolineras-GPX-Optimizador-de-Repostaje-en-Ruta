@@ -43,7 +43,7 @@ Correcciones del propietario sobre la primera mezcla:
 | `on-accent` | `#FFFFFF` | `#0B0E10` | Texto sobre `accent` |
 | `hito-red` | `#C0392B` | `#D9473A` | **Solo** la cabeza del hito kilométrico |
 | `ok` | `#1E8A4C` | `#5CC98A` | Solo el punto de "precios actualizados" |
-| `warn` | `#E8A900` | `#F2C14E` | Solo el icono de aviso de autonomía, cuando el usuario la activa. Nunca como fondo |
+| `warn` | `#E8A900` | `#F2C14E` | Solo el icono de aviso: autonomía (si el usuario la activa) y precios antiguos. Nunca como fondo |
 
 Reglas:
 - Ningún fondo teñido ni pastel. Para destacar se usa tinta, peso tipográfico o el azul.
@@ -70,6 +70,8 @@ Reglas:
 - Formato español: coma decimal (`1,639 €/L`), "km" en minúscula.
 
 ## Componentes propios
+
+En código: `web/src/components/` (tokens en `web/src/app/globals.css`). Catálogo vivo en la ruta `/diseno` de la web (oculta a los buscadores). Un test (`web/src/design-tokens.test.ts`) impide colores literales fuera de los tokens y la paleta por defecto de Tailwind, que está desactivada.
 
 - **Hito kilométrico**: poste blanco con la cabeza roja y el km de la ruta en mono, con borde de tinta. Aparece en:
   - el logo;

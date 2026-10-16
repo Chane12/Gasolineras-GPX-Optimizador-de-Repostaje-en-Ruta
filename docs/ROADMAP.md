@@ -44,14 +44,14 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funciona sin conexión. **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-> **Retomar aquí (2026-10-16)**: estructura de `web/` hecha. Siguiente tarea: el punto 3 (sistema de diseño en código). El punto 1 sigue esperando la cuenta de Render del propietario.
+> **Retomar aquí (2026-10-16)**: estructura y sistema de diseño en código hechos. Siguiente tarea: el punto 4 (cliente de la API). El punto 1 sigue esperando la cuenta de Render del propietario.
 
 - [x] Planificación con el propietario: disposición, alcance, estilo y API en Render (`docs/web/plan.md`)
 - [x] Dirección visual aprobada (mezcla de A y C, sin pastel, paradas en el centro y autonomía opcional) y maquetas en `docs/web/maquetas/`
 - [ ] **Acción del propietario**: crear la cuenta gratuita de Render y dar acceso (bloquea el punto 1)
 - [ ] 1. API publicada en Render (`render.yaml`, CORS, `TRUSTED_PROXY_HOPS=1`)
 - [x] 2. `web/` con Next.js 16 + TypeScript 6 estricto + pnpm 12; Node 24 propio en `.tools/` (`scripts/setup-node.sh`, `scripts/pnpm`); `web/CLAUDE.md`; `verify.sh` y CI cubren la web (lint, tipos, formato, tests, build); dependencias con ≥ 7 días de antigüedad y scripts de instalación bloqueados
-- [ ] 3. Sistema de diseño en código: tokens (claro/oscuro), fuentes y componentes base (hito, placa de precio, fila, botones)
+- [x] 3. Sistema de diseño en código: tokens claro/oscuro en `globals.css` (paleta de Tailwind desactivada; un test impide colores sueltos), fuentes con `next/font`, componentes base (botones, hito, placa de precio, fila de gasolinera, resumen, frescura de precios), formato en español y catálogo en `/diseno`
 - [ ] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en el CI), TanStack Query y aviso de servidor despertando
 - [ ] 5. Inicio y formulario (texto / GPX / demo, combustible, "Más opciones") con la búsqueda en la URL
 - [ ] 6. Mapa: MapLibre + OpenFreeMap con estilo propio, ruta, placas de precio e hitos

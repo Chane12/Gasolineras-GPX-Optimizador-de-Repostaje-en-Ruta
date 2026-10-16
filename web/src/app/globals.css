@@ -1,1 +1,112 @@
+/*
+ * Sistema de diseño: tokens de docs/web/diseno.md. Es el ÚNICO sitio con colores literales
+ * (un test lo comprueba). La paleta por defecto de Tailwind está desactivada: solo existen estos.
+ */
 @import "tailwindcss";
+
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --ink: #161b1f;
+  --muted: #5b636a;
+  --rule: #dadad6;
+  --rule-soft: #e6e6e2;
+  --field-border: #bdbdb7;
+  --accent: #0b4c94;
+  --accent-strong: #083770;
+  --on-accent: #ffffff;
+  --hito-red: #c0392b;
+  --hito-body: #ffffff;
+  --hito-ink: #161b1f;
+  --ok: #1e8a4c;
+  --warn: #e8a900;
+  --map-land: #efefec;
+  --map-contour: #e1e1dc;
+  --map-road: #ffffff;
+  --map-road-casing: #cfcfc9;
+  --map-water: #d9dfe2;
+  --shadow-color: 22 27 31;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121619;
+    --surface: #1a1f23;
+    --ink: #eceef0;
+    --muted: #a5adb4;
+    --rule: #2b3237;
+    --rule-soft: #262d32;
+    --field-border: #4a535a;
+    --accent: #7fb2ec;
+    --accent-strong: #b5d3f6;
+    --on-accent: #0b0e10;
+    --hito-red: #d9473a;
+    --hito-body: #eceef0;
+    --hito-ink: #161b1f;
+    --ok: #5cc98a;
+    --warn: #f2c14e;
+    --map-land: #121619;
+    --map-contour: #1c2226;
+    --map-road: #2b3237;
+    --map-road-casing: #2b3237;
+    --map-water: #172128;
+    --shadow-color: 0 0 0;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-field-border: var(--field-border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-on-accent: var(--on-accent);
+  --color-hito-red: var(--hito-red);
+  --color-hito-body: var(--hito-body);
+  --color-hito-ink: var(--hito-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-map-land: var(--map-land);
+  --color-map-contour: var(--map-contour);
+  --color-map-road: var(--map-road);
+  --color-map-road-casing: var(--map-road-casing);
+  --color-map-water: var(--map-water);
+
+  --font-sans: var(--font-familjen), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --radius-plate: 4px;
+  --radius-field: 8px;
+  --radius-button: 10px;
+  --radius-card: 12px;
+  --radius-sheet: 18px;
+
+  --shadow-float: 0 6px 20px rgb(var(--shadow-color) / 0.12);
+  --shadow-bar: 0 8px 22px rgb(var(--shadow-color) / 0.28);
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+    color: var(--ink);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
