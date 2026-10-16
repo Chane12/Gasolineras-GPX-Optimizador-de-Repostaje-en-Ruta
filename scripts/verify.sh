@@ -3,6 +3,7 @@
 #   ./scripts/verify.sh           → Python: lint, formato, tipos, tests (sin red), requirements legacy, contrato OpenAPI
 #                                   Web: dependencias, lint, tipos, formato, tests y build (Node propio en .tools/)
 #   ./scripts/verify.sh --smoke   → además arranca la app Streamlit con la demo (usa red: MITECO)
+#   ./scripts/verify.sh --e2e     → además la e2e de la web (Playwright + axe, Chrome del sistema, API simulada)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -34,9 +35,11 @@ step "Web: formato (prettier)";                pnpm_web format:check
 step "Web: tests (vitest)";                    pnpm_web test
 step "Web: build (next build)";                pnpm_web build >/dev/null
 
-if [[ "${1:-}" == "--smoke" ]]; then
-  step "Smoke test app Streamlit (demo, red)"
-  uv run python scripts/smoke_legacy.py
-fi
+for flag in "$@"; do
+  case "$flag" in
+    --smoke) step "Smoke test app Streamlit (demo, red)"; uv run python scripts/smoke_legacy.py ;;
+    --e2e) step "Web: e2e (Playwright + axe, sobre el build anterior)"; pnpm_web e2e ;;
+  esac
+done
 
 printf '\n\033[1;32m✔ Todo en verde\033[0m\n'

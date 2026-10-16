@@ -164,3 +164,7 @@ desktop.ini
 # pyproject.toml DEBE estar en el repo
 # Vercel CLI (enlace local al proyecto)
 .vercel/
+
+# Playwright (e2e de la web)
+web/test-results/
+web/playwright-report/
