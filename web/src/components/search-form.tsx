@@ -1,22 +1,18 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/button";
-import { ArrowRightIcon, CloseIcon, SwapIcon, UploadIcon, WarningIcon } from "@/components/icons";
+import { ArrowRightIcon, CloseIcon, SwapIcon, UploadIcon } from "@/components/icons";
 import { emptyPlace, PlaceInput, type PlaceValue } from "@/components/place-input";
+import { FieldMessage, PlaceProblemMessage } from "@/components/place-problem";
 import { api, type ApiClient } from "@/lib/api/client";
-import { type PlaceSuggestion, placeSuggestionsQuery, useFuels } from "@/lib/api/queries";
+import { useFuels } from "@/lib/api/queries";
 import { validateGpxFile } from "@/lib/gpx-store";
-import { resolvePlace } from "@/lib/place-resolution";
-import { DEFAULT_FUEL, type FuelId, type LatLon } from "@/lib/search-params";
+import { DEFAULT_FUEL, type FuelId } from "@/lib/search-params";
+import { type PlaceProblem, type RouteEnd, usePlaceCheck } from "@/lib/use-place-check";
 
-/** Un extremo de la ruta: el nombre y, si se conoce, el punto exacto (elegido en las sugerencias). */
-export interface RouteEnd {
-  text: string;
-  point?: LatLon;
-}
+export type { RouteEnd };
 
 export type SearchSubmission = (
   { kind: "text"; origen: RouteEnd; destino: RouteEnd } | { kind: "gpx"; file: File }
@@ -24,35 +20,14 @@ export type SearchSubmission = (
 
 type PlaceField = "origen" | "destino";
 
-interface PlaceProblem {
-  message: string;
-  alternatives: PlaceSuggestion[];
-}
-
 const field =
   "h-12 w-full rounded-field border-[1.5px] border-field-border bg-surface px-3 text-[17px] font-semibold text-ink";
-
-function FieldMessage({ id, children }: { id: string; children: ReactNode }) {
-  return (
-    <div id={id} role="alert" className="flex items-start gap-2 text-[15px] leading-snug">
-      <WarningIcon size={18} className="mt-0.5 shrink-0 text-warn" />
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
 
 function formatBytes(bytes: number): string {
   return bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`
     : `${Math.ceil(bytes / 1024)} KB`;
 }
-
-const toRouteEnd = (value: PlaceValue, place?: PlaceSuggestion): RouteEnd => {
-  const chosen = place ?? value.place;
-  return chosen
-    ? { text: chosen.name, point: { lat: chosen.lat, lon: chosen.lon } }
-    : { text: value.text.trim() };
-};
 
 const OriginMarker = <span className="size-3.5 rounded-full border-[3px] border-accent" />;
 const DestinationMarker = <span className="size-3.5 bg-accent" />;
@@ -72,7 +47,7 @@ export function SearchForm({
   secondaryAction?: ReactNode;
 }) {
   const ids = useId();
-  const queryClient = useQueryClient();
+  const checkPlace = usePlaceCheck(client);
   const fileInput = useRef<HTMLInputElement>(null);
   const fuels = useFuels(client);
 
@@ -99,33 +74,6 @@ export function SearchForm({
     setGpxFile(problem ? null : file);
   }
 
-  async function check(name: PlaceField): Promise<{ end?: RouteEnd; problem?: PlaceProblem }> {
-    const value = values[name];
-    if (value.text.trim().length < 2) {
-      return {
-        problem: {
-          message: name === "origen" ? "Escribe de dónde sales." : "Escribe a dónde vas.",
-          alternatives: [],
-        },
-      };
-    }
-    const result = await resolvePlace(value, (text) =>
-      queryClient.fetchQuery(placeSuggestionsQuery(text, client)),
-    );
-    if (result.status === "found") return { end: toRouteEnd(value, result.place) };
-    if (result.status === "unchecked") return { end: toRouteEnd(value) };
-    const typed = value.text.trim();
-    return {
-      problem: {
-        message:
-          result.alternatives.length > 0
-            ? `«${typed}» no aparece tal cual. ¿Te refieres a…?`
-            : `No encontramos «${typed}». Revisa cómo está escrito o prueba con un pueblo cercano.`,
-        alternatives: result.alternatives,
-      },
-    };
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -134,7 +82,7 @@ export function SearchForm({
         await onSubmit({ kind: "gpx", file: gpxFile, combustible });
         return;
       }
-      const [o, d] = await Promise.all([check("origen"), check("destino")]);
+      const [o, d] = await Promise.all([checkPlace("origen", origen), checkPlace("destino", destino)]);
       setProblems({ origen: o.problem, destino: d.problem });
       if (o.end && d.end) await onSubmit({ kind: "text", origen: o.end, destino: d.end, combustible });
     } finally {
@@ -157,26 +105,11 @@ export function SearchForm({
           client={client}
         />
         {problem ? (
-          <FieldMessage id={messageId}>
-            {problem.message}
-            {problem.alternatives.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {problem.alternatives.map((place) => (
-                  <button
-                    key={`${place.name}-${place.lat}-${place.lon}`}
-                    type="button"
-                    className="flex min-h-11 flex-col items-start justify-center rounded-field border-[1.5px] border-accent px-3.5 py-1 text-left font-bold text-accent hover:bg-rule-soft"
-                    onClick={() => edit(name, { text: place.name, place })}
-                  >
-                    {place.name}
-                    {place.context ? (
-                      <span className="text-xs font-semibold text-muted">{place.context}</span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </FieldMessage>
+          <PlaceProblemMessage
+            id={messageId}
+            problem={problem}
+            onPick={(place) => edit(name, { text: place.name, place })}
+          />
         ) : null}
       </div>
     );

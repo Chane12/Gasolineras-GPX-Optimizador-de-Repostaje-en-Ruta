@@ -2,18 +2,40 @@
 
 import Link from "next/link";
 import { useQueryStates } from "nuqs";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
+import { AutonomyWarnings } from "@/components/autonomy-warnings";
 import { Button, buttonClasses } from "@/components/button";
+import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
-import { WarningIcon } from "@/components/icons";
+import { CloseIcon, WarningIcon } from "@/components/icons";
+import { RouteSearchBar } from "@/components/route-search-bar";
+import { Logo } from "@/components/site-header";
 import { ServerWarmupNotice } from "@/components/server-warmup-notice";
 import { StationRow } from "@/components/station-row";
+import { SummaryStats } from "@/components/summary-stats";
+import { TuRutaBar } from "@/components/tu-ruta-bar";
 import { api, type ApiClient } from "@/lib/api/client";
 import { type RouteSource, routeSourceKey, useRoute, useStationSearch } from "@/lib/api/queries";
-import { formatKm } from "@/lib/format";
-import { plateTones, stationKey } from "@/lib/map/geo";
-import { routeSourceFrom, searchOptionsFrom, searchParams } from "@/lib/search-params";
+import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
+import { plateTones, type Station, stationKey } from "@/lib/map/geo";
+import { normalizeOptions, routeSourceFrom, searchOptionsFrom, searchParams } from "@/lib/search-params";
+import {
+  autoSegmentKm,
+  formatSchedule,
+  formatStationName,
+  RECOMMENDED_CHEAPEST,
+  trackLengthKm,
+} from "@/lib/stations";
+import { placeValueFrom } from "@/lib/use-place-check";
 
 import { RouteMapLazy } from "./route-map-lazy";
 
@@ -28,14 +50,28 @@ function routeTitle(source: RouteSource): string {
   }
 }
 
-/** Alto de un elemento, para que el mapa encuadre la ruta en la parte que queda a la vista. */
+const DESKTOP = "(min-width: 1024px)";
+
+/** ¿Pantalla de ordenador? (Solo para el encuadre del mapa: la disposición la decide el CSS.) */
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia(DESKTOP);
+      query.addEventListener("change", notify);
+      return () => query.removeEventListener("change", notify);
+    },
+    () => window.matchMedia(DESKTOP).matches,
+    () => false,
+  );
+}
+
+/** Alto de un elemento (con relleno y borde), para que el mapa encuadre la ruta en lo que queda a la vista. */
 function useHeight<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [height, setHeight] = useState(0);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    // Alto completo (con relleno y borde): es lo que tapa del mapa.
     const observer = new ResizeObserver(() => setHeight(element.getBoundingClientRect().height));
     observer.observe(element);
     return () => observer.disconnect();
@@ -43,155 +79,459 @@ function useHeight<T extends HTMLElement>() {
   return [ref, height] as const;
 }
 
+type Snap = "peek" | "half" | "full";
+const SNAPS: Snap[] = ["peek", "half", "full"];
+/** Alto de la hoja del móvil en cada posición (px a partir del alto de la ventana). */
+function snapHeight(snap: Snap, viewport: number): number {
+  if (snap === "peek") return 228;
+  if (snap === "half") return Math.round(viewport * 0.55);
+  return viewport - 88;
+}
+
+type Sort = "km" | "price";
+
 /**
- * Resultados: mapa a pantalla completa con la ruta y los precios. La lista de abajo es provisional:
- * en el paso 7 del plan pasa a ser la hoja deslizable, y en el 8 las paradas se guardan en el dispositivo.
+ * La ruta como sitio de trabajo (maquetas Escritorio-Ruta y Movil-Resultados): búsqueda editable, filtros,
+ * resumen, recomendadas (unas 8) y el resto bajo "Ver las N", y "Tu ruta" siempre a la vista.
+ * En el ordenador, panel a la izquierda y mapa a la derecha; en el móvil, mapa con una hoja deslizable.
  */
 export function RouteResults({ client = api }: { client?: ApiClient }) {
-  const [params] = useQueryStates(searchParams);
+  const [params, setParams] = useQueryStates(searchParams);
   const source = routeSourceFrom(params);
-  const options = searchOptionsFrom(params);
+  const isDesktop = useIsDesktop();
 
   const route = useRoute(source, client);
+  const routeKm = useMemo(() => (route.data ? trackLengthKm(route.data.track.coordinates) : 0), [route.data]);
   const routeForSearch =
     route.data && source ? { key: routeSourceKey(source), track: route.data.track } : null;
+  const options = {
+    ...searchOptionsFrom(params),
+    top_n: RECOMMENDED_CHEAPEST,
+    segment_km: autoSegmentKm(routeKm),
+    include_others: true,
+  };
   const search = useStationSearch(routeForSearch, options, client);
 
-  const [stops, setStops] = useState<ReadonlySet<string>>(new Set());
+  const [stops, setStops] = useState<ReadonlyMap<string, Station>>(new Map());
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [sort, setSort] = useState<Sort>("km");
+  const [showAll, setShowAll] = useState(false);
+  const [snap, setSnap] = useState<Snap>("half");
+  const [dragHeight, setDragHeight] = useState<number | null>(null);
+  const [viewport, setViewport] = useState(800);
   const [topRef, topHeight] = useHeight<HTMLDivElement>();
   const [panelRef, panelHeight] = useHeight<HTMLElement>();
+  const searchDialog = useRef<HTMLDialogElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  const stations = useMemo(() => search.data?.stations ?? [], [search.data]);
-  const tones = useMemo(() => plateTones(stations), [stations]);
+  useEffect(() => {
+    const dialog = searchDialog.current;
+    if (!dialog) return;
+    if (searchOpen && !dialog.open) dialog.showModal();
+    if (!searchOpen && dialog.open) dialog.close();
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const update = () => setViewport(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const recommended = useMemo(() => search.data?.stations ?? [], [search.data]);
+  const others = useMemo(() => search.data?.other_stations ?? [], [search.data]);
+  const total = recommended.length + others.length;
+  const shown = useMemo(() => {
+    const list = showAll ? [...recommended, ...others] : [...recommended];
+    return list.sort((a, b) => (sort === "km" ? a.km_on_route - b.km_on_route : a.price - b.price));
+  }, [recommended, others, showAll, sort]);
+  const tones = useMemo(() => plateTones(shown), [shown]);
 
   if (!source) {
     return (
-      <Centered>
+      <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-10">
         <p className="m-0">Falta la ruta: vuelve al inicio y escribe origen y destino o sube tu GPX.</p>
         <Link href="/" className={buttonClasses()}>
           Ir al inicio
         </Link>
-      </Centered>
+      </main>
     );
   }
 
-  const toggleStop = (key: string) =>
+  const toggleStop = (station: Station) =>
     setStops((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
+      const next = new Map(current);
+      const key = stationKey(station);
+      if (!next.delete(key)) next.set(key, station);
       return next;
     });
 
+  const normalized = normalizeOptions(params);
+  const filters: Filters = {
+    radio: normalized.radio,
+    abierta24h: params.abierta24h,
+    vaciada: params.vaciada,
+    autonomia: normalized.autonomia,
+  };
+
+  const searchBar = (layout: "row" | "column", onDone?: () => void) => (
+    <RouteSearchBar
+      key={`${layout}-${routeSourceKey(source)}`}
+      layout={layout}
+      places={
+        source.kind === "text"
+          ? {
+              origen: placeValueFrom(params.origen, params.origenGeo),
+              destino: placeValueFrom(params.destino, params.destinoGeo),
+            }
+          : null
+      }
+      routeName={routeTitle(source)}
+      fuel={params.combustible}
+      onFuelChange={(combustible) => {
+        void setParams({ combustible });
+        onDone?.();
+      }}
+      onSearch={({ origen, destino }) => {
+        void setParams({
+          origen: origen.text,
+          destino: destino.text,
+          origenGeo: origen.point ?? null,
+          destinoGeo: destino.point ?? null,
+          gpx: false,
+          demo: false,
+        });
+        setStops(new Map());
+        onDone?.();
+      }}
+      client={client}
+    />
+  );
+
   const error = route.error ?? search.error;
   const retry = () => void (route.isError ? route.refetch() : search.refetch());
+  const best = recommended.length > 0 ? Math.min(...recommended.map((s) => s.price)) : null;
+  const maxPrice = search.data?.max_price_in_corridor ?? null;
+
+  const sheetHeight = dragHeight ?? snapHeight(snap, viewport);
+
+  function onHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    const startY = event.clientY;
+    const startHeight = sheetHeight;
+    let moved = false;
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    const move = (e: globalThis.PointerEvent) => {
+      if (Math.abs(e.clientY - startY) > 4) moved = true;
+      if (moved) setDragHeight(Math.min(viewport - 60, Math.max(160, startHeight + (startY - e.clientY))));
+    };
+    const up = (e: globalThis.PointerEvent) => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      if (!moved) return;
+      const final = Math.min(viewport - 60, Math.max(160, startHeight + (startY - e.clientY)));
+      const nearest = SNAPS.reduce((a, b) =>
+        Math.abs(snapHeight(a, viewport) - final) <= Math.abs(snapHeight(b, viewport) - final) ? a : b,
+      );
+      setSnap(nearest);
+      setDragHeight(null);
+      // El clic que sigue al arrastre no debe cambiar otra vez de posición.
+      target.dataset.dragged = "true";
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+  }
+
+  const routeSummary = search.data
+    ? `${formatKm(search.data.route_km)} km · ${search.data.fuel.label}`
+    : route.isPending
+      ? "Calculando la ruta…"
+      : route.isError
+        ? "No se pudo calcular la ruta"
+        : "Buscando gasolineras…";
 
   return (
-    <div className="relative h-dvh overflow-hidden">
-      <div className="absolute inset-0">
-        {route.data ? (
-          <RouteMapLazy
-            track={route.data.track.coordinates}
-            stations={stations}
-            stopKeys={stops}
-            focusedKey={focusedKey}
-            onStationSelect={setFocusedKey}
-            padding={{ top: topHeight + 12, bottom: panelHeight, left: 0, right: 0 }}
-          />
-        ) : (
-          <div className="size-full bg-map-land" />
-        )}
-      </div>
-
-      <div ref={topRef} className="absolute inset-x-3 top-3 flex flex-col items-start gap-2">
-        <header className="flex w-full items-center gap-3 rounded-card border border-rule bg-surface py-2 pr-2 pl-3.5 shadow-float">
-          <RouteGlyph />
-          <div className="min-w-0 flex-1">
-            <h1 className="m-0 truncate text-[17px] leading-tight font-bold">{routeTitle(source)}</h1>
-            <p className="m-0 mt-0.5 font-mono text-xs text-muted">
-              {search.data
-                ? `${formatKm(search.data.route_km)} km · ${search.data.fuel.label}`
-                : route.isPending
-                  ? "Calculando la ruta…"
-                  : "Buscando gasolineras…"}
-            </p>
-          </div>
-          <Link href="/" className={buttonClasses({ variant: "secondary" })}>
-            Editar
-          </Link>
-        </header>
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <h1 className="sr-only">{routeTitle(source)}</h1>
+      {/* Cabecera del ordenador: logo, búsqueda editable y frescura de los precios. */}
+      <header className="hidden items-start gap-5 border-b border-rule px-5 py-2.5 lg:flex">
+        <Link
+          href="/"
+          className="mt-2 shrink-0 text-ink no-underline"
+          aria-label="Gasolineras en Ruta, inicio"
+        >
+          <Logo />
+        </Link>
+        {searchBar("row")}
         {search.data ? (
-          <FreshnessPill
-            status={search.data.prices.status}
-            ageMinutes={search.data.prices.age_minutes ?? null}
-          />
+          <div className="mt-2 shrink-0">
+            <FreshnessPill
+              status={search.data.prices.status}
+              ageMinutes={search.data.prices.age_minutes ?? null}
+            />
+          </div>
         ) : null}
-      </div>
+      </header>
 
-      <section
-        ref={panelRef}
-        aria-labelledby="results-title"
-        className="absolute inset-x-0 bottom-0 flex max-h-[45dvh] flex-col gap-3 rounded-t-sheet border-t border-rule bg-surface px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-      >
-        <div>
-          <p className="m-0 font-mono text-[11px] font-semibold tracking-[0.1em] text-muted">
-            GASOLINERAS EN TU RUTA
-          </p>
-          <h2 id="results-title" className="m-0 mt-0.5 text-2xl leading-tight font-bold tracking-[-0.015em]">
-            Elige tus paradas
-          </h2>
+      <div className="relative flex min-h-0 flex-1">
+        <section
+          ref={panelRef}
+          aria-labelledby="results-title"
+          style={{ ["--sheet-h" as string]: `${sheetHeight}px` }}
+          className={`absolute inset-x-0 bottom-0 z-10 flex h-[var(--sheet-h)] flex-col rounded-t-sheet border-t border-rule bg-surface shadow-[0_-6px_22px_rgb(var(--shadow-color)/0.10)] lg:static lg:z-auto lg:h-auto lg:w-[480px] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-r lg:shadow-none xl:w-[520px] ${
+            dragHeight === null ? "transition-[height] duration-200 motion-reduce:transition-none" : ""
+          }`}
+        >
+          <button
+            type="button"
+            aria-label={snap === "full" ? "Reducir la lista" : "Ampliar la lista"}
+            className="mx-auto flex h-6 w-20 shrink-0 cursor-grab touch-none items-center justify-center lg:hidden"
+            onPointerDown={onHandlePointerDown}
+            onClick={(e) => {
+              if (e.currentTarget.dataset.dragged) {
+                delete e.currentTarget.dataset.dragged;
+                return;
+              }
+              setSnap((s) => SNAPS[(SNAPS.indexOf(s) + 1) % SNAPS.length] ?? "half");
+            }}
+          >
+            <span className="block h-[5px] w-10 rounded-full bg-field-border" />
+          </button>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pb-4 lg:px-6 lg:pt-5">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="m-0 truncate font-mono text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
+                  {search.data
+                    ? `${routeTitle(source)} · ${formatKm(search.data.route_km)} km`
+                    : "Gasolineras en tu ruta"}
+                </p>
+                <h2
+                  id="results-title"
+                  className="m-0 mt-0.5 text-2xl leading-tight font-bold tracking-[-0.015em]"
+                >
+                  Elige tus paradas
+                </h2>
+              </div>
+              {search.isFetching && search.data ? (
+                <span role="status" className="shrink-0 pb-1 text-sm text-muted">
+                  Actualizando…
+                </span>
+              ) : null}
+            </div>
+
+            <ServerWarmupNotice client={client} />
+
+            {route.data ? (
+              <FilterBar
+                filters={filters}
+                onChange={(next) => {
+                  void setParams(next);
+                  setShowAll(false);
+                }}
+              />
+            ) : null}
+
+            {error ? (
+              <div
+                role="alert"
+                className="flex items-center gap-3 rounded-card border-[1.5px] border-ink p-3 text-[15px]"
+              >
+                <WarningIcon size={20} className="shrink-0 text-warn" />
+                <span className="flex-1">{error.message}</span>
+                <Button variant="secondary" onClick={retry}>
+                  Reintentar
+                </Button>
+              </div>
+            ) : route.isPending || (search.isPending && !search.data) ? (
+              <p role="status" className="m-0 text-muted">
+                {route.isPending ? "Calculando la ruta…" : "Buscando gasolineras en tu ruta…"}
+              </p>
+            ) : total === 0 ? (
+              <p className="m-0">
+                No hay gasolineras con este combustible a menos de {filters.radio} km de la ruta. Prueba a
+                ampliar el desvío{filters.abierta24h ? " o a quitar «Solo abiertas 24 h»" : ""}.
+              </p>
+            ) : (
+              <>
+                {search.data?.autonomy && filters.autonomia > 0 ? (
+                  <AutonomyWarnings segments={search.data.autonomy} autonomyKm={filters.autonomia} />
+                ) : null}
+                <SummaryStats
+                  stats={[
+                    {
+                      label: "Recomendadas",
+                      value: (
+                        <>
+                          {recommended.length}
+                          <span className="text-xs text-muted"> de {total}</span>
+                        </>
+                      ),
+                    },
+                    {
+                      label: "Mejor precio",
+                      accent: true,
+                      value: best !== null ? <PriceValue>{formatPrice(best)}</PriceValue> : "—",
+                    },
+                    {
+                      label: "Ahorro hasta",
+                      value:
+                        best !== null && maxPrice !== null ? (
+                          <PriceValue>{formatPriceDelta(maxPrice - best)}</PriceValue>
+                        ) : (
+                          "—"
+                        ),
+                    },
+                  ]}
+                />
+                <div role="group" aria-label="Ordenar" className="flex gap-5">
+                  {(
+                    [
+                      ["km", "Por km"],
+                      ["price", "Por precio"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={sort === value}
+                      onClick={() => setSort(value)}
+                      className={`h-9 border-b-[2.5px] text-[15px] ${
+                        sort === value
+                          ? "border-accent font-bold text-accent"
+                          : "border-transparent font-semibold text-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <ul
+                  className="m-0 list-none p-0"
+                  aria-label={showAll ? "Todas las gasolineras" : "Gasolineras recomendadas"}
+                >
+                  {shown.map((s, i) => {
+                    const key = stationKey(s);
+                    const name = formatStationName(s.name);
+                    return (
+                      <StationRow
+                        key={key}
+                        name={name}
+                        kmOnRoute={s.km_on_route}
+                        price={s.price}
+                        town={s.town ? formatStationName(s.town) : null}
+                        schedule={formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null)}
+                        cheapest={tones[i] === "best"}
+                        dimmed={tones[i] === "expensive"}
+                        inPlan={stops.has(key)}
+                        onTogglePlan={() => toggleStop(s)}
+                        onSelect={() => {
+                          setFocusedKey(key);
+                          if (!isDesktop) setSnap("peek");
+                        }}
+                        onHighlight={(on) => setHighlightedKey(on ? key : null)}
+                        highlighted={highlightedKey === key}
+                      />
+                    );
+                  })}
+                </ul>
+                {others.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((all) => !all)}
+                    className="self-start py-2 text-[15px] font-bold text-accent hover:text-accent-strong"
+                  >
+                    {showAll ? "Ver solo las recomendadas" : `Ver las ${total} gasolineras de la ruta`}
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
+
+          <div className="shrink-0 px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:border-t lg:border-rule lg:px-4 lg:py-3">
+            <TuRutaBar
+              stops={[...stops.values()].map((s) => ({ key: stationKey(s), kmOnRoute: s.km_on_route }))}
+              routeKm={search.data?.route_km ?? routeKm}
+            />
+          </div>
+        </section>
+
+        <div className="absolute inset-0 lg:static lg:min-w-0 lg:flex-1">
+          {route.data ? (
+            <RouteMapLazy
+              track={route.data.track.coordinates}
+              stations={recommended}
+              stopKeys={new Set(stops.keys())}
+              focusedKey={focusedKey}
+              highlightedKey={highlightedKey}
+              onStationSelect={setFocusedKey}
+              padding={
+                isDesktop
+                  ? { top: 0, bottom: 0, left: 0, right: 0 }
+                  : { top: topHeight + 12, bottom: panelHeight, left: 0, right: 0 }
+              }
+            />
+          ) : (
+            <div className="size-full bg-map-land" />
+          )}
         </div>
 
-        <ServerWarmupNotice client={client} />
-
-        {error ? (
-          <div
-            role="alert"
-            className="flex items-center gap-3 rounded-card border-[1.5px] border-ink p-3 text-[15px]"
-          >
-            <WarningIcon size={20} className="shrink-0 text-warn" />
-            <span className="flex-1">{error.message}</span>
-            <Button variant="secondary" onClick={retry}>
-              Reintentar
+        {/* Móvil: tarjeta de la ruta con "Cambiar" y la frescura de los precios, sobre el mapa. */}
+        <div ref={topRef} className="absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 lg:hidden">
+          <header className="flex w-full items-center gap-3 rounded-card border border-rule bg-surface py-2 pr-2 pl-3.5 shadow-float">
+            <RouteGlyph />
+            <div className="min-w-0 flex-1">
+              <p className="m-0 truncate text-[17px] leading-tight font-bold">{routeTitle(source)}</p>
+              <p className="m-0 mt-0.5 truncate font-mono text-xs text-muted">{routeSummary}</p>
+            </div>
+            <Button variant="secondary" onClick={() => setSearchOpen(true)}>
+              Cambiar
             </Button>
+          </header>
+          {search.data ? (
+            <FreshnessPill
+              status={search.data.prices.status}
+              ageMinutes={search.data.prices.age_minutes ?? null}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      <dialog
+        ref={searchDialog}
+        aria-labelledby="change-title"
+        onClose={() => setSearchOpen(false)}
+        className="m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-sheet border-0 bg-surface p-0 text-ink backdrop:bg-ink/40 lg:hidden"
+      >
+        <div className="flex flex-col gap-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-between">
+            <h2 id="change-title" className="m-0 text-xl font-bold">
+              Cambiar la búsqueda
+            </h2>
+            <button
+              type="button"
+              aria-label="Cerrar"
+              className="inline-flex size-11 items-center justify-center rounded-field hover:bg-rule-soft"
+              onClick={() => setSearchOpen(false)}
+            >
+              <CloseIcon size={20} />
+            </button>
           </div>
-        ) : route.isPending || search.isPending ? (
-          <p role="status" className="m-0 text-muted">
-            {route.isPending ? "Calculando la ruta…" : "Buscando gasolineras en tu ruta…"}
-          </p>
-        ) : stations.length === 0 ? (
-          <p className="m-0">
-            No hay gasolineras con este combustible cerca de la ruta. Prueba a ampliar la distancia máxima.
-          </p>
-        ) : (
-          <ul className="m-0 -mx-1 list-none overflow-y-auto px-1 p-0">
-            {stations.map((s, i) => {
-              const key = stationKey(s);
-              return (
-                <StationRow
-                  key={key}
-                  name={s.name}
-                  kmOnRoute={s.km_on_route}
-                  price={s.price}
-                  town={s.town}
-                  schedule={s.open_24h ? "24 h" : null}
-                  cheapest={tones[i] === "best"}
-                  dimmed={tones[i] === "expensive"}
-                  inPlan={stops.has(key)}
-                  onTogglePlan={() => toggleStop(key)}
-                  onSelect={() => setFocusedKey(key)}
-                />
-              );
-            })}
-          </ul>
-        )}
-      </section>
+          {searchBar("column", () => setSearchOpen(false))}
+        </div>
+      </dialog>
     </div>
   );
 }
 
-function Centered({ children }: { children: ReactNode }) {
-  return <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-10">{children}</main>;
+function PriceValue({ children }: { children: ReactNode }) {
+  return (
+    <>
+      {children}
+      <span className="text-xs"> €/L</span>
+    </>
+  );
 }
 
 /** Origen (círculo), trayecto y destino (cuadrado), como en el mapa. */

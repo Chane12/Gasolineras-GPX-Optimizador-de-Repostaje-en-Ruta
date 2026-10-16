@@ -126,6 +126,9 @@ export function useStationSearch(
       ),
     enabled: route !== null,
     staleTime: 10 * 60_000,
+    // Al cambiar un filtro se siguen viendo los resultados anteriores hasta que llegan los nuevos.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === (route?.key ?? null) ? previous : undefined,
   });
 }
 
