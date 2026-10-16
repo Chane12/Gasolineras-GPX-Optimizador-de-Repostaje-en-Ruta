@@ -31,7 +31,7 @@ uv run pytest -q api/tests
 docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api   # imagen de producción (Dockerfile en la raíz)
 ```
 
-Variables de entorno (en Render, en `/render.yaml`): `GASOLINERAS_CORS_ORIGINS` (dominios de la web separados por comas; por defecto `http://localhost:3000`), `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (Render: 3; Cloud Run: 1), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).
+Variables de entorno (en Render, en `/render.yaml`): `GASOLINERAS_CORS_ORIGINS` (dominios de la web separados por comas; por defecto `http://localhost:3000`), `GASOLINERAS_CORS_ORIGIN_REGEX` (patrón para las vistas previas de Vercel; el origen entero debe encajar), `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (Render: 3; Cloud Run: 1), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).
 
 ## Despliegue (Render)
 

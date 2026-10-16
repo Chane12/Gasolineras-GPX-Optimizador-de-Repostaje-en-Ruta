@@ -25,4 +25,5 @@ El proyecto no genera ingresos todavía. El propietario quiere coste 0 € hasta
 
 - La primera petición tras un rato sin uso será lenta (arranque en frío): el frontend debe mostrar un estado de carga claro y la API debe arrancar rápido (cargar el MITECO de forma diferida o en segundo plano).
 - Sin disco persistente garantizado: el fallback del MITECO va a `GASOLINERAS_DATA_DIR` (p. ej. `/tmp`) y puede perderse en cada arranque.
+- **El plan gratuito de Vercel (Hobby) es solo para uso no comercial** (añadido el 2026-10-16, al publicar la web de pruebas). Si se monetiza (Fase 4), habrá que pasar a Vercel Pro (~20 $/mes) o mover la web a otro alojamiento gratuito que admita uso comercial (p. ej. Cloudflare Pages). La web es un Next.js estándar, sin funciones propias de Vercel, para que mudarla sea sencillo.
 - Revisar esta decisión cuando haya tráfico real o monetización.

@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from gasolineras_api.main import DEFAULT_CORS_ORIGINS, cors_origins_from_env, create_app
+from gasolineras_api.main import DEFAULT_CORS_ORIGINS, cors_origin_regex_from_env, cors_origins_from_env, create_app
 from gasolineras_core.config import DEMO_GPX_PATH
 from gasolineras_core.optimizer import export
 
@@ -42,6 +42,35 @@ def test_cors_origins_from_env(monkeypatch):
 
     monkeypatch.delenv("GASOLINERAS_CORS_ORIGINS")
     assert cors_origins_from_env() == DEFAULT_CORS_ORIGINS
+
+
+PREVIEWS = r"https://gasolineras-web-[a-z0-9-]+-gasol\.vercel\.app"
+
+
+@pytest.mark.parametrize(
+    ("origin", "allowed"),
+    [
+        ("https://gasolineras-web-a1b2c3d4e-gasol.vercel.app", True),
+        ("https://gasolineras-web-git-feat-map-gasol.vercel.app", True),
+        ("https://otra-web-a1b2c3d4e-gasol.vercel.app", False),
+        ("https://gasolineras-web-a1b2c3d4e-gasol.vercel.app.evil.example", False),
+        ("http://gasolineras-web-a1b2c3d4e-gasol.vercel.app", False),
+    ],
+)
+def test_cors_regex_allows_only_matching_preview_origins(origin, allowed):
+    client = TestClient(create_app(warm_up=False, cors_origins=[WEB], cors_origin_regex=PREVIEWS))
+
+    response = client.get("/health", headers={"Origin": origin})
+
+    assert (response.headers.get("access-control-allow-origin") == origin) is allowed
+
+
+def test_cors_origin_regex_from_env(monkeypatch):
+    monkeypatch.setenv("GASOLINERAS_CORS_ORIGIN_REGEX", f" {PREVIEWS} ")
+    assert cors_origin_regex_from_env() == PREVIEWS
+
+    monkeypatch.delenv("GASOLINERAS_CORS_ORIGIN_REGEX")
+    assert cors_origin_regex_from_env() is None
 
 
 def test_large_responses_are_compressed():

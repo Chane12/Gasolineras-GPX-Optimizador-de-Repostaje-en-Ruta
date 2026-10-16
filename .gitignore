@@ -162,3 +162,5 @@ desktop.ini
 
 # uv.lock DEBE estar en el repo (determinismo de dependencias)
 # pyproject.toml DEBE estar en el repo
+# Vercel CLI (enlace local al proyecto)
+.vercel/
