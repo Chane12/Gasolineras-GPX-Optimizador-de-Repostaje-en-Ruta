@@ -6,6 +6,8 @@ import { THEME_COLOR } from "@/lib/theme-colors";
 
 import "./globals.css";
 
+import { Providers } from "./providers";
+
 // Fuentes alojadas en la propia web (next/font): sin llamadas a Google en tiempo de ejecución.
 const familjen = Familjen_Grotesk({ subsets: ["latin"], variable: "--font-familjen", display: "swap" });
 const plexMono = IBM_Plex_Mono({
@@ -31,7 +33,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="es" className={`${familjen.variable} ${plexMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

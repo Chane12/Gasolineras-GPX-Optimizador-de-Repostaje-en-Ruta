@@ -24,6 +24,10 @@ git diff --exit-code -- api/openapi.json \
 
 pnpm_web() { ./scripts/pnpm --silent -C web "$@"; }
 step "Web: dependencias (lockfile congelado)"; pnpm_web install --frozen-lockfile
+step "Web: tipos de la API al día (src/lib/api/schema.d.ts)"
+pnpm_web api:types >/dev/null
+git diff --exit-code -- web/src/lib/api/schema.d.ts \
+  || { echo "✗ Los tipos de la API de la web no coinciden con api/openapi.json: commitea web/src/lib/api/schema.d.ts regenerado."; exit 1; }
 step "Web: lint (eslint)";                     pnpm_web lint
 step "Web: tipos (tsc)";                       pnpm_web typecheck
 step "Web: formato (prettier)";                pnpm_web format:check

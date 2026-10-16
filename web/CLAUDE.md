@@ -25,7 +25,11 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
 ## Reglas
 
 - **TypeScript estricto** (`strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`). Nada de `any`; si hace falta, `unknown` y estrechar el tipo.
-- **Los tipos de la API se generan** desde `api/openapi.json` (paso 4 del plan); nunca se escriben a mano.
+- **API**: siempre a través de `src/lib/api/`.
+  - Los tipos se generan desde `api/openapi.json` con `./scripts/pnpm -C web api:types`, en `src/lib/api/schema.d.ts`. Nunca se escriben a mano, y `verify.sh` falla si no están al día.
+  - Las llamadas van con `unwrap(api.GET(...))`: devuelve los datos o lanza un `ApiError` con un mensaje en español, listo para mostrar.
+  - Los datos se cargan con TanStack Query (`src/lib/api/queries.ts`), que solo reintenta los fallos transitorios.
+  - La URL de la API sale de `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:8000`, la API en local con uvicorn; la API ya permite el origen `localhost:3000`).
 - **Diseño**: solo los tokens de `diseno.md`, a través del tema de Tailwind. Nada de colores, fuentes o radios sueltos. Nada de pastel, degradados ni emojis. El azul (`accent`) es el único color de acción y el rojo, solo el del hito.
 - **Accesibilidad**:
   - `<button>` y `<a href>` reales, con `aria-label` en los botones de solo icono.
@@ -34,7 +38,7 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
 - **Textos en español** (tuteo, vocabulario de carretera); identificadores y código en inglés (ADR 0004). Precios con coma decimal (`1,639 €/L`).
 - **Tests**:
   - `*.test.ts(x)` junto al código, con Testing Library y consultas por rol o texto, como lo usaría una persona.
-  - Sin red: la API se simula.
+  - Sin red: `fetch` está bloqueado en los tests. La API se simula con `fakeApi()` y se renderiza con `renderWithQuery()` (`src/test-utils.tsx`).
 - Estructura: `src/app/` (rutas, App Router), y más adelante `src/components/`, `src/lib/` (cliente de la API, utilidades) y `src/styles/` según se necesiten.
 
 ## Verificación
