@@ -32,3 +32,11 @@ docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api   #
 ```
 
 Variables de entorno: `GASOLINERAS_CORS_ORIGINS` (dominios de la web separados por comas; por defecto `http://localhost:3000`), `PORT` (8080 en Docker), `GASOLINERAS_TRUSTED_PROXY_HOPS` (1 detrás de Cloud Run), `GASOLINERAS_LOG_LEVEL` (INFO), `GASOLINERAS_DATA_DIR` (`/tmp` en Docker: copia de respaldo del MITECO).
+
+## Despliegue (Render)
+
+- Servicio `gasolineras-api` definido en `/render.yaml` (Blueprint): Docker, plan gratuito, Fráncfort, comprobación de salud en `/health`.
+- **Se redespliega solo** con cada commit en `main` que toque `api/`, `core/`, el `Dockerfile`, `uv.lock` o `render.yaml`. Los cambios de la web no lo despliegan.
+- Las variables de entorno van en `render.yaml`, nunca en el panel, para que el repo siga siendo la memoria.
+- El plan gratuito se duerme tras ~15 min sin uso y tarda ~50 s en despertar; la web lo explica con `ServerWarmupNotice`.
+- Tras desplegar, comprueba `/health` (los precios deberían pasar de `loading` a `fresh`) y el límite por IP con `X-Forwarded-For` falseado (`GASOLINERAS_TRUSTED_PROXY_HOPS`).

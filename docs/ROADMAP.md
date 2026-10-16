@@ -48,8 +48,8 @@ Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funci
 
 - [x] Planificación con el propietario: disposición, alcance, estilo y API en Render (`docs/web/plan.md`)
 - [x] Dirección visual aprobada (mezcla de A y C, sin pastel, paradas en el centro y autonomía opcional) y maquetas en `docs/web/maquetas/`
-- [ ] **Acción del propietario**: crear la cuenta gratuita de Render y dar acceso (bloquea el punto 1)
-- [ ] 1. API publicada en Render (`render.yaml`, CORS, `TRUSTED_PROXY_HOPS=1`)
+- [x] **Acción del propietario**: crear la cuenta gratuita de Render (2026-10-16)
+- [ ] 1. API publicada en Render: `render.yaml` hecho; falta que el propietario aplique el Blueprint en el panel (New → Blueprint) y comprobar el despliegue
 - [x] 2. `web/` con Next.js 16 + TypeScript 6 estricto + pnpm 12; Node 24 propio en `.tools/` (`scripts/setup-node.sh`, `scripts/pnpm`); `web/CLAUDE.md`; `verify.sh` y CI cubren la web (lint, tipos, formato, tests, build); dependencias con ≥ 7 días de antigüedad y scripts de instalación bloqueados
 - [x] 3. Sistema de diseño en código: tokens claro/oscuro en `globals.css` (paleta de Tailwind desactivada; un test impide colores sueltos), fuentes con `next/font`, componentes base (botones, hito, placa de precio, fila de gasolinera, resumen, frescura de precios), formato en español y catálogo en `/diseno`
 - [x] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en `verify.sh`), `openapi-fetch` + TanStack Query (reintenta solo fallos transitorios), errores en español y aviso de servidor despertando / no disponible con "Reintentar"

@@ -1,0 +1,34 @@
+# Blueprint de Render: la API (FastAPI) en el plan gratuito (ADR 0002, docs/web/plan.md).
+# Se aplica una vez desde el panel de Render (New → Blueprint → este repo). A partir de ahí, cada
+# commit en main que toque la API o el motor la vuelve a desplegar sola.
+services:
+  - type: web
+    name: gasolineras-api
+    runtime: docker
+    repo: https://github.com/Chane12/Gasolineras-GPX-Optimizador-de-Repostaje-en-Ruta
+    branch: main
+    plan: free
+    region: frankfurt # la más cercana a España en el plan gratuito
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - api/**
+        - core/**
+        - Dockerfile
+        - .dockerignore
+        - pyproject.toml
+        - uv.lock
+        - render.yaml
+    envVars:
+      # Dominios de la web que pueden llamar a la API desde el navegador (separados por comas).
+      # De momento, la web en local; se añadirá el de Vercel al publicarla.
+      - key: GASOLINERAS_CORS_ORIGINS
+        value: http://localhost:3000
+      # Render pone un proxy delante: la IP real del cliente es la última de X-Forwarded-For.
+      - key: GASOLINERAS_TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: GASOLINERAS_LOG_LEVEL
+        value: INFO
