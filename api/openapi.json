@@ -1136,6 +1136,28 @@
         ]
       }
     },
+    "/route/demo": {
+      "get": {
+        "description": "Ruta de ejemplo: los puertos de la Sierra de Gredos (la misma demo que la app Streamlit).",
+        "operationId": "route_demo_route_demo_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Route Demo",
+        "tags": [
+          "ruta"
+        ]
+      }
+    },
     "/route/gpx": {
       "post": {
         "description": "Lee la ruta de un archivo GPX subido por el usuario.",

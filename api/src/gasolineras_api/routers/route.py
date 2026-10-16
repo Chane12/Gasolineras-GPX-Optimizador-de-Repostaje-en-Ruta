@@ -1,6 +1,7 @@
 """Route input: origin/destination text or GPX upload → validated track."""
 
 import logging
+from functools import cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -8,6 +9,7 @@ from shapely.geometry import LineString
 
 from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
 from gasolineras_api.schemas import ErrorResponse, LineStringGeometry, Place, RouteResponse, RouteTextRequest
+from gasolineras_core.config import DEMO_GPX_PATH
 from gasolineras_core.ingestion import geocoder
 from gasolineras_core.ingestion.gpx_parser import parse_gpx_track, validate_gpx_track
 
@@ -83,3 +85,15 @@ def route_from_gpx(file: Annotated[UploadFile, File(description="Archivo .gpx co
 
     track = _validated(track)
     return RouteResponse(track=LineStringGeometry.from_shapely(track), point_count=len(track.coords))
+
+
+@cache
+def _demo_route() -> RouteResponse:
+    track = parse_gpx_track(DEMO_GPX_PATH.read_bytes(), name=DEMO_GPX_PATH.name)
+    return RouteResponse(track=LineStringGeometry.from_shapely(track), point_count=len(track.coords))
+
+
+@router.get("/demo", response_model=RouteResponse, dependencies=[Depends(rate_limited("default"))])
+def route_demo() -> RouteResponse:
+    """Ruta de ejemplo: los puertos de la Sierra de Gredos (la misma demo que la app Streamlit)."""
+    return _demo_route()

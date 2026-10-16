@@ -118,8 +118,21 @@ class TestRouteFromGpx:
         assert client.post("/route/gpx").status_code == 422
 
 
+class TestRouteDemo:
+    def test_returns_the_gredos_track(self, client):
+        response = client.get("/route/demo")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["point_count"] == len(body["track"]["coordinates"]) > 100
+        lon, lat = body["track"]["coordinates"][0]
+        assert -6 < lon < -4 and 39.5 < lat < 41  # Sierra de Gredos
+        assert body["origin"] is None
+
+
 def test_openapi_documents_route_endpoints_and_errors(client):
     paths = client.get("/openapi.json").json()["paths"]
 
     assert set(paths["/route/text"]["post"]["responses"]) >= {"200", "400", "422", "503"}
     assert "413" in paths["/route/gpx"]["post"]["responses"]
+    assert "200" in paths["/route/demo"]["get"]["responses"]
