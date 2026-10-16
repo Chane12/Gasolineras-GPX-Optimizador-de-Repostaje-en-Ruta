@@ -5,6 +5,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import {
   type PointerEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -18,6 +19,7 @@ import { Button, buttonClasses } from "@/components/button";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { CloseIcon, WarningIcon } from "@/components/icons";
+import { PassingTimeOptions } from "@/components/passing-time-options";
 import { RefuelPlanner } from "@/components/refuel-planner";
 import { RouteSearchBar } from "@/components/route-search-bar";
 import { Logo } from "@/components/site-header";
@@ -33,6 +35,7 @@ import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
 import { plateTones, type Station, stationKey } from "@/lib/map/geo";
 import { normalizeOptions, serializeSearch } from "@/lib/search-params";
 import { formatSchedule, formatStationName } from "@/lib/stations";
+import { type PassingStatus, usePassingTime } from "@/lib/use-passing-time";
 import { placeValueFrom } from "@/lib/use-place-check";
 
 import { RouteMapLazy } from "./route-map-lazy";
@@ -98,6 +101,8 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   const { params, setParams, source, route, routeKm, routeForSearch, search, recommended, others, stops } =
     useRouteData(client);
   const isDesktop = useIsDesktop();
+  const passing = usePassingTime();
+  const { statusOf } = passing;
 
   // La ficha abierta va en la URL: "atrás" vuelve a la lista y el enlace se puede compartir.
   const [selectedKey, setSelectedKey] = useQueryState(
@@ -146,8 +151,23 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   const detours = useDetours(routeForSearch, detourTargets, client);
 
   const allStations = useMemo(() => [...recommended, ...others], [recommended, others]);
+  // "Abierta cuando pases": hora de paso y si estará abierta (solo si se activó).
+  const passingByKey = useMemo(() => {
+    const map = new Map<string, PassingStatus>();
+    for (const s of allStations) {
+      const status = statusOf(s);
+      if (status) map.set(stationKey(s), status);
+    }
+    return map;
+  }, [allStations, statusOf]);
+  const closedWhenPassing = useCallback(
+    (key: string) => passingByKey.get(key)?.open === false,
+    [passingByKey],
+  );
   const shown = useMemo(() => {
-    const list = showAll ? [...recommended, ...others] : [...recommended];
+    const list = (showAll ? [...recommended, ...others] : [...recommended]).filter(
+      (s) => !(passing.settings.hideClosed && closedWhenPassing(stationKey(s))),
+    );
     const detourOf = (s: Station) => detours.get(stationKey(s))?.km ?? Number.POSITIVE_INFINITY;
     return list.sort((a, b) =>
       sort === "km"
@@ -156,7 +176,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
           ? a.price - b.price
           : detourOf(a) - detourOf(b) || a.km_on_route - b.km_on_route,
     );
-  }, [recommended, others, showAll, sort, detours]);
+  }, [recommended, others, showAll, sort, detours, passing.settings.hideClosed, closedWhenPassing]);
   const tones = useMemo(() => plateTones(shown), [shown]);
 
   // En el mapa llevan placa las recomendadas y, aunque no lo sean, las paradas y la elegida; el resto, punto.
@@ -343,6 +363,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 }
                 fuelLabel={search.data.fuel.label}
                 priceAgeMinutes={search.data.prices.age_minutes ?? null}
+                passingNote={passingNote(passingByKey.get(stationKey(selected)))}
               />
             ) : (
               <>
@@ -380,12 +401,14 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 ) : null}
 
                 {search.data ? (
-                  <AdvancedOptions>
+                  <AdvancedOptions active={passing.settings.enabled ? 1 : 0}>
+                    <PassingTimeOptions settings={passing.settings} onChange={passing.update} />
                     <RefuelPlanner
                       stations={allStations}
                       routeKm={search.data.route_km}
                       detourKm={(key) => detours.get(key)?.km ?? null}
                       defaultAutonomyKm={filters.autonomia}
+                      exclude={closedWhenPassing}
                       onUse={(keys) => {
                         const byKey = new Map(allStations.map((st) => [stationKey(st), st]));
                         stops.replaceAll(keys.map((k) => byKey.get(k)).filter((st): st is Station => !!st));
@@ -485,6 +508,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                             town={s.town ? formatStationName(s.town) : null}
                             schedule={formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null)}
                             detourKm={detours.get(key)?.km ?? null}
+                            note={passingNote(passingByKey.get(key))}
                             cheapest={tones[i] === "best"}
                             dimmed={tones[i] === "expensive"}
                             inPlan={stops.keys.has(key)}
@@ -587,6 +611,17 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
       </dialog>
     </div>
   );
+}
+
+const clock = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+/** Texto de "Abierta cuando pases" para una gasolinera. */
+function passingNote(status: PassingStatus | undefined): { text: string; warn: boolean } | null {
+  if (!status) return null;
+  const time = clock.format(status.eta);
+  if (status.open === false) return { text: `Cerrada al pasar (≈ ${time})`, warn: true };
+  if (status.open === true) return { text: `Abierta al pasar (≈ ${time})`, warn: false };
+  return { text: `Pasas hacia las ${time}: comprueba el horario`, warn: false };
 }
 
 function PriceValue({ children }: { children: ReactNode }) {
