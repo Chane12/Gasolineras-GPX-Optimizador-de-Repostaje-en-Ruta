@@ -77,8 +77,16 @@ export const RECOMMENDED_CHEAPEST = 4;
 /** Tramos por ruta para "la más barata de cada tramo": con 4 más baratas salen unas 8–10 recomendadas. */
 const SEGMENTS_PER_ROUTE = 6;
 
+/** Cuántas recomendadas ver (opciones avanzadas, 10e): "normal" son unas 8. */
+export type Density = "few" | "normal" | "many";
+export const DENSITY_RULES: Record<Density, { topN: number; segments: number }> = {
+  few: { topN: 3, segments: 3 },
+  normal: { topN: RECOMMENDED_CHEAPEST, segments: SEGMENTS_PER_ROUTE },
+  many: { topN: 6, segments: 10 },
+};
+
 /** Longitud del tramo (km, en decenas, dentro de los límites de la API) según lo larga que sea la ruta. */
-export function autoSegmentKm(routeKm: number): number {
-  const rounded = Math.round(routeKm / SEGMENTS_PER_ROUTE / 10) * 10;
+export function autoSegmentKm(routeKm: number, segments = SEGMENTS_PER_ROUTE): number {
+  const rounded = Math.round(routeKm / segments / 10) * 10;
   return Math.min(300, Math.max(10, rounded));
 }

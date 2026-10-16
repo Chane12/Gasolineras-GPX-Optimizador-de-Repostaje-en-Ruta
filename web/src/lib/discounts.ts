@@ -58,31 +58,47 @@ export function applyDiscounts<T extends Station>(
   };
 }
 
-/**
- * Recomendadas y resto con los descuentos aplicados. Las recomendadas se vuelven a elegir sobre el precio que
- * pagará el usuario, con la misma regla que la API: las `topN` más baratas y la más barata de cada tramo de
- * `segmentKm` km.
- */
-export function withDiscounts(
-  recommended: readonly Station[],
-  others: readonly Station[],
-  discounts: readonly Discount[],
-  rule: { topN: number; segmentKm: number },
-): { recommended: PricedStation[]; others: PricedStation[] } {
-  if (!discounts.some(isValidDiscount)) return { recommended: [...recommended], others: [...others] };
-  const all = [...recommended, ...others].map((s) => applyDiscounts(s, discounts));
-  const chosen = new Set<PricedStation>([...all].sort((a, b) => a.price - b.price).slice(0, rule.topN));
+/** Regla de las recomendadas (la misma que usa la API): las `topN` más baratas y la más barata de cada tramo. */
+export interface RecommendationRule {
+  topN: number;
+  segmentKm: number;
+}
+
+/** Elige las recomendadas de una lista con la regla dada. */
+export function recommend<T extends Station>(stations: readonly T[], rule: RecommendationRule): Set<T> {
+  const chosen = new Set<T>([...stations].sort((a, b) => a.price - b.price).slice(0, rule.topN));
   if (rule.segmentKm > 0) {
-    const bySegment = new Map<number, PricedStation>();
-    for (const s of all) {
+    const bySegment = new Map<number, T>();
+    for (const s of stations) {
       const segment = Math.floor(s.km_on_route / rule.segmentKm);
       const best = bySegment.get(segment);
       if (!best || s.price < best.price) bySegment.set(segment, s);
     }
     bySegment.forEach((s) => chosen.add(s));
   }
+  return chosen;
+}
+
+/**
+ * Recomendadas y resto con las preferencias del usuario (opciones avanzadas): sus descuentos y las marcas
+ * que no quiere. Si hay alguna, las recomendadas se vuelven a elegir con los precios que pagará y sin esas
+ * marcas, con la misma regla que la API; si no, se dejan las de la API.
+ */
+export function personalize(
+  recommended: readonly Station[],
+  others: readonly Station[],
+  preferences: { discounts: readonly Discount[]; excludedBrands: readonly string[] },
+  rule: RecommendationRule,
+): { recommended: PricedStation[]; others: PricedStation[] } {
+  const excluded = preferences.excludedBrands.filter((b) => b.trim());
+  const hasDiscounts = preferences.discounts.some(isValidDiscount);
+  if (!hasDiscounts && excluded.length === 0) return { recommended: [...recommended], others: [...others] };
+  const pool = [...recommended, ...others]
+    .filter((s) => !excluded.some((brand) => matchesBrand(s.name, brand)))
+    .map((s) => applyDiscounts(s, preferences.discounts));
+  const chosen = recommend(pool, rule);
   return {
-    recommended: [...chosen].sort((a, b) => a.km_on_route - b.km_on_route),
-    others: all.filter((s) => !chosen.has(s)),
+    recommended: pool.filter((s) => chosen.has(s)).sort((a, b) => a.km_on_route - b.km_on_route),
+    others: pool.filter((s) => !chosen.has(s)),
   };
 }

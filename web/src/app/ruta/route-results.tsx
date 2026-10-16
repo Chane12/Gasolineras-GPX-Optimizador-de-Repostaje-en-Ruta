@@ -19,6 +19,7 @@ import { Button, buttonClasses } from "@/components/button";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { CloseIcon, WarningIcon } from "@/components/icons";
+import { DensityOptions, ExcludedBrandsOptions } from "@/components/brand-and-density-options";
 import { DiscountsOptions } from "@/components/discounts-options";
 import { MySideOptions } from "@/components/my-side-options";
 import { PassingTimeOptions } from "@/components/passing-time-options";
@@ -36,8 +37,14 @@ import { type RouteSource, routeSourceKey } from "@/lib/api/queries";
 import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
 import { plateTones, type Station, stationKey } from "@/lib/map/geo";
 import { normalizeOptions, serializeSearch } from "@/lib/search-params";
-import { autoSegmentKm, formatSchedule, formatStationName, RECOMMENDED_CHEAPEST } from "@/lib/stations";
-import { type PricedStation, withDiscounts } from "@/lib/discounts";
+import {
+  autoSegmentKm,
+  DENSITY_RULES,
+  type Density,
+  formatSchedule,
+  formatStationName,
+} from "@/lib/stations";
+import { personalize, type PricedStation } from "@/lib/discounts";
 import { type RoadSide, roadSides } from "@/lib/road-side";
 import { useDiscounts } from "@/lib/use-discounts";
 import { useStoredState } from "@/lib/use-stored-state";
@@ -104,6 +111,9 @@ type Sort = "km" | "price" | "detour";
  * En el ordenador, panel a la izquierda y mapa a la derecha; en el móvil, mapa con una hoja deslizable.
  */
 export function RouteResults({ client = api }: { client?: ApiClient }) {
+  // Opciones avanzadas guardadas en el dispositivo (10e): cuántas recomendadas y marcas que no se quieren.
+  const [density, setDensity] = useStoredState<Density>("gasolineras:recomendadas", "normal");
+  const [excludedBrands, setExcludedBrands] = useStoredState<string[]>("gasolineras:marcas-fuera", []);
   const {
     params,
     setParams,
@@ -115,16 +125,21 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
     recommended: rawRecommended,
     others: rawOthers,
     stops,
-  } = useRouteData(client);
+  } = useRouteData(client, density);
   // Mis descuentos (10c): precios que pagará el usuario; una gasolinera puede subir a recomendada.
   const discounts = useDiscounts();
   const { recommended, others } = useMemo(
     () =>
-      withDiscounts(rawRecommended, rawOthers, discounts.discounts, {
-        topN: RECOMMENDED_CHEAPEST,
-        segmentKm: autoSegmentKm(routeKm),
-      }),
-    [rawRecommended, rawOthers, discounts.discounts, routeKm],
+      personalize(
+        rawRecommended,
+        rawOthers,
+        { discounts: discounts.discounts, excludedBrands },
+        {
+          topN: DENSITY_RULES[density].topN,
+          segmentKm: autoSegmentKm(routeKm, DENSITY_RULES[density].segments),
+        },
+      ),
+    [rawRecommended, rawOthers, discounts.discounts, excludedBrands, density, routeKm],
   );
   const isDesktop = useIsDesktop();
   const passing = usePassingTime();
@@ -454,7 +469,13 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
 
                 {search.data ? (
                   <AdvancedOptions
-                    active={(passing.settings.enabled ? 1 : 0) + discounts.active + (onlyMySide ? 1 : 0)}
+                    active={
+                      (passing.settings.enabled ? 1 : 0) +
+                      discounts.active +
+                      (onlyMySide ? 1 : 0) +
+                      (excludedBrands.length > 0 ? 1 : 0) +
+                      (density !== "normal" ? 1 : 0)
+                    }
                   >
                     <DiscountsOptions
                       discounts={discounts.discounts}
@@ -463,6 +484,12 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                     />
                     <PassingTimeOptions settings={passing.settings} onChange={passing.update} />
                     <MySideOptions enabled={onlyMySide} onChange={setOnlyMySide} />
+                    <ExcludedBrandsOptions
+                      brands={excludedBrands}
+                      onChange={setExcludedBrands}
+                      suggestions={brandSuggestions(allStations)}
+                    />
+                    <DensityOptions density={density} onChange={setDensity} />
                     <RefuelPlanner
                       stations={allStations}
                       routeKm={search.data.route_km}
