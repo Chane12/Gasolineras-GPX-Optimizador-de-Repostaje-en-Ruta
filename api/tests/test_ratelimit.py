@@ -62,6 +62,11 @@ class TestClientIp:
         request = make_request("10.0.0.1", forwarded="6.6.6.6, 203.0.113.7")
         assert client_ip(request, trusted_hops=1) == "203.0.113.7"
 
+    def test_behind_render_takes_the_third_address_from_the_right(self):
+        # Real header seen on Render (2026-10-16): client-supplied, real client, Cloudflare, internal LB.
+        request = make_request("10.197.182.121", forwarded="6.6.6.6,93.156.201.87, 104.22.7.42, 10.197.182.121")
+        assert client_ip(request, trusted_hops=3) == "93.156.201.87"
+
     def test_without_forwarded_header_falls_back_to_the_peer(self):
         assert client_ip(make_request("10.0.0.1"), trusted_hops=1) == "10.0.0.1"
 

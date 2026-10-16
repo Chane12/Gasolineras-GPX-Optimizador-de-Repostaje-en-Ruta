@@ -78,7 +78,7 @@ Comportamientos clave:
 
 ## Orden de trabajo (un PR por punto)
 
-1. **API en Render**: `render.yaml`, variables (`GASOLINERAS_CORS_ORIGINS`, `GASOLINERAS_TRUSTED_PROXY_HOPS=1`) y comprobación de `/health`. *Bloqueado hasta que el propietario cree la cuenta de Render.*
+1. **API en Render**: `render.yaml`, variables (`GASOLINERAS_CORS_ORIGINS`, `GASOLINERAS_TRUSTED_PROXY_HOPS=3`) y comprobación de `/health`.
 2. **Estructura de `web/`**: Next.js + TypeScript estricto, lint y formato, `web/CLAUDE.md`, job de CI para la web y `verify.sh` ampliado.
 3. **Sistema de diseño en código**: tokens de `diseno.md` en Tailwind (claro y oscuro), fuentes y componentes base (botón, campo, hito, placa de precio, fila de gasolinera, pestañas, píldora de frescura).
 4. **Cliente de la API**: tipos generados desde `api/openapi.json` (comprobados en el CI), `openapi-fetch` + TanStack Query, aviso de servidor despertando y errores en español.

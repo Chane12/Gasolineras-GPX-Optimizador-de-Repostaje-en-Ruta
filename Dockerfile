@@ -1,7 +1,7 @@
 # API de Gasolineras en Ruta (FastAPI + gasolineras_core). Contenedor estándar: Cloud Run, Render… (ADR 0002).
 #   docker build -t gasolineras-api .
 #   docker run -p 8080:8080 gasolineras-api      → http://localhost:8080/docs
-# Variables: PORT (8080), GASOLINERAS_TRUSTED_PROXY_HOPS (1 detrás de Cloud Run), GASOLINERAS_LOG_LEVEL (INFO).
+# Variables: PORT (8080), GASOLINERAS_TRUSTED_PROXY_HOPS (Render: 3; Cloud Run: 1), GASOLINERAS_LOG_LEVEL (INFO).
 
 FROM python:3.11-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.10.12 /uv /usr/local/bin/uv
