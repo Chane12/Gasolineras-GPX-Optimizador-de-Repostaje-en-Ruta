@@ -731,6 +731,12 @@
             "title": "Fuel",
             "type": "string"
           },
+          "include_others": {
+            "default": false,
+            "description": "Devuelve también el resto de gasolineras del corredor con este combustible (other_stations)",
+            "title": "Include Others",
+            "type": "boolean"
+          },
           "max_detour_km": {
             "default": 5,
             "description": "Distancia máxima a la ruta (km)",
@@ -805,6 +811,21 @@
               }
             ],
             "title": "Max Price In Corridor"
+          },
+          "other_stations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Station"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resto de gasolineras del corredor con este combustible, por km (solo si include_others)",
+            "title": "Other Stations"
           },
           "prices": {
             "$ref": "#/components/schemas/PricesStatus"

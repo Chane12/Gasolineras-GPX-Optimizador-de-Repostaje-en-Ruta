@@ -67,6 +67,11 @@ def _station(row: Any, lon: float, lat: float, max_price: float | None) -> Stati
     )
 
 
+def _stations(gdf: Any, max_price: float | None) -> list[Station]:
+    points = gdf.geometry.to_crs(CRS_WGS84) if not gdf.empty else gdf.geometry
+    return [_station(row, point.x, point.y, max_price) for (_, row), point in zip(gdf.iterrows(), points, strict=True)]
+
+
 @router.post(
     "/search",
     response_model=SearchResponse,
@@ -103,15 +108,12 @@ def search(body: SearchRequest, catalogue: Annotated[PriceCatalogue, Depends(get
             only_24h=body.only_24h,
             include_all_on_route=body.all_on_route,
             autonomy_km=float(body.autonomy_km),
+            include_others=body.include_others,
         ),
     )
 
-    selected = result.stations
-    points = selected.geometry.to_crs(CRS_WGS84) if not selected.empty else selected.geometry
-    station_list = [
-        _station(row, point.x, point.y, result.max_price_in_corridor)
-        for (_, row), point in zip(selected.iterrows(), points, strict=True)
-    ]
+    station_list = _stations(result.stations, result.max_price_in_corridor)
+    others = _stations(result.others, result.max_price_in_corridor) if result.others is not None else None
     autonomy = (
         [
             AutonomySegment(
@@ -136,5 +138,6 @@ def search(body: SearchRequest, catalogue: Annotated[PriceCatalogue, Depends(get
         corridor_station_count=result.corridor_count,
         max_price_in_corridor=result.max_price_in_corridor,
         stations=station_list,
+        other_stations=others,
         autonomy=autonomy,
     )

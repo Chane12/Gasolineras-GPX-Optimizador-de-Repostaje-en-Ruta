@@ -545,6 +545,12 @@ export interface components {
              */
             fuel: "gasolina_95" | "gasolina_95_premium" | "gasolina_98" | "diesel" | "diesel_premium" | "glp" | "gnc" | "gnl" | "gasoil_b" | "gasolina_95_e10" | "gasolina_98_e10" | "hidrogeno";
             /**
+             * Include Others
+             * @description Devuelve también el resto de gasolineras del corredor con este combustible (other_stations)
+             * @default false
+             */
+            include_others: boolean;
+            /**
              * Max Detour Km
              * @description Distancia máxima a la ruta (km)
              * @default 5
@@ -586,6 +592,11 @@ export interface components {
             fuel: components["schemas"]["Fuel"];
             /** Max Price In Corridor */
             max_price_in_corridor?: number | null;
+            /**
+             * Other Stations
+             * @description Resto de gasolineras del corredor con este combustible, por km (solo si include_others)
+             */
+            other_stations?: components["schemas"]["Station"][] | null;
             prices: components["schemas"]["PricesStatus"];
             /**
              * Route Km
