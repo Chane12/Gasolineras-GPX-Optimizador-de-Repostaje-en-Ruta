@@ -67,17 +67,9 @@ export async function metricsInBrowser(points: readonly LonLat[], fetcher: typeo
 /** Distancia del desvío para decidir los puntos de antes y después (la misma que usa el servidor). */
 export const DETOUR_ANCHOR_M = 2000;
 
-/**
- * Puntos de la ruta `anchorM` metros antes y después de la gasolinera, en el sentido de la marcha
- * (proyección local en metros, de sobra a esta escala).
- */
-export function detourAnchors(
-  track: ReadonlyArray<readonly number[]>,
-  station: { lat: number; lon: number },
-  anchorM = DETOUR_ANCHOR_M,
-): { before: LonLat; after: LonLat } {
-  const meanLat = (track[0]?.[1] ?? station.lat) * (Math.PI / 180);
-  const kx = 111_320 * Math.cos(meanLat);
+/** El track en metros (proyección local, de sobra a esta escala) y lo recorrido hasta cada punto. */
+function measure(track: ReadonlyArray<readonly number[]>, refLat: number) {
+  const kx = 111_320 * Math.cos(refLat * (Math.PI / 180));
   const ky = 110_540;
   const pts = track.map((p) => [(p[0] ?? 0) * kx, (p[1] ?? 0) * ky] as const);
   const cumulative = [0];
@@ -86,6 +78,12 @@ export function detourAnchors(
     const [bx = 0, by = 0] = pts[i] ?? [];
     cumulative.push((cumulative[i - 1] ?? 0) + Math.hypot(bx - ax, by - ay));
   }
+  return { kx, ky, pts, cumulative };
+}
+
+/** Metros recorridos por la ruta hasta el punto más cercano a la gasolinera. */
+function alongTrack(geo: ReturnType<typeof measure>, station: { lat: number; lon: number }): number {
+  const { kx, ky, pts, cumulative } = geo;
   const x = station.lon * kx;
   const y = station.lat * ky;
   let best = Infinity;
@@ -103,6 +101,21 @@ export function detourAnchors(
       along = (cumulative[i] ?? 0) + t * Math.sqrt(len2);
     }
   }
+  return along;
+}
+
+/**
+ * Puntos de la ruta `anchorM` metros antes y después de la gasolinera, en el sentido de la marcha
+ * (proyección local en metros, de sobra a esta escala).
+ */
+export function detourAnchors(
+  track: ReadonlyArray<readonly number[]>,
+  station: { lat: number; lon: number },
+  anchorM = DETOUR_ANCHOR_M,
+): { before: LonLat; after: LonLat } {
+  const geo = measure(track, track[0]?.[1] ?? station.lat);
+  const { cumulative } = geo;
+  const along = alongTrack(geo, station);
   const total = cumulative.at(-1) ?? 0;
   const at = (distance: number): LonLat => {
     const target = Math.min(total, Math.max(0, distance));
@@ -116,6 +129,82 @@ export function detourAnchors(
     return [(a[0] ?? 0) + t * ((b[0] ?? 0) - (a[0] ?? 0)), (a[1] ?? 0) + t * ((b[1] ?? 0) - (a[1] ?? 0))];
   };
   return { before: at(along - anchorM), after: at(along + anchorM) };
+}
+
+/** Cuánto antes y después de cada parada se sale y se vuelve a la ruta en el GPX exportado. */
+export const SPLICE_ANCHOR_M = 1000;
+
+/**
+ * El track desviado por cada parada para el GPX: se sustituye el tramo de la ruta alrededor de cada
+ * gasolinera (desde `anchorM` antes hasta `anchorM` después) por el camino real por carretera que entra
+ * en ella. Las paradas a menos de 2 × `anchorM` entre sí van en la misma petición. Si OSRM no responde
+ * para alguna, devuelve `null` (el servidor lo intentará por su cuenta).
+ */
+export async function spliceStopsInBrowser(
+  track: ReadonlyArray<readonly number[]>,
+  stops: ReadonlyArray<{ lat: number; lon: number }>,
+  fetcher: typeof fetch = fetch,
+  anchorM = SPLICE_ANCHOR_M,
+): Promise<number[][] | null> {
+  if (track.length < 2 || stops.length === 0) return track.map((p) => [...p]);
+  const geo = measure(track, track[0]?.[1] ?? 0);
+  const { cumulative } = geo;
+  const lastIndex = track.length - 1;
+  // Índice del último punto del track a `distance` metros o antes / del primero a esa distancia o después.
+  const indexBefore = (distance: number) => {
+    let i = 0;
+    while (i < lastIndex && (cumulative[i + 1] ?? Infinity) <= distance) i++;
+    return i;
+  };
+  const indexAfter = (distance: number) => {
+    let i = lastIndex;
+    while (i > 0 && (cumulative[i - 1] ?? -Infinity) >= distance) i--;
+    return i;
+  };
+
+  const placed = stops
+    .map((stop) => ({ stop, along: alongTrack(geo, stop) }))
+    .sort((a, b) => a.along - b.along);
+  const groups: { from: number; to: number; stops: { lat: number; lon: number }[] }[] = [];
+  for (const { stop, along } of placed) {
+    const from = indexBefore(along - anchorM);
+    const to = Math.min(lastIndex, Math.max(from + 1, indexAfter(along + anchorM)));
+    const last = groups.at(-1);
+    if (last && from <= last.to) {
+      last.to = Math.max(last.to, to);
+      last.stops.push(stop);
+    } else {
+      groups.push({ from, to, stops: [stop] });
+    }
+  }
+
+  const pieces: number[][][] = [];
+  let next = 0;
+  for (const group of groups) {
+    const start = track[group.from] ?? [0, 0];
+    const end = track[group.to] ?? start;
+    let road: number[][];
+    try {
+      road = (
+        await routeInBrowser(
+          [
+            [start[0] ?? 0, start[1] ?? 0],
+            ...group.stops.map((s): LonLat => [s.lon, s.lat]),
+            [end[0] ?? 0, end[1] ?? 0],
+          ],
+          fetcher,
+        )
+      ).coordinates;
+    } catch {
+      return null;
+    }
+    pieces.push(track.slice(next, group.from + 1).map((p) => [...p]));
+    // Los extremos son puntos del track: el camino por carretera empieza y acaba en ellos.
+    pieces.push(road.slice(1, -1));
+    next = group.to;
+  }
+  pieces.push(track.slice(next).map((p) => [...p]));
+  return pieces.flat();
 }
 
 /** Desvío real (como el del servidor): ruta(antes → gasolinera → después) − ruta(antes → después). */
