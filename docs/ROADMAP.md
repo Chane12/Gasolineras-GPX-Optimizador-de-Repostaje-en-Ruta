@@ -44,7 +44,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 Hecho cuando iguala la funcionalidad de la app Streamlit **con el mismo acabado en el ordenador y en el móvil** (decisión del 2026-10-16: los dos igual de importantes; el modo sin conexión pasa a después del lanzamiento). **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-> **Retomar aquí (2026-10-16)**: hechos los puntos 1–6. La API está en Render (https://gasolineras-api-kwnx.onrender.com). La web tiene inicio, formulario, búsqueda en la URL y `/ruta` con el mapa y una lista provisional abajo. **El plan se revisó con el propietario el 2026-10-16**: ordenador y móvil valen lo mismo y cada pantalla se hace para los dos tamaños a la vez (ver "Listón de calidad" en `docs/web/plan.md`). **Siguiente tarea: el punto 7 (resultados en los dos tamaños: panel + mapa en el ordenador según `D-Escritorio` y hoja deslizable en el móvil según `D-Resultados`, más el script de capturas).** Notas:
+> **Retomar aquí (2026-10-16)**: hechos los puntos 1–6. La API está en Render (https://gasolineras-api-kwnx.onrender.com) y la web de pruebas en Vercel (https://gasolineras-web.vercel.app; cada PR, con vista previa). La web tiene inicio, formulario, búsqueda en la URL y `/ruta` con el mapa y una lista provisional abajo. **El plan se revisó con el propietario el 2026-10-16**: ordenador y móvil valen lo mismo y cada pantalla se hace para los dos tamaños a la vez (ver "Listón de calidad" en `docs/web/plan.md`). **Siguiente tarea: el punto 7 (resultados en los dos tamaños: panel + mapa en el ordenador según `D-Escritorio` y hoja deslizable en el móvil según `D-Resultados`, más el script de capturas).** Notas:
 > - La lista provisional está en `web/src/app/ruta/route-results.tsx`; las paradas viven solo en memoria hasta el punto 8. El mapa (`web/src/components/route-map/`) recibe `padding` con lo que tapan la tarjeta y la hoja, y encuadra la ruta en el hueco que queda.
 > - El OSRM público a veces limita las peticiones desde Render: `/detours` devuelve `complete: false`. La web debe volver a pedir solo los desvíos que falten, tras una pausa.
 > - Para probar la web contra la API publicada: `NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C web dev`.
@@ -64,11 +64,11 @@ Hecho cuando iguala la funcionalidad de la app Streamlit **con el mismo acabado 
 - [ ] 10. Inicio a dos columnas en el ordenador, "Editar" con el formulario relleno, y revisión visual completa (los dos tamaños, claro y oscuro)
 - [ ] 11. Páginas legales (aviso legal, privacidad, fuentes) y SEO
 - [ ] 12. Cierre: e2e Playwright de la demo en los dos tamaños, axe, presupuesto de rendimiento y lista de paridad completa
-- [ ] **Acción del propietario (recomendada)**: cuenta gratuita en Vercel para publicar la web de pruebas y probarla en un móvil real
+- [x] **Acción del propietario**: cuenta de Vercel y app de Vercel en GitHub (2026-10-16). Web de pruebas en https://gasolineras-web.vercel.app (sin indexar): `main` se publica solo y cada PR tiene vista previa (`web/vercel.json`, `web/CLAUDE.md`)
 
 ## Fase 3 — Lanzamiento
 
-- [ ] Despliegue: web en Vercel, API ya en Render (`render.yaml`) — ADR 0002. Al publicar la web: añadir su dominio a `GASOLINERAS_CORS_ORIGINS`
+- [ ] Lanzamiento: la web ya está en Vercel y la API en Render (ADR 0002); falta abrirla a buscadores (`SITE_INDEXABLE=true`) y, si hay dominio propio, añadirlo a `GASOLINERAS_CORS_ORIGINS`
 - [ ] Monitorización básica de errores y disponibilidad
 - [ ] Periodo en paralelo con Streamlit; después, retirar `legacy/streamlit/`
 - [ ] Después del lanzamiento: PWA y hoja de ruta sin conexión (Serwist, ADR 0008)
