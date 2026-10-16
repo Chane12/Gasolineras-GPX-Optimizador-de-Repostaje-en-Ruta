@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeOptions, routeSourceFrom, searchOptionsFrom, serializeSearch } from "./search-params";
+import {
+  normalizeOptions,
+  parseAsLatLon,
+  routeSourceFrom,
+  searchOptionsFrom,
+  serializeSearch,
+} from "./search-params";
 
 describe("search params", () => {
   it("writes a readable URL and leaves defaults out", () => {
@@ -73,6 +79,8 @@ describe("searchOptionsFrom", () => {
       searchOptionsFrom({
         origen: "Madrid",
         destino: "Valencia",
+        origenGeo: null,
+        destinoGeo: null,
         gpx: false,
         demo: false,
         combustible: "diesel",
@@ -91,6 +99,45 @@ describe("searchOptionsFrom", () => {
       only_24h: true,
       all_on_route: false,
       autonomy_km: 250,
+    });
+  });
+});
+
+describe("place coordinates in the URL", () => {
+  it("writes the picked points as lat,lon with 5 decimals and reads them back", () => {
+    const url = serializeSearch("/ruta", {
+      origen: "Madrid",
+      destino: "València",
+      origenGeo: { lat: 40.416775, lon: -3.70379 },
+      destinoGeo: { lat: 39.46975, lon: -0.37739 },
+    });
+    const params = new URL(url, "https://x.test").searchParams;
+
+    expect(params.get("origenGeo")).toBe("40.41678,-3.70379");
+    expect(parseAsLatLon.parse(params.get("destinoGeo") ?? "")).toEqual({ lat: 39.46975, lon: -0.37739 });
+  });
+
+  it("ignores broken or impossible coordinates", () => {
+    expect(parseAsLatLon.parse("abc")).toBeNull();
+    expect(parseAsLatLon.parse("40.4")).toBeNull();
+    expect(parseAsLatLon.parse("140,-3")).toBeNull();
+  });
+
+  it("passes the picked points to the route", () => {
+    expect(
+      routeSourceFrom({
+        demo: false,
+        gpx: false,
+        origen: "Madrid",
+        destino: "València",
+        origenGeo: { lat: 40.41678, lon: -3.70379 },
+        destinoGeo: null,
+      }),
+    ).toEqual({
+      kind: "text",
+      origin: "Madrid",
+      destination: "València",
+      originPoint: { lat: 40.41678, lon: -3.70379 },
     });
   });
 });

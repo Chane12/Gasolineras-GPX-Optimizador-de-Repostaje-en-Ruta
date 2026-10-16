@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, QueryClient, useQuery } from "@tanstack/react-query";
 
 import { loadGpx } from "@/lib/gpx-store";
 
@@ -46,11 +46,22 @@ export function useFuels(client: ApiClient = api) {
 
 /** De dónde sale la ruta: texto (origen/destino), el GPX guardado en el dispositivo o la demo. */
 export type RouteSource =
-  { kind: "text"; origin: string; destination: string } | { kind: "gpx" } | { kind: "demo" };
+  | {
+      kind: "text";
+      origin: string;
+      destination: string;
+      /** El lugar elegido en las sugerencias: la API no lo vuelve a buscar por nombre. */
+      originPoint?: { lat: number; lon: number };
+      destinationPoint?: { lat: number; lon: number };
+    }
+  | { kind: "gpx" }
+  | { kind: "demo" };
 
 /** Clave corta de la ruta para las cachés (el track entero es demasiado grande para una clave). */
 export function routeSourceKey(source: RouteSource): string {
-  return source.kind === "text" ? `text:${source.origin}→${source.destination}` : source.kind;
+  if (source.kind !== "text") return source.kind;
+  const at = (p?: { lat: number; lon: number }) => (p ? `@${p.lat},${p.lon}` : "");
+  return `text:${source.origin}${at(source.originPoint)}→${source.destination}${at(source.destinationPoint)}`;
 }
 
 export class MissingGpxError extends Error {
@@ -63,7 +74,14 @@ async function fetchRoute(client: ApiClient, source: RouteSource) {
   switch (source.kind) {
     case "text":
       return unwrap(
-        client.POST("/route/text", { body: { origin: source.origin, destination: source.destination } }),
+        client.POST("/route/text", {
+          body: {
+            origin: source.origin,
+            destination: source.destination,
+            origin_point: source.originPoint ?? null,
+            destination_point: source.destinationPoint ?? null,
+          },
+        }),
       );
     case "demo":
       return unwrap(client.GET("/route/demo"));
@@ -108,5 +126,40 @@ export function useStationSearch(
       ),
     enabled: route !== null,
     staleTime: 10 * 60_000,
+  });
+}
+
+export type PlaceSuggestion = Schemas["PlaceSuggestion"];
+
+/** Texto normalizado para comparar lugares: sin acentos, mayúsculas ni espacios de más. */
+export function normalizePlace(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+export const MIN_SUGGEST_CHARS = 2;
+
+export function placeSuggestionsQuery(text: string, client: ApiClient = api) {
+  const q = text.trim();
+  return {
+    queryKey: ["places", normalizePlace(q)],
+    queryFn: async () => (await unwrap(client.GET("/places/suggest", { params: { query: { q } } }))).places,
+    staleTime: 60 * 60_000,
+    // Si Photon no responde, simplemente no hay sugerencias: nada de reintentos mientras se escribe.
+    retry: false,
+  };
+}
+
+/** Sugerencias de lugares para lo que se lleva escrito (la espera entre teclas se aplica fuera). */
+export function usePlaceSuggestions(text: string, client: ApiClient = api) {
+  return useQuery({
+    ...placeSuggestionsQuery(text, client),
+    enabled: normalizePlace(text).length >= MIN_SUGGEST_CHARS,
+    placeholderData: keepPreviousData,
   });
 }

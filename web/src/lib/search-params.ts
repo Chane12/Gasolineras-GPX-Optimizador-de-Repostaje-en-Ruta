@@ -4,6 +4,7 @@
  * Los valores por defecto no se escriben en la URL.
  */
 import {
+  createParser,
   createSerializer,
   type inferParserType,
   parseAsBoolean,
@@ -47,9 +48,29 @@ export const LIMITS = {
   autonomiaKm: { min: 50, max: 2000 },
 } as const;
 
+export interface LatLon {
+  lat: number;
+  lon: number;
+}
+
+/** Punto "lat,lon" con 5 decimales (~1 m): el lugar elegido en las sugerencias, para no volver a buscarlo. */
+export const parseAsLatLon = createParser<LatLon>({
+  parse(value) {
+    const [lat, lon] = value.split(",").map(Number);
+    if (lat === undefined || lon === undefined || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon };
+  },
+  serialize: ({ lat, lon }) => `${lat.toFixed(5)},${lon.toFixed(5)}`,
+  eq: (a, b) => a.lat === b.lat && a.lon === b.lon,
+});
+
 export const searchParams = {
   origen: parseAsString,
   destino: parseAsString,
+  /** Coordenadas del origen elegido en las sugerencias (opcional). */
+  origenGeo: parseAsLatLon,
+  destinoGeo: parseAsLatLon,
   /** La ruta es el GPX guardado en el dispositivo (un archivo no cabe en la URL). */
   gpx: parseAsBoolean.withDefault(false),
   /** Ruta de ejemplo por la Sierra de Gredos. */
@@ -88,13 +109,21 @@ export type SearchState = inferParserType<typeof searchParams>;
 
 /** De dónde sale la ruta según la URL; null si falta (p. ej. un enlace a /ruta sin parámetros). */
 export function routeSourceFrom(
-  p: Pick<SearchState, "demo" | "gpx" | "origen" | "destino">,
+  p: Pick<SearchState, "demo" | "gpx" | "origen" | "destino"> &
+    Partial<Pick<SearchState, "origenGeo" | "destinoGeo">>,
 ): RouteSource | null {
   if (p.demo) return { kind: "demo" };
   if (p.gpx) return { kind: "gpx" };
   const origin = p.origen?.trim();
   const destination = p.destino?.trim();
-  return origin && destination ? { kind: "text", origin, destination } : null;
+  if (!origin || !destination) return null;
+  return {
+    kind: "text",
+    origin,
+    destination,
+    ...(p.origenGeo ? { originPoint: p.origenGeo } : {}),
+    ...(p.destinoGeo ? { destinationPoint: p.destinoGeo } : {}),
+  };
 }
 
 /** Opciones de /search a partir de la URL (con los valores fuera de rango ya corregidos). */

@@ -107,6 +107,30 @@ describe("RouteResults", () => {
     expect(mapProps.last?.focusedKey).toBe("1");
   });
 
+  it("sends the places picked from the suggestions so the API does not look them up again", async () => {
+    const bodies: unknown[] = [];
+    const client = fakeApi(async (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/route/text") {
+        bodies.push(await request.json());
+        return jsonResponse({ track, point_count: 2 });
+      }
+      if (path === "/search") return jsonResponse(searchResponse);
+      return jsonResponse({ status: "ok", prices: { status: "fresh" } });
+    });
+    renderAt("?origen=Madrid&destino=Val%C3%A8ncia&origenGeo=40.41678,-3.70379", client);
+
+    expect(await screen.findByText("352 km · Gasolina 95")).toBeInTheDocument();
+    expect(bodies).toEqual([
+      {
+        origin: "Madrid",
+        destination: "València",
+        origin_point: { lat: 40.41678, lon: -3.70379 },
+        destination_point: null,
+      },
+    ]);
+  });
+
   it("loads the sample route for the demo", async () => {
     const { client, requests } = api();
     renderAt("?demo=true", client);
