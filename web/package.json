@@ -19,7 +19,9 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
+    "idb-keyval": "^6.3.0",
     "next": "^16.4.0",
+    "nuqs": "^2.10.2",
     "openapi-fetch": "^0.17.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
