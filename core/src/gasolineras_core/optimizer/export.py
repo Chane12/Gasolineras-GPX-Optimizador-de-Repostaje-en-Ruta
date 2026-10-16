@@ -316,10 +316,14 @@ def enrich_gpx_with_stops(
     gdf_stops: gpd.GeoDataFrame,
     fuel_column: str = "",
     max_seconds: float | None = None,
+    splice: bool = True,
 ) -> str:
     """
     Inyecta las paradas de repostaje como Waypoints (<wpt>) dentro del GPX
     original y realiza Track Splicing via OSRM.
+
+    Con ``splice=False`` solo se añaden los waypoints: el track ya pasa por las gasolineras
+    (p. ej. porque el navegador calculó los desvíos).
 
     Returns
     -------
@@ -371,6 +375,9 @@ def enrich_gpx_with_stops(
         )
         gpx_obj.waypoints.append(wpt)
         paradas.append({"lon": lon, "lat": lat})
+
+    if not splice:
+        return gpx_obj.to_xml()
 
     # 2. Build KD-Tree from track points for nearest-neighbor splicing
     puntos_ref = []

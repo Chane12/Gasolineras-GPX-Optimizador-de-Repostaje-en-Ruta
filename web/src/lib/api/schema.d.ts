@@ -60,7 +60,8 @@ export interface paths {
          * Gpx
          * @description GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).
          *
-         *     Si el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera.
+         *     Si el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera. Con
+         *     `splice_detours: false` el track se deja como llega y solo se añaden los waypoints.
          */
         post: operations["gpx_export_gpx_post"];
         delete?: never;
@@ -349,6 +350,12 @@ export interface components {
              * @default Ruta con gasolineras
              */
             name: string;
+            /**
+             * Splice Detours
+             * @description Desviar el track por cada gasolinera con OSRM. `false` si el track ya pasa por ellas (la web calcula los desvíos en el navegador cuando el servidor no llega a OSRM)
+             * @default true
+             */
+            splice_detours: boolean;
             /** Stops */
             stops?: components["schemas"]["GpxStop"][];
             track: components["schemas"]["LineStringGeometry"];

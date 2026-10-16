@@ -312,6 +312,12 @@
             "title": "Name",
             "type": "string"
           },
+          "splice_detours": {
+            "default": true,
+            "description": "Desviar el track por cada gasolinera con OSRM. `false` si el track ya pasa por ellas (la web calcula los desvíos en el navegador cuando el servidor no llega a OSRM)",
+            "title": "Splice Detours",
+            "type": "boolean"
+          },
           "stops": {
             "items": {
               "$ref": "#/components/schemas/GpxStop"
@@ -1190,7 +1196,7 @@
     },
     "/export/gpx": {
       "post": {
-        "description": "GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).\n\nSi el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera.",
+        "description": "GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).\n\nSi el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera. Con\n`splice_detours: false` el track se deja como llega y solo se añaden los waypoints.",
         "operationId": "gpx_export_gpx_post",
         "requestBody": {
           "content": {

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { spliceStopsInBrowser } from "@/lib/browser-routing";
 import { type Station, stationKey } from "@/lib/map/geo";
 import { formatSchedule, formatStationName } from "@/lib/stations";
 
@@ -42,19 +43,29 @@ export function useGmapsUrl(
   });
 }
 
-/** El GPX de la ruta con las paradas como waypoints (nombre y precio), descargado como archivo. */
+/**
+ * El GPX de la ruta con las paradas como waypoints (nombre y precio), descargado como archivo. El desvío
+ * por cada gasolinera lo calcula el navegador (el servidor no siempre llega a OSRM, ADR 0005); si tampoco
+ * puede, se lo pide al servidor como antes.
+ */
 export async function downloadGpx(
   track: Track,
   stops: readonly Station[],
   name: string,
   client: ApiClient = api,
+  fetcher: typeof fetch = fetch,
 ): Promise<void> {
+  const included = stops.slice(0, MAX_GPX_STOPS);
+  const spliced = await spliceStopsInBrowser(track.coordinates, included, fetcher);
   const blob = await unwrap(
     client.POST("/export/gpx", {
       body: {
         name: name.slice(0, 120),
-        track: track as Schemas["GpxExportRequest"]["track"],
-        stops: stops.slice(0, 10).map((s) => ({
+        track: (spliced
+          ? { type: "LineString", coordinates: spliced }
+          : track) as Schemas["GpxExportRequest"]["track"],
+        splice_detours: spliced === null,
+        stops: included.map((s) => ({
           name: formatStationName(s.name).slice(0, 120),
           lat: s.lat,
           lon: s.lon,

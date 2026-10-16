@@ -286,6 +286,11 @@ class GpxExportRequest(BaseModel):
     track: LineStringGeometry
     stops: list[GpxStop] = Field(default_factory=list, max_length=10)
     name: str = Field(default="Ruta con gasolineras", max_length=120)
+    splice_detours: bool = Field(
+        default=True,
+        description="Desviar el track por cada gasolinera con OSRM. `false` si el track ya pasa por ellas "
+        "(la web calcula los desvíos en el navegador cuando el servidor no llega a OSRM)",
+    )
 
     @field_validator("track")
     @classmethod

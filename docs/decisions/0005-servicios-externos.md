@@ -41,5 +41,6 @@ Los servidores públicos de OSRM empezaron a rechazar las peticiones que salen d
 
 - **Ruta**: si `/route/text` responde 503, la web calcula la ruta **directamente desde el navegador** contra OSRM (admite CORS), con los puntos elegidos en las sugerencias o con el primer lugar que sugiere la API. Después sigue igual (`/search` valida la ruta). Un solo reintento.
 - **Desvíos**: si `/detours` no responde en 8 s o deja desvíos sin calcular, el navegador calcula los que faltan (como mucho 12 por tanda, de uno en uno), con el mismo método que el servidor.
+- **GPX con paradas** (añadido el mismo día): el navegador desvía el track por cada parada (una petición por parada, o por grupo de paradas a menos de 2 km) y lo manda a `/export/gpx` con `splice_detours: false`, para que el servidor solo añada los waypoints. Si el navegador tampoco llega a OSRM, el servidor lo intenta como antes. Aquí el navegador va primero, porque el servidor no avisa cuando le falla OSRM (deja el track pasando solo por la gasolinera).
 - Así las peticiones cuentan contra la conexión de cada usuario, como las de cualquier visitante de la web de OSRM. Se mantiene el uso moderado: pocas peticiones, tiempo máximo y el segundo servidor solo si falla el primero.
 - El punto 5 (OSRM propio o proveedor de pago) gana prioridad si el bloqueo a Render se mantiene: es la solución de fondo.

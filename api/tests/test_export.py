@@ -93,3 +93,22 @@ def test_gpx_without_stops_is_just_the_route(client):
 def test_too_many_gpx_stops_is_422(client):
     stops = [{"name": f"G{i}", "lat": 40.7, "lon": -4.5} for i in range(11)]
     assert client.post("/export/gpx", json={"track": TRACK, "stops": stops}).status_code == 422
+
+
+def test_gpx_without_splicing_keeps_the_track_and_adds_waypoints(client, monkeypatch):
+    # The browser already routed the track through the station: the server must not touch it (nor ask OSRM).
+    monkeypatch.setattr(export.requests, "get", lambda *a, **k: pytest.fail("no OSRM request expected"))
+    response = client.post(
+        "/export/gpx",
+        json={
+            "track": TRACK,
+            "stops": [{"name": "Repsol Ávila", "lat": 40.7, "lon": -4.5, "price": 1.559}],
+            "splice_detours": False,
+        },
+    )
+
+    assert response.status_code == 200
+    gpx = gpxpy.parse(response.text)
+    assert len(gpx.waypoints) == 1
+    points = [[p.longitude, p.latitude] for t in gpx.tracks for s in t.segments for p in s.points]
+    assert points == [list(c) for c in TRACK["coordinates"]]

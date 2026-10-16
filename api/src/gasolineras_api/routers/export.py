@@ -38,7 +38,8 @@ def gmaps_url(body: GmapsUrlRequest) -> GmapsUrlResponse:
 def gpx(body: GpxExportRequest) -> Response:
     """GPX con la ruta y las paradas como waypoints; el track se desvía por cada gasolinera (OSRM).
 
-    Si el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera.
+    Si el servicio de rutas no responde para una parada, el track solo pasa por la gasolinera. Con
+    `splice_detours: false` el track se deja como llega y solo se añaden los waypoints.
     """
     track = LineString(body.track.coordinates)
     stops = gpd.GeoDataFrame(
@@ -54,7 +55,11 @@ def gpx(body: GpxExportRequest) -> Response:
         crs=CRS_WGS84,
     )
     xml = export.enrich_gpx_with_stops(
-        export.build_gpx_from_track(track, body.name), stops, fuel_column=_PRICE_COLUMN, max_seconds=GPX_SPLICE_MAX_S
+        export.build_gpx_from_track(track, body.name),
+        stops,
+        fuel_column=_PRICE_COLUMN,
+        max_seconds=GPX_SPLICE_MAX_S,
+        splice=body.splice_detours,
     )
     return Response(
         content=xml,
