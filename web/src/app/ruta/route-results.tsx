@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { parseAsString, useQueryState, useQueryStates } from "nuqs";
+import { parseAsString, useQueryState } from "nuqs";
 import {
   type PointerEvent,
   type ReactNode,
@@ -26,20 +26,15 @@ import { SummaryStats } from "@/components/summary-stats";
 import { TuRutaBar } from "@/components/tu-ruta-bar";
 import { api, type ApiClient } from "@/lib/api/client";
 import { useDetours } from "@/lib/api/detours";
-import { type RouteSource, routeSourceKey, useRoute, useStationSearch } from "@/lib/api/queries";
+import { type RouteSource, routeSourceKey } from "@/lib/api/queries";
 import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
 import { plateTones, type Station, stationKey } from "@/lib/map/geo";
-import { normalizeOptions, routeSourceFrom, searchOptionsFrom, searchParams } from "@/lib/search-params";
-import {
-  autoSegmentKm,
-  formatSchedule,
-  formatStationName,
-  RECOMMENDED_CHEAPEST,
-  trackLengthKm,
-} from "@/lib/stations";
+import { normalizeOptions, serializeSearch } from "@/lib/search-params";
+import { formatSchedule, formatStationName } from "@/lib/stations";
 import { placeValueFrom } from "@/lib/use-place-check";
 
 import { RouteMapLazy } from "./route-map-lazy";
+import { useRouteData } from "./use-route-data";
 
 function routeTitle(source: RouteSource): string {
   switch (source.kind) {
@@ -98,26 +93,10 @@ type Sort = "km" | "price" | "detour";
  * En el ordenador, panel a la izquierda y mapa a la derecha; en el móvil, mapa con una hoja deslizable.
  */
 export function RouteResults({ client = api }: { client?: ApiClient }) {
-  const [params, setParams] = useQueryStates(searchParams);
-  const source = routeSourceFrom(params);
+  const { params, setParams, source, route, routeKm, routeForSearch, search, recommended, others, stops } =
+    useRouteData(client);
   const isDesktop = useIsDesktop();
 
-  const route = useRoute(source, client);
-  const routeKm = useMemo(() => (route.data ? trackLengthKm(route.data.track.coordinates) : 0), [route.data]);
-  const routeKey = source ? routeSourceKey(source) : null;
-  const routeForSearch = useMemo(
-    () => (route.data && routeKey ? { key: routeKey, track: route.data.track } : null),
-    [route.data, routeKey],
-  );
-  const options = {
-    ...searchOptionsFrom(params),
-    top_n: RECOMMENDED_CHEAPEST,
-    segment_km: autoSegmentKm(routeKm),
-    include_others: true,
-  };
-  const search = useStationSearch(routeForSearch, options, client);
-
-  const [stops, setStops] = useState<ReadonlyMap<string, Station>>(new Map());
   // La ficha abierta va en la URL: "atrás" vuelve a la lista y el enlace se puede compartir.
   const [selectedKey, setSelectedKey] = useQueryState(
     "gasolinera",
@@ -149,8 +128,6 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const recommended = useMemo(() => search.data?.stations ?? [], [search.data]);
-  const others = useMemo(() => search.data?.other_stations ?? [], [search.data]);
   const total = recommended.length + others.length;
   const selected = useMemo(
     () =>
@@ -161,7 +138,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   // Desvíos reales, en segundo plano: de las recomendadas, las paradas y la ficha abierta.
   const detourTargets = useMemo(() => {
     const byKey = new Map(recommended.map((s) => [stationKey(s), s]));
-    for (const s of [...stops.values(), ...(selected ? [selected] : [])]) byKey.set(stationKey(s), s);
+    for (const s of [...stops.list, ...(selected ? [selected] : [])]) byKey.set(stationKey(s), s);
     return [...byKey.values()];
   }, [recommended, stops, selected]);
   const detours = useDetours(routeForSearch, detourTargets, client);
@@ -181,10 +158,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
 
   // En el mapa llevan placa las recomendadas y, aunque no lo sean, las paradas y la elegida; el resto, punto.
   const [mapPlates, mapDots] = useMemo(() => {
-    const withPlate = new Set([
-      ...stops.keys(),
-      ...[focusedKey, selectedKey].filter((k): k is string => !!k),
-    ]);
+    const withPlate = new Set([...stops.keys, ...[focusedKey, selectedKey].filter((k): k is string => !!k)]);
     const promoted = others.filter((s) => withPlate.has(stationKey(s)));
     return [[...recommended, ...promoted], others.filter((s) => !withPlate.has(stationKey(s)))];
   }, [recommended, others, stops, focusedKey, selectedKey]);
@@ -200,13 +174,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
     );
   }
 
-  const toggleStop = (station: Station) =>
-    setStops((current) => {
-      const next = new Map(current);
-      const key = stationKey(station);
-      if (!next.delete(key)) next.set(key, station);
-      return next;
-    });
+  const toggleStop = stops.toggle;
 
   const normalized = normalizeOptions(params);
   const filters: Filters = {
@@ -242,8 +210,8 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
           destinoGeo: destino.point ?? null,
           gpx: false,
           demo: false,
+          paradas: null,
         });
-        setStops(new Map());
         onDone?.();
       }}
       client={client}
@@ -359,7 +327,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 station={selected}
                 detour={detours.get(stationKey(selected))}
                 cheapest={best !== null && selected.price === best}
-                inPlan={stops.has(stationKey(selected))}
+                inPlan={stops.keys.has(stationKey(selected))}
                 onTogglePlan={() => toggleStop(selected)}
                 onBack={() => void setSelectedKey(null)}
                 previous={selectedIndex > 0 ? neighbourAt(selectedIndex - 1) : null}
@@ -501,7 +469,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                             detourKm={detours.get(key)?.km ?? null}
                             cheapest={tones[i] === "best"}
                             dimmed={tones[i] === "expensive"}
-                            inPlan={stops.has(key)}
+                            inPlan={stops.keys.has(key)}
                             onTogglePlan={() => toggleStop(s)}
                             onSelect={() => openStation(key)}
                             onHighlight={(on) => setHighlightedKey(on ? key : null)}
@@ -527,7 +495,8 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
 
           <div className="shrink-0 px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:border-t lg:border-rule lg:px-4 lg:py-3">
             <TuRutaBar
-              stops={[...stops.values()].map((s) => ({ key: stationKey(s), kmOnRoute: s.km_on_route }))}
+              stops={stops.list.map((s) => ({ key: stationKey(s), kmOnRoute: s.km_on_route }))}
+              planHref={serializeSearch("/ruta/hoja", params)}
               routeKm={search.data?.route_km ?? routeKm}
             />
           </div>
@@ -539,7 +508,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
               track={route.data.track.coordinates}
               stations={mapPlates}
               otherStations={mapDots}
-              stopKeys={new Set(stops.keys())}
+              stopKeys={stops.keys}
               focusedKey={focusedKey}
               highlightedKey={highlightedKey}
               onStationSelect={openStation}

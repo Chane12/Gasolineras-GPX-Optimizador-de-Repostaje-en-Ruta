@@ -6,6 +6,7 @@
 import {
   createParser,
   createSerializer,
+  parseAsArrayOf,
   type inferParserType,
   parseAsBoolean,
   parseAsInteger,
@@ -84,6 +85,8 @@ export const searchParams = {
   vaciada: parseAsBoolean.withDefault(false),
   /** Autonomía del vehículo en km; 0 = sin aviso de autonomía (opcional, desactivado por defecto). */
   autonomia: parseAsInteger.withDefault(0),
+  /** Paradas elegidas (id del MITECO; si falta, "lat,lon"), separadas por "~": el enlace las comparte. */
+  paradas: parseAsArrayOf(parseAsString, "~").withDefault([]),
 };
 
 export const serializeSearch = createSerializer(searchParams);

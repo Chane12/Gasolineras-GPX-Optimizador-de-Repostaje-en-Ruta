@@ -189,12 +189,17 @@ describe("RouteResults", () => {
 
     const tuRuta = screen.getByRole("region", { name: "Tu ruta" });
     expect(tuRuta).toHaveTextContent("Añade tus paradas con +");
+    expect(within(tuRuta).queryByRole("link")).not.toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Añadir E.S Ballenoil a tus paradas" }));
     expect(screen.getByRole("button", { name: "Quitar E.S Ballenoil de tus paradas" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(tuRuta).toHaveTextContent("1 parada · km 118");
+    expect(within(tuRuta).getByRole("link", { name: /Hoja de ruta/ })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^\/ruta\/hoja\?.*paradas=2/),
+    );
     expect([...(mapProps.last?.stopKeys ?? [])]).toEqual(["2"]);
 
     await user.click(screen.getByRole("button", { name: "Repsol, ver la ficha" }));
