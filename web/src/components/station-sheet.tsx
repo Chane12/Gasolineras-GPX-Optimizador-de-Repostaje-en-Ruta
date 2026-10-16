@@ -50,6 +50,7 @@ export function StationSheet({
   fuelLabel,
   priceAgeMinutes,
   passingNote = null,
+  side = null,
 }: {
   station: PricedStation;
   detour: DetourInfo | undefined;
@@ -66,6 +67,8 @@ export function StationSheet({
   priceAgeMinutes: number | null;
   /** "Abierta al pasar (≈ 14:20)" / "Cerrada al pasar…", si se activó en las opciones avanzadas. */
   passingNote?: { text: string; warn: boolean } | null;
+  /** Lado de la carretera según el sentido de la marcha (solo si está pegada a la ruta). */
+  side?: "right" | "left" | null;
 }) {
   const name = formatStationName(station.name);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -163,6 +166,14 @@ export function StationSheet({
             "Ahorro frente a la más cara",
             station.savings_vs_max != null ? `${formatPriceDelta(station.savings_vs_max)} €/L` : "—",
           ],
+          ...(side
+            ? [
+                [
+                  "Lado de la carretera",
+                  side === "right" ? "A tu derecha" : "A tu izquierda (hay que cruzar)",
+                ],
+              ]
+            : []),
           [
             "Siguiente recomendada",
             nextRecommended

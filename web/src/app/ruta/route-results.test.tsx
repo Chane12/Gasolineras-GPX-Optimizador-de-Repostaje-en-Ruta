@@ -338,6 +338,22 @@ describe("RouteResults", () => {
     expect(within(cepsa).getByText("MÁS BARATA")).toBeInTheDocument();
   });
 
+  it("remembers «solo las de mi lado» on the device and counts it as active", async () => {
+    const user = userEvent.setup();
+    renderAt("?origen=Madrid&destino=Valencia", api().client);
+
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Opciones avanzadas/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Ocultar las que quedan al otro lado de la carretera" }),
+    );
+
+    expect(screen.getByRole("button", { name: /Opciones avanzadas/ })).toHaveTextContent("1 activa");
+    expect(localStorage.getItem("gasolineras:mi-lado")).toBe("true");
+    // Ninguna de prueba está pegada a la ruta (a menos de 100 m): no se oculta ninguna.
+    expect(within(recommendedList()).getAllByRole("listitem")).toHaveLength(2);
+  });
+
   it("highlights the plate of the row under the pointer", async () => {
     const user = userEvent.setup();
     renderAt("?origen=Madrid&destino=Valencia", api().client);
