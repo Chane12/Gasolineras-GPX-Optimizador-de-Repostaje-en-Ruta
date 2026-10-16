@@ -7,7 +7,7 @@ import { api, type ApiClient } from "@/lib/api/client";
 import { routeSourceKey, useRoute, useStationSearch } from "@/lib/api/queries";
 import { type Station, stationKey } from "@/lib/map/geo";
 import { routeSourceFrom, searchOptionsFrom, searchParams } from "@/lib/search-params";
-import { autoSegmentKm, RECOMMENDED_CHEAPEST, trackLengthKm } from "@/lib/stations";
+import { autoSegmentKm, DENSITY_RULES, type Density, trackLengthKm } from "@/lib/stations";
 import { loadSavedStops, type SavedStop, saveStop } from "@/lib/stop-store";
 
 const NO_STATIONS: Station[] = [];
@@ -73,7 +73,7 @@ export function useStops(
 }
 
 /** Todo lo que necesitan la pantalla de la ruta y la hoja de ruta: ruta, búsqueda y paradas, desde la URL. */
-export function useRouteData(client: ApiClient = api) {
+export function useRouteData(client: ApiClient = api, density: Density = "normal") {
   const [params, setParams] = useQueryStates(searchParams);
   const source = routeSourceFrom(params);
 
@@ -86,8 +86,8 @@ export function useRouteData(client: ApiClient = api) {
   );
   const options = {
     ...searchOptionsFrom(params),
-    top_n: RECOMMENDED_CHEAPEST,
-    segment_km: autoSegmentKm(routeKm),
+    top_n: DENSITY_RULES[density].topN,
+    segment_km: autoSegmentKm(routeKm, DENSITY_RULES[density].segments),
     include_others: true,
   };
   const search = useStationSearch(routeForSearch, options, client);

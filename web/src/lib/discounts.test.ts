@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Station } from "@/lib/map/geo";
 
-import { applyDiscounts, type Discount, matchesBrand, withDiscounts } from "./discounts";
+import { applyDiscounts, type Discount, matchesBrand, personalize } from "./discounts";
 
 const st = (id: string, name: string, price: number, km = 10) =>
   ({ id, name, price, km_on_route: km, lat: 40, lon: -3, open_24h: true }) as Station;
@@ -43,15 +43,21 @@ describe("applyDiscounts", () => {
   });
 });
 
-describe("withDiscounts", () => {
+describe("personalize", () => {
   const rule = { topN: 1, segmentKm: 100 };
+  const none = { discounts: [], excludedBrands: [] };
 
   it("chooses the recommended stations again with the prices I will pay", () => {
     // Sin descuento: la más barata es "a" (1,62) y por tramos de 100 km, "a" (km 50) y "b" (km 120).
     const recommended = [st("a", "PLENERGY", 1.62, 50), st("b", "BALLENOIL", 1.63, 120)];
     const others = [st("c", "REPSOL", 1.69, 80), st("d", "CEPSA", 1.7, 150)];
 
-    const result = withDiscounts(recommended, others, [{ brand: "Repsol", kind: "cents", value: 10 }], rule);
+    const result = personalize(
+      recommended,
+      others,
+      { ...none, discounts: [{ brand: "Repsol", kind: "cents", value: 10 }] },
+      rule,
+    );
 
     // Con 10 céntimos, Repsol (1,59) es la más barata y la del primer tramo.
     expect(result.recommended.map((s) => [s.id, s.price])).toEqual([
@@ -61,8 +67,18 @@ describe("withDiscounts", () => {
     expect(result.others.map((s) => s.id)).toEqual(["a", "d"]);
   });
 
-  it("does nothing without valid discounts", () => {
+  it("leaves out the brands I do not want, and recommends others instead", () => {
+    const recommended = [st("a", "PLENERGY", 1.62, 50), st("b", "BALLENOIL", 1.63, 120)];
+    const others = [st("c", "REPSOL", 1.69, 80), st("d", "CEPSA", 1.7, 150)];
+
+    const result = personalize(recommended, others, { ...none, excludedBrands: ["Plenergy"] }, rule);
+
+    expect(result.recommended.map((s) => s.id)).toEqual(["c", "b"]);
+    expect([...result.recommended, ...result.others].map((s) => s.id)).not.toContain("a");
+  });
+
+  it("keeps the API choice without preferences", () => {
     const recommended = [st("a", "X", 1.6)];
-    expect(withDiscounts(recommended, [], [], rule).recommended).toEqual(recommended);
+    expect(personalize(recommended, [], none, rule).recommended).toEqual(recommended);
   });
 });

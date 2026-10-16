@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NuqsTestingAdapter, type UrlUpdateEvent } from "nuqs/adapters/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -352,6 +352,25 @@ describe("RouteResults", () => {
     expect(localStorage.getItem("gasolineras:mi-lado")).toBe("true");
     // Ninguna de prueba está pegada a la ruta (a menos de 100 m): no se oculta ninguna.
     expect(within(recommendedList()).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("hides the brands I do not want and asks for fewer recommended stations", async () => {
+    const user = userEvent.setup();
+    const { client, requests } = api();
+    renderAt("?origen=Madrid&destino=Valencia", client);
+
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Opciones avanzadas/ }));
+    await user.type(screen.getByRole("combobox", { name: "Marca que no quiero" }), "Repsol");
+    await user.click(screen.getByRole("button", { name: "Quitar marca" }));
+
+    expect(screen.getByRole("button", { name: "Volver a mostrar Repsol" })).toBeInTheDocument();
+    expect(recommendedList()).not.toHaveTextContent("Repsol");
+    expect(screen.getByRole("button", { name: /Opciones avanzadas/ })).toHaveTextContent("1 activa");
+
+    await user.click(screen.getByRole("button", { name: /^Pocas/ }));
+    await waitFor(() => expect(requests.searches.at(-1)).toMatchObject({ top_n: 3 }));
+    expect(screen.getByRole("button", { name: /Opciones avanzadas/ })).toHaveTextContent("2 activas");
   });
 
   it("highlights the plate of the row under the pointer", async () => {
