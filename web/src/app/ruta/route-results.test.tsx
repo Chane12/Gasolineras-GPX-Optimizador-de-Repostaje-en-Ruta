@@ -70,6 +70,16 @@ function api(overrides: Partial<Record<string, () => Response>> = {}) {
       requests.searches.push((await request.json()) as Record<string, unknown>);
       return jsonResponse(searchResponse);
     }
+    if (path === "/detours") {
+      const body = (await request.json()) as { stations: { id: string; lat: number; lon: number }[] };
+      // Desvío simulado: 3,1 km la gasolinera 1 y 0,4 km las demás.
+      const detours = body.stations.map((st) => ({
+        ...st,
+        detour_km: st.id === "1" ? 3.1 : 0.4,
+        detour_min: st.id === "1" ? 4 : 1,
+      }));
+      return jsonResponse({ detours, complete: true });
+    }
     return new Response(null, { status: 404 });
   });
   return { client, requests };
@@ -81,7 +91,7 @@ function renderAt(
   onUrlUpdate?: (e: UrlUpdateEvent) => void,
 ) {
   return renderWithQuery(
-    <NuqsTestingAdapter searchParams={search} onUrlUpdate={onUrlUpdate}>
+    <NuqsTestingAdapter searchParams={search} onUrlUpdate={onUrlUpdate} hasMemory>
       <RouteResults client={client} />
     </NuqsTestingAdapter>,
   );
@@ -187,7 +197,7 @@ describe("RouteResults", () => {
     expect(tuRuta).toHaveTextContent("1 parada · km 118");
     expect([...(mapProps.last?.stopKeys ?? [])]).toEqual(["2"]);
 
-    await user.click(screen.getByRole("button", { name: "Repsol, ver en el mapa" }));
+    await user.click(screen.getByRole("button", { name: "Repsol, ver la ficha" }));
     expect(mapProps.last?.focusedKey).toBe("1");
   });
 
@@ -199,10 +209,56 @@ describe("RouteResults", () => {
     expect(mapProps.last?.otherStations?.map((s) => s.id)).toEqual(["3", "4"]);
 
     await user.click(screen.getByRole("button", { name: "Ver las 4 gasolineras de la ruta" }));
-    await user.click(screen.getByRole("button", { name: "Cepsa, ver en el mapa" }));
+    await user.click(screen.getByRole("button", { name: "Cepsa, ver la ficha" }));
     expect(mapProps.last?.focusedKey).toBe("3");
     expect(mapProps.last?.stations.map((s) => s.id)).toEqual(["1", "2", "3"]);
     expect(mapProps.last?.otherStations?.map((s) => s.id)).toEqual(["4"]);
+  });
+
+  it("shows the real detour of each recommended station and sorts by it", async () => {
+    const user = userEvent.setup();
+    renderAt("?origen=Madrid&destino=Valencia", api().client);
+
+    await screen.findByText(/desvío 3,1 km/);
+    await user.click(screen.getByRole("button", { name: "Por desvío" }));
+    const rows = within(recommendedList()).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("E.S Ballenoil");
+    expect(rows[0]).toHaveTextContent("desvío 0,4 km");
+    expect(rows[1]).toHaveTextContent("Repsol");
+  });
+
+  it("opens the station sheet from the list, moves between stations and goes back", async () => {
+    const user = userEvent.setup();
+    const updates: string[] = [];
+    renderAt("?origen=Madrid&destino=Valencia", api().client, (e) => updates.push(e.queryString));
+
+    await user.click(await screen.findByRole("button", { name: "Repsol, ver la ficha" }));
+    const sheet = screen.getByRole("article", { name: "Repsol" });
+    expect(updates.at(-1)).toContain("gasolinera=1");
+    expect(sheet).toHaveTextContent("1,659");
+    expect(sheet).toHaveTextContent("Abierta 24 h, todos los días");
+    expect(await within(sheet).findByText("3,1 km ida y vuelta · +4 min")).toBeInTheDocument();
+    expect(sheet).toHaveTextContent("en 76 km (E.S Ballenoil)");
+    expect(within(sheet).getByRole("link", { name: /Cómo llegar/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining("destination=40,-2.99"),
+    );
+    expect(mapProps.last?.focusedKey).toBe("1");
+
+    await user.click(within(sheet).getByRole("button", { name: "Añadir parada" }));
+    expect(screen.getByRole("region", { name: "Tu ruta" })).toHaveTextContent("1 parada · km 42");
+
+    await user.click(within(sheet).getByRole("button", { name: /Siguiente: E.S Ballenoil, km 118/ }));
+    expect(screen.getByRole("article", { name: /E.S Ballenoil/ })).toHaveTextContent("MÁS BARATA");
+
+    await user.click(screen.getByRole("button", { name: "Volver a la lista" }));
+    expect(recommendedList()).toBeInTheDocument();
+  });
+
+  it("opens the sheet of a station shared by link", async () => {
+    renderAt("?origen=Madrid&destino=Valencia&gasolinera=2", api().client);
+
+    expect(await screen.findByRole("article", { name: /E.S Ballenoil/ })).toHaveTextContent("6–22 h");
   });
 
   it("highlights the plate of the row under the pointer", async () => {
