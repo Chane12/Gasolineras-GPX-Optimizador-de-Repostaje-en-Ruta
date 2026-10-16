@@ -39,6 +39,8 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
 - **Tests**:
   - `*.test.ts(x)` junto al código, con Testing Library y consultas por rol o texto, como lo usaría una persona.
   - Sin red: `fetch` está bloqueado en los tests. La API se simula con `fakeApi()` y se renderiza con `renderWithQuery()` (`src/test-utils.tsx`).
+- **Next.js 16** cambia APIs respecto a versiones anteriores: ante la duda, consulta la documentación que trae el paquete (`node_modules/next/dist/docs/`).
+- **Mapa** (`src/components/route-map/`, estilo en `src/lib/map/style.ts`): MapLibre no funciona en jsdom (sin WebGL). La lógica pura va en `src/lib/map/` con tests, y en los tests de páginas el mapa se sustituye por un doble (ver `src/app/ruta/route-results.test.tsx`). Lo visual se comprueba con capturas de Playwright contra la API.
 - Estructura: `src/app/` (rutas, App Router), y más adelante `src/components/`, `src/lib/` (cliente de la API, utilidades) y `src/styles/` según se necesiten.
 
 ## Verificación

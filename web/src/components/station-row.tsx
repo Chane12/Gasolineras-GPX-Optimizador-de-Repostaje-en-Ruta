@@ -18,6 +18,8 @@ export interface StationRowProps {
   dimmed?: boolean;
   inPlan: boolean;
   onTogglePlan: () => void;
+  /** Si se da, el nombre es un botón que centra el mapa en la gasolinera. */
+  onSelect?: () => void;
 }
 
 /** Fila del índice de gasolineras: hito · nombre y datos · precio · añadir/quitar parada. */
@@ -32,6 +34,7 @@ export function StationRow({
   dimmed = false,
   inPlan,
   onTogglePlan,
+  onSelect,
 }: StationRowProps) {
   const details = [town, schedule, detourKm != null ? `desvío ${formatShortKm(detourKm)} km` : null].filter(
     Boolean,
@@ -43,7 +46,18 @@ export function StationRow({
       <Hito km={kmOnRoute} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-1.5">
-          <span className="text-[17px] leading-tight font-bold">{name}</span>
+          {onSelect ? (
+            <button
+              type="button"
+              onClick={onSelect}
+              className="min-h-11 cursor-pointer text-left text-[17px] leading-tight font-bold text-ink hover:underline"
+            >
+              {name}
+              <span className="sr-only">, ver en el mapa</span>
+            </button>
+          ) : (
+            <span className="text-[17px] leading-tight font-bold">{name}</span>
+          )}
           {cheapest ? (
             <span className="rounded-[3px] bg-accent px-[5px] pt-0.5 pb-px text-[11px] font-bold tracking-wide text-on-accent">
               MÁS BARATA

@@ -5,6 +5,7 @@
  */
 import {
   createSerializer,
+  type inferParserType,
   parseAsBoolean,
   parseAsInteger,
   parseAsString,
@@ -12,6 +13,7 @@ import {
 } from "nuqs/server"; // apto para servidor y cliente
 
 import type { Schemas } from "@/lib/api/client";
+import type { RouteSource, SearchOptions } from "@/lib/api/queries";
 
 export type FuelId = Schemas["Fuel"]["id"];
 
@@ -79,5 +81,32 @@ export function normalizeOptions(p: { radio: number; top: number; tramo: number;
     top: clamp(p.top, LIMITS.top.min, LIMITS.top.max),
     tramo: p.tramo <= 0 ? 0 : clamp(p.tramo, LIMITS.tramoKm.min, LIMITS.tramoKm.max),
     autonomia: p.autonomia <= 0 ? 0 : clamp(p.autonomia, LIMITS.autonomiaKm.min, LIMITS.autonomiaKm.max),
+  };
+}
+
+export type SearchState = inferParserType<typeof searchParams>;
+
+/** De dónde sale la ruta según la URL; null si falta (p. ej. un enlace a /ruta sin parámetros). */
+export function routeSourceFrom(
+  p: Pick<SearchState, "demo" | "gpx" | "origen" | "destino">,
+): RouteSource | null {
+  if (p.demo) return { kind: "demo" };
+  if (p.gpx) return { kind: "gpx" };
+  const origin = p.origen?.trim();
+  const destination = p.destino?.trim();
+  return origin && destination ? { kind: "text", origin, destination } : null;
+}
+
+/** Opciones de /search a partir de la URL (con los valores fuera de rango ya corregidos). */
+export function searchOptionsFrom(p: SearchState): SearchOptions {
+  const o = normalizeOptions(p);
+  return {
+    fuel: p.combustible,
+    max_detour_km: o.radio,
+    top_n: o.top,
+    segment_km: o.tramo,
+    only_24h: p.abierta24h,
+    all_on_route: p.vaciada,
+    autonomy_km: o.autonomia,
   };
 }

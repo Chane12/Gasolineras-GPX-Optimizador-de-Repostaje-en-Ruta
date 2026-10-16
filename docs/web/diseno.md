@@ -106,7 +106,9 @@ En código: `web/src/components/` (tokens en `web/src/app/globals.css`). Catálo
 - La **ruta** es el elemento más fuerte: `accent` de 5 px con un halo blanco.
 - Origen: círculo con borde. Destino: cuadrado relleno.
 - Nombres de ciudades en mayúsculas con interletrado, como en un atlas.
-- Atribución visible: "© OpenStreetMap · OpenFreeMap".
+- Atribución visible: "OpenFreeMap · © OpenMapTiles · © OpenStreetMap" (la licencia de OpenMapTiles también pide citarla). Va encima de la hoja, para que no quede tapada.
+- En código: `web/src/lib/map/style.ts`. El estilo lee los colores de los tokens CSS al cargarse y se rehace al cambiar el modo claro/oscuro, así que no hay colores sueltos.
+- OpenFreeMap no trae curvas de nivel: en su lugar, los bosques y parques llevan el tono `map-contour`, que da la misma textura suave. Los rótulos del mapa usan Noto Sans (los glifos que sirve OpenFreeMap); Familjen Grotesk queda para la interfaz.
 
 ## Textos
 
