@@ -102,6 +102,14 @@ def create_app(
     def health(request: Request) -> HealthResponse:
         return HealthResponse(status="ok", version=API_VERSION, prices=_prices_status(get_catalogue(request)))
 
+    if os.environ.get("GASOLINERAS_DEBUG_IP") == "1":
+        # TEMPORAL: diagnóstico de cabeceras de IP detrás del proxy de Render. Fuera del contrato.
+        @app.get("/debug/ip", include_in_schema=False)
+        def debug_ip(request: Request) -> dict[str, str | None]:
+            names = ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "true-client-ip", "forwarded", "via"]
+            headers = {name: request.headers.get(name) for name in names}
+            return {**headers, "peer": request.client.host if request.client else None}
+
     app.include_router(route.router)
     app.include_router(search.router)
     app.include_router(detours.router)
