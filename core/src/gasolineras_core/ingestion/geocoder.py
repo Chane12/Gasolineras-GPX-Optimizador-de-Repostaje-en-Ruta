@@ -1,7 +1,8 @@
 """
 gasolineras_core.ingestion.geocoder
 ===================================
-Geocoding (Nominatim, with Photon as fallback) and OSRM routing for text-based route input.
+Geocoding (Nominatim, with Photon as fallback), place suggestions while typing (Photon) and OSRM
+routing for text-based route input.
 
 Polite use of OSM services (ADR 0005): identifiable User-Agent, at most one request per second
 to each geocoder (process-wide) and caching of places and routes.
@@ -29,6 +30,12 @@ from gasolineras_core.config import (
     PHOTON_URL,
     ROUTE_CACHE_MAX_ITEMS,
     ROUTE_CACHE_TTL_S,
+    SUGGEST_CACHE_MAX_ITEMS,
+    SUGGEST_CACHE_TTL_S,
+    SUGGEST_LIMIT,
+    SUGGEST_MAX_WAIT_S,
+    SUGGEST_MIN_INTERVAL_S,
+    SUGGEST_TIMEOUT_S,
     USER_AGENT,
 )
 from gasolineras_core.http_utils import RateLimitBusyError, RateLimiter, TTLCache
@@ -55,6 +62,17 @@ class RoutingServiceError(RouteTextError):
 
 
 @dataclass(frozen=True)
+class PlaceSuggestion:
+    """A place offered while the user types: name plus context to tell namesakes apart."""
+
+    name: str
+    context: str  # "León, Castilla y León"
+    lat: float
+    lon: float
+    kind: str  # OSM place type: city, town, village…
+
+
+@dataclass(frozen=True)
 class GeocodedPlace:
     query: str
     lat: float
@@ -66,6 +84,8 @@ _nominatim_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
 _photon_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
 _geocode_cache: TTLCache[GeocodedPlace] = TTLCache(GEOCODE_CACHE_MAX_ITEMS, GEOCODE_CACHE_TTL_S)
 _route_cache: TTLCache[LineString] = TTLCache(ROUTE_CACHE_MAX_ITEMS, ROUTE_CACHE_TTL_S)
+_suggest_limiter = RateLimiter(SUGGEST_MIN_INTERVAL_S, SUGGEST_MAX_WAIT_S)
+_suggest_cache: TTLCache[list[PlaceSuggestion]] = TTLCache(SUGGEST_CACHE_MAX_ITEMS, SUGGEST_CACHE_TTL_S)
 
 _SERVICE_UNAVAILABLE_MSG = (
     "El servicio de búsqueda de lugares no está disponible ahora mismo. Inténtalo de nuevo en unos minutos."
@@ -79,6 +99,7 @@ def clear_caches() -> None:
     """Vacía las cachés de lugares y rutas (útil en tests)."""
     _geocode_cache.clear()
     _route_cache.clear()
+    _suggest_cache.clear()
 
 
 def normalize_place(place: str) -> str:
@@ -166,6 +187,89 @@ def geocode_place(place: str, timeout: float = 5.0) -> GeocodedPlace:
         return result
 
     raise RoutingServiceError(_SERVICE_UNAVAILABLE_MSG)
+
+
+# Order in which place types are offered: Photon matches prefixes but does not rank by importance
+# ("Valen" lists villages before the city of Valencia). Types not listed (provinces, regions,
+# streets…) are not offered: a province is not a route endpoint.
+_PLACE_RANK: dict[str, int] = {
+    "city": 0,
+    "town": 1,
+    "village": 2,
+    "suburb": 3,
+    "hamlet": 3,
+    "neighbourhood": 4,
+    "quarter": 4,
+    "locality": 5,
+    "isolated_dwelling": 6,
+}
+
+
+def parse_photon_suggestions(payload: Any, limit: int = SUGGEST_LIMIT) -> list[PlaceSuggestion]:
+    """Places in Spain from a Photon answer, most important first, without repeats."""
+    features = payload.get("features") if isinstance(payload, dict) else None
+    candidates: list[tuple[int, int, PlaceSuggestion]] = []
+    seen: set[tuple[str, str]] = set()
+    for order, feature in enumerate(features or []):
+        try:
+            props = feature["properties"]
+            lon, lat = feature["geometry"]["coordinates"][:2]
+        except (KeyError, TypeError, ValueError):
+            continue
+        kind = props.get("osm_value")
+        name = (props.get("name") or "").strip()
+        if props.get("countrycode") != "ES" or kind not in _PLACE_RANK or not name:
+            continue
+        parts: list[str] = []
+        for part in (props.get("county"), props.get("state")):
+            if part and part != name and part not in parts:
+                parts.append(part)
+        context = ", ".join(parts)
+        if (name, context) in seen:
+            continue
+        seen.add((name, context))
+        suggestion = PlaceSuggestion(name=name, context=context, lat=float(lat), lon=float(lon), kind=kind)
+        candidates.append((_PLACE_RANK[kind], order, suggestion))
+    candidates.sort(key=lambda c: (c[0], c[1]))
+    return [c[2] for c in candidates[:limit]]
+
+
+def suggest_places(query: str, limit: int = SUGGEST_LIMIT, timeout: float = SUGGEST_TIMEOUT_S) -> list[PlaceSuggestion]:
+    """
+    Lugares de España que encajan con lo que el usuario lleva escrito (autocompletar), con Photon.
+
+    Con menos de 2 letras no pregunta. Las respuestas se cachean por texto normalizado.
+
+    Raises
+    ------
+    RoutingServiceError
+        Si Photon no responde a tiempo o está saturado (la web sigue sin sugerencias).
+    """
+    key = normalize_place(query)
+    if len(key) < 2:
+        return []
+    cached = _suggest_cache.get(key)
+    if cached is not None:
+        return cached[:limit]
+
+    bb = BBOX_SPAIN
+    params: dict[str, Any] = {
+        "q": " ".join(query.split()),
+        "limit": 25,  # wide: results outside Spain and non-place types are dropped afterwards
+        "bbox": f"{bb['min_lon']},{bb['min_lat']},{bb['max_lon']},{bb['max_lat']}",
+        "osm_tag": "place",
+        "lang": "default",  # local names ("Castilla y León"); Photon has no Spanish, and English is worse
+    }
+    try:
+        _suggest_limiter.wait()
+        resp = requests.get(PHOTON_URL, params=params, headers=GEOCODER_HEADERS, timeout=timeout)
+        resp.raise_for_status()
+        suggestions = parse_photon_suggestions(resp.json(), limit=SUGGEST_LIMIT)
+    except (RateLimitBusyError, requests.RequestException, ValueError) as exc:
+        logger.warning("Photon suggestions failed for %r: %s", query, exc)
+        raise RoutingServiceError(_SERVICE_UNAVAILABLE_MSG) from exc
+    _suggest_cache.set(key, suggestions)
+    return suggestions[:limit]
 
 
 def fetch_road_route(origin: LatLon, destination: LatLon, timeout: float = 12.0) -> LineString:

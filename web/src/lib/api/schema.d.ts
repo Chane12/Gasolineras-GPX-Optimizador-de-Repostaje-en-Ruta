@@ -106,6 +106,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/places/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Places
+         * @description Lugares de España que encajan con lo escrito, los más importantes primero (para autocompletar).
+         */
+        get: operations["suggest_places_places_suggest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/route/demo": {
         parameters: {
             query?: never;
@@ -221,6 +241,13 @@ export interface components {
              * @description Archivo .gpx con el track
              */
             file: string;
+        };
+        /** Coordinates */
+        Coordinates: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
         };
         /** Detour */
         Detour: {
@@ -402,6 +429,39 @@ export interface components {
             query: string;
         };
         /**
+         * PlaceSuggestion
+         * @description A place offered while the user types.
+         */
+        PlaceSuggestion: {
+            /**
+             * Context
+             * @description Comarca, provincia o comunidad, para distinguir lugares con el mismo nombre
+             */
+            context: string;
+            /**
+             * Kind
+             * @description Tipo de lugar en OpenStreetMap: city, town, village…
+             */
+            kind: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * Name
+             * @example Valencia de Don Juan
+             */
+            name: string;
+        };
+        /** PlaceSuggestionsResponse */
+        PlaceSuggestionsResponse: {
+            /**
+             * Places
+             * @description Los más importantes primero; vacía si no hay ninguno
+             */
+            places: components["schemas"]["PlaceSuggestion"][];
+        };
+        /**
          * PricesStatus
          * @description Age of the MITECO prices. The web must show a warning unless ``status`` is ``fresh``.
          */
@@ -454,11 +514,15 @@ export interface components {
              * @example Segovia
              */
             destination: string;
+            /** @description Igual que origin_point, para el destino */
+            destination_point?: components["schemas"]["Coordinates"] | null;
             /**
              * Origin
              * @example Ávila
              */
             origin: string;
+            /** @description Coordenadas del lugar elegido en las sugerencias: evita volver a buscarlo por nombre */
+            origin_point?: components["schemas"]["Coordinates"] | null;
         };
         /** SearchRequest */
         SearchRequest: {
@@ -777,6 +841,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    suggest_places_places_suggest_get: {
+        parameters: {
+            query: {
+                /** @description Lo que el usuario lleva escrito */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceSuggestionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Demasiadas peticiones */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Photon no responde */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

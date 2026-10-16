@@ -88,6 +88,28 @@ class TestRouteFromText:
     def test_invalid_body_is_422(self, client, fake_services, body):
         assert client.post("/route/text", json=body).status_code == 422
 
+    def test_uses_the_points_picked_from_suggestions_without_geocoding(self, client, monkeypatch):
+        def no_geocoding(place: str) -> GeocodedPlace:
+            raise AssertionError("should not geocode")
+
+        routed: list[tuple] = []
+        monkeypatch.setattr(geocoder, "geocode_place", no_geocoding)
+        monkeypatch.setattr(geocoder, "fetch_road_route", lambda o, d: routed.append((o, d)) or ROAD)
+
+        response = client.post(
+            "/route/text",
+            json={
+                "origin": "Ávila",
+                "destination": "Segovia",
+                "origin_point": {"lat": 40.6572, "lon": -4.6627},
+                "destination_point": {"lat": 40.9481, "lon": -4.1172},
+            },
+        )
+
+        assert response.status_code == 200
+        assert routed == [((40.6572, -4.6627), (40.9481, -4.1172))]
+        assert response.json()["origin"] == {"query": "Ávila", "lat": 40.6572, "lon": -4.6627}
+
 
 class TestRouteFromGpx:
     def test_returns_track_from_uploaded_file(self, client):

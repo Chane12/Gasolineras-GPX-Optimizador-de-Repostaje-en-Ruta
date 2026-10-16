@@ -126,6 +126,14 @@ GEOCODER_MIN_INTERVAL_S: float = 1.0
 GEOCODER_MAX_WAIT_S: float = 10.0
 GEOCODE_CACHE_TTL_S: float = 7 * 24 * 3600  # los lugares no se mueven
 GEOCODE_CACHE_MAX_ITEMS: int = 2048
+# Sugerencias de lugares al escribir (Photon, que sí admite autocompletar; Nominatim no). Cada usuario
+# dispara varias por búsqueda: espera corta, caché amplia, y si Photon tarda, sin sugerencias (no es grave).
+SUGGEST_MIN_INTERVAL_S: float = 0.2
+SUGGEST_MAX_WAIT_S: float = 2.0
+SUGGEST_TIMEOUT_S: float = 3.0
+SUGGEST_CACHE_TTL_S: float = 24 * 3600
+SUGGEST_CACHE_MAX_ITEMS: int = 4096
+SUGGEST_LIMIT: int = 6
 ROUTE_CACHE_TTL_S: float = 24 * 3600
 ROUTE_CACHE_MAX_ITEMS: int = 512
 # Peticiones simultáneas a OSRM como máximo en todo el proceso (desvíos y GPX con paradas); servidor de demostración.

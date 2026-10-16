@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from shapely.geometry import LineString
 
 from gasolineras_api.ratelimit import RATE_LIMIT_RESPONSE, rate_limited
-from gasolineras_api.schemas import ErrorResponse, LineStringGeometry, Place, RouteResponse, RouteTextRequest
+from gasolineras_api.schemas import (
+    Coordinates,
+    ErrorResponse,
+    LineStringGeometry,
+    Place,
+    RouteResponse,
+    RouteTextRequest,
+)
 from gasolineras_core.config import DEMO_GPX_PATH
 from gasolineras_core.ingestion import geocoder
 from gasolineras_core.ingestion.gpx_parser import parse_gpx_track, validate_gpx_track
@@ -34,6 +41,13 @@ def _validated(track: LineString) -> LineString:
     return track
 
 
+def _place(text: str, point: Coordinates | None) -> geocoder.GeocodedPlace:
+    """The place the user picked from the suggestions (no lookup), or a lookup by name."""
+    if point is not None:
+        return geocoder.GeocodedPlace(query=text.strip(), lat=point.lat, lon=point.lon, source="suggestion")
+    return geocoder.geocode_place(text)
+
+
 @router.post(
     "/text",
     response_model=RouteResponse,
@@ -43,8 +57,8 @@ def _validated(track: LineString) -> LineString:
 def route_from_text(body: RouteTextRequest) -> RouteResponse:
     """Calcula la ruta por carretera entre un origen y un destino escritos en texto."""
     try:
-        origin = geocoder.geocode_place(body.origin)
-        destination = geocoder.geocode_place(body.destination)
+        origin = _place(body.origin, body.origin_point)
+        destination = _place(body.destination, body.destination_point)
         track = geocoder.fetch_road_route((origin.lat, origin.lon), (destination.lat, destination.lon))
     except geocoder.RoutingServiceError as exc:
         logger.warning("External routing service unavailable: %s", exc)
