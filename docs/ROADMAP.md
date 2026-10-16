@@ -45,7 +45,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funciona sin conexión. **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
 > **Retomar aquí (2026-10-16, fin de sesión)**: hechos los puntos 1–5. La API está en Render (https://gasolineras-api-kwnx.onrender.com) y la web tiene inicio, formulario y búsqueda en la URL; `/ruta` aún es provisional. **Siguiente tarea: el punto 6 (mapa con MapLibre + OpenFreeMap, estilo propio según `docs/web/diseno.md` y la maqueta `D-Resultados`).** Notas para los puntos 6–7:
-> - La ruta de ejemplo de Gredos necesita un endpoint en la API (`GET /route/demo`), que aún no existe.
+> - La ruta de ejemplo de Gredos ya tiene su endpoint: `GET /route/demo`.
 > - El OSRM público a veces limita las peticiones desde Render: `/detours` devuelve `complete: false`. La web debe volver a pedir solo los desvíos que falten, tras una pausa.
 > - Para probar la web contra la API publicada: `NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C web dev`.
 
