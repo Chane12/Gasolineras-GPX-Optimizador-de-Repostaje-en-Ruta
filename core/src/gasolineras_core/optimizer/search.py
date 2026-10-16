@@ -41,6 +41,7 @@ class SearchParams:
     only_24h: bool = False
     include_all_on_route: bool = False  # Modo España Vaciada
     autonomy_km: float = 0.0  # 0 = no autonomy radar
+    include_others: bool = False  # also return the corridor stations that were not selected
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,9 @@ class SearchResult:
     max_price_in_corridor: float | None  # most expensive price of this fuel in the corridor (for "savings")
     route_km: float  # geodesic length of the original track
     radar: list[dict] | None  # autonomy segments (calculate_autonomy_radar), None if autonomy_km == 0
+    # Corridor stations selling this fuel that were not selected (same columns as ``stations``, by km_ruta);
+    # None unless ``include_others``. The web shows them as small dots, behind "see all".
+    others: gpd.GeoDataFrame | None = None
 
 
 def route_length_km(track: LineString) -> float:
@@ -74,6 +78,18 @@ def _open_24h(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     if "Horario" not in gdf.columns:
         return gdf.iloc[0:0]
     return gpd.GeoDataFrame(gdf[gdf["Horario"].str.contains("24H|24 H", case=False, na=False)], crs=gdf.crs)
+
+
+def _not_selected(
+    within: gpd.GeoDataFrame, has_fuel: pd.Series, prices: pd.Series, selected: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Corridor stations with this fuel that are not in ``selected`` (matched by position)."""
+    candidates = within.loc[has_fuel].copy()
+    candidates["precio_seleccionado"] = prices[has_fuel]
+    if not selected.empty:
+        taken = set(selected.geometry.to_wkb())
+        candidates = candidates[[wkb not in taken for wkb in candidates.geometry.to_wkb()]]
+    return gpd.GeoDataFrame(candidates, crs=within.crs)
 
 
 def _with_km(gdf: gpd.GeoDataFrame, track: LineString, total_km: float) -> gpd.GeoDataFrame:
@@ -127,6 +143,11 @@ def search_stations(stations: gpd.GeoDataFrame, track: LineString, params: Searc
         survival = _with_km(survival, track, total_km) if not survival.empty else survival
         radar, _ = calculate_autonomy_radar(track, survival, params.autonomy_km)
 
+    others = None
+    if params.include_others:
+        others = _not_selected(within, has_fuel, prices, top)
+        others = _with_km(others, track, total_km) if not others.empty else others
+
     max_price = float(prices[has_fuel].max()) if has_fuel.any() else None
     logger.info("Search: %d selected of %d in corridor (fuel=%s)", len(top), len(within), fuel)
     return SearchResult(
@@ -135,4 +156,5 @@ def search_stations(stations: gpd.GeoDataFrame, track: LineString, params: Searc
         max_price_in_corridor=max_price,
         route_km=total_km,
         radar=radar,
+        others=others,
     )

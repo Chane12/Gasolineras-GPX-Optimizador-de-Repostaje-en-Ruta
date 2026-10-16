@@ -137,5 +137,6 @@ export function searchOptionsFrom(p: SearchState): SearchOptions {
     only_24h: p.abierta24h,
     all_on_route: p.vaciada,
     autonomy_km: o.autonomia,
+    include_others: false,
   };
 }

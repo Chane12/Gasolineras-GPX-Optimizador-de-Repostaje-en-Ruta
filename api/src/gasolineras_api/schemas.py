@@ -148,6 +148,10 @@ class SearchRequest(BaseModel):
         description="Modo España Vaciada: añade todas las gasolineras a ≤ 500 m de la ruta, sean o no baratas",
     )
     autonomy_km: int = Field(default=0, ge=0, le=2000, description="Autonomía del vehículo; 0 desactiva el radar")
+    include_others: bool = Field(
+        default=False,
+        description="Devuelve también el resto de gasolineras del corredor con este combustible (other_stations)",
+    )
 
     @field_validator("segment_km")
     @classmethod
@@ -201,6 +205,10 @@ class SearchResponse(BaseModel):
     corridor_station_count: int = Field(description="Gasolineras en el corredor, vendan o no este combustible")
     max_price_in_corridor: float | None = None
     stations: list[Station] = Field(description="Gasolineras sugeridas, ordenadas por km en ruta")
+    other_stations: list[Station] | None = Field(
+        default=None,
+        description="Resto de gasolineras del corredor con este combustible, por km (solo si include_others)",
+    )
     autonomy: list[AutonomySegment] | None = Field(
         default=None, description="Radar de autonomía (solo si autonomy_km > 0)"
     )

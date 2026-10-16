@@ -99,6 +99,7 @@ describe("searchOptionsFrom", () => {
       only_24h: true,
       all_on_route: false,
       autonomy_km: 250,
+      include_others: false,
     });
   });
 });

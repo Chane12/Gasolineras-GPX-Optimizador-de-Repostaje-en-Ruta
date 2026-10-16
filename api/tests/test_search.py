@@ -79,6 +79,20 @@ def test_search_returns_cheapest_stations_in_route_order(client, track_json):
     assert body["autonomy"] is None
 
 
+def test_others_come_only_when_asked_and_do_not_repeat_the_suggested(client, track_json):
+    base = {"track": track_json, "fuel": "diesel", "max_detour_km": 10, "top_n": 1, "segment_km": 0}
+
+    plain = client.post("/search", json=base).json()
+    with_others = client.post("/search", json={**base, "include_others": True}).json()
+
+    assert plain["other_stations"] is None
+    suggested = {s["id"] for s in with_others["stations"]}
+    others = with_others["other_stations"]
+    assert others and suggested.isdisjoint({s["id"] for s in others})
+    assert [s["km_on_route"] for s in others] == sorted(s["km_on_route"] for s in others)
+    assert all(s["savings_vs_max"] is not None for s in others)
+
+
 def test_station_fields(client, track_json):
     body = client.post("/search", json={"track": track_json, "fuel": "diesel", "max_detour_km": 10}).json()
 

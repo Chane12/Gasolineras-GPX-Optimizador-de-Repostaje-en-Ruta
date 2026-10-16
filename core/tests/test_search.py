@@ -1,5 +1,7 @@
 """Tests for the full search pipeline (no network: synthetic stations along the Ávila–Segovia fixture)."""
 
+from dataclasses import replace
+
 import geopandas as gpd
 import pandas as pd
 import pytest
@@ -114,3 +116,21 @@ def test_radar_flags_gaps_longer_than_the_autonomy(stations):
 
     assert result.stations.empty
     assert [s["nivel"] for s in result.radar or []] == ["critico"]
+
+
+def test_others_are_the_rest_of_the_corridor_stations_with_this_fuel(sample_track, stations):
+    params = SearchParams(DIESEL, buffer_m=10_000, top_n=1, segment_km=0)
+    plain = search_stations(stations, sample_track, params)
+    with_others = search_stations(stations, sample_track, replace(params, include_others=True))
+
+    assert plain.others is None
+    assert with_others.others is not None
+    selected = set(with_others.stations.geometry.to_wkb())
+    others = with_others.others
+    assert not others.empty
+    assert selected.isdisjoint(set(others.geometry.to_wkb()))
+    assert list(others["km_ruta"]) == sorted(others["km_ruta"])
+    assert (others["precio_seleccionado"] > 0).all()
+    # Selected + others = every corridor station that sells the fuel.
+    everything = search_stations(stations, sample_track, replace(params, top_n=1000, include_others=True))
+    assert len(with_others.stations) + len(others) == len(everything.stations)
