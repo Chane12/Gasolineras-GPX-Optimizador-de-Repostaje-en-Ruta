@@ -360,6 +360,11 @@ export interface components {
              * @description Coste previsto de la parada (€)
              */
             cost?: number | null;
+            /**
+             * Km
+             * @description Km de la ruta, para la descripción del waypoint
+             */
+            km?: number | null;
             /** Lat */
             lat: number;
             /**
@@ -376,6 +381,11 @@ export interface components {
              * @description €/L, para la descripción del waypoint
              */
             price?: number | null;
+            /**
+             * Schedule
+             * @description Horario, para la descripción
+             */
+            schedule?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
