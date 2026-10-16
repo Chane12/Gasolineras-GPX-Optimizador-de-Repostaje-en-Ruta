@@ -66,6 +66,28 @@
         "title": "Body_route_from_gpx_route_gpx_post",
         "type": "object"
       },
+      "Coordinates": {
+        "properties": {
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lon"
+        ],
+        "title": "Coordinates",
+        "type": "object"
+      },
       "Detour": {
         "properties": {
           "detour_km": {
@@ -470,6 +492,62 @@
         "title": "Place",
         "type": "object"
       },
+      "PlaceSuggestion": {
+        "description": "A place offered while the user types.",
+        "properties": {
+          "context": {
+            "description": "Comarca, provincia o comunidad, para distinguir lugares con el mismo nombre",
+            "title": "Context",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Tipo de lugar en OpenStreetMap: city, town, village…",
+            "title": "Kind",
+            "type": "string"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "name": {
+            "examples": [
+              "Valencia de Don Juan"
+            ],
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "context",
+          "lat",
+          "lon",
+          "kind"
+        ],
+        "title": "PlaceSuggestion",
+        "type": "object"
+      },
+      "PlaceSuggestionsResponse": {
+        "properties": {
+          "places": {
+            "description": "Los más importantes primero; vacía si no hay ninguno",
+            "items": {
+              "$ref": "#/components/schemas/PlaceSuggestion"
+            },
+            "title": "Places",
+            "type": "array"
+          }
+        },
+        "required": [
+          "places"
+        ],
+        "title": "PlaceSuggestionsResponse",
+        "type": "object"
+      },
       "PricesStatus": {
         "description": "Age of the MITECO prices. The web must show a warning unless ``status`` is ``fresh``.",
         "properties": {
@@ -579,6 +657,17 @@
             "title": "Destination",
             "type": "string"
           },
+          "destination_point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Coordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Igual que origin_point, para el destino"
+          },
           "origin": {
             "examples": [
               "Ávila"
@@ -587,6 +676,17 @@
             "minLength": 2,
             "title": "Origin",
             "type": "string"
+          },
+          "origin_point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Coordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Coordenadas del lugar elegido en las sugerencias: evita volver a buscarlo por nombre"
           }
         },
         "required": [
@@ -1133,6 +1233,72 @@
         "summary": "Health",
         "tags": [
           "sistema"
+        ]
+      }
+    },
+    "/places/suggest": {
+      "get": {
+        "description": "Lugares de España que encajan con lo escrito, los más importantes primero (para autocompletar).",
+        "operationId": "suggest_places_places_suggest_get",
+        "parameters": [
+          {
+            "description": "Lo que el usuario lleva escrito",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Lo que el usuario lleva escrito",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceSuggestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Demasiadas peticiones"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Photon no responde"
+          }
+        },
+        "summary": "Suggest Places",
+        "tags": [
+          "lugares"
         ]
       }
     },

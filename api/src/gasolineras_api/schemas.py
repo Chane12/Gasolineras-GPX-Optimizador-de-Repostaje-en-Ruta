@@ -40,9 +40,32 @@ class Place(BaseModel):
     lon: float
 
 
+class Coordinates(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
 class RouteTextRequest(BaseModel):
     origin: str = Field(min_length=2, max_length=200, examples=["Ávila"])
     destination: str = Field(min_length=2, max_length=200, examples=["Segovia"])
+    origin_point: Coordinates | None = Field(
+        default=None, description="Coordenadas del lugar elegido en las sugerencias: evita volver a buscarlo por nombre"
+    )
+    destination_point: Coordinates | None = Field(default=None, description="Igual que origin_point, para el destino")
+
+
+class PlaceSuggestion(BaseModel):
+    """A place offered while the user types."""
+
+    name: str = Field(examples=["Valencia de Don Juan"])
+    context: str = Field(description="Comarca, provincia o comunidad, para distinguir lugares con el mismo nombre")
+    lat: float
+    lon: float
+    kind: str = Field(description="Tipo de lugar en OpenStreetMap: city, town, village…")
+
+
+class PlaceSuggestionsResponse(BaseModel):
+    places: list[PlaceSuggestion] = Field(description="Los más importantes primero; vacía si no hay ninguno")
 
 
 class RouteResponse(BaseModel):

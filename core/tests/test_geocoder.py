@@ -52,6 +52,7 @@ def isolated_geocoder(monkeypatch):
     no_wait = RateLimiter(0.0, 10.0, sleep=lambda _s: None)
     monkeypatch.setattr(geocoder, "_nominatim_limiter", no_wait)
     monkeypatch.setattr(geocoder, "_photon_limiter", no_wait)
+    monkeypatch.setattr(geocoder, "_suggest_limiter", no_wait)
     yield
     geocoder.clear_caches()
 
@@ -194,3 +195,85 @@ class TestGetRouteFromText:
     def test_errors_are_still_route_text_errors_for_legacy_callers(self):
         for exc in (geocoder.PlaceNotFoundError, geocoder.NoRouteError, geocoder.RoutingServiceError):
             assert issubclass(exc, geocoder.RouteTextError)
+
+
+def photon_place(name, kind, county=None, state=None, country="ES", lon=-3.7, lat=40.4):
+    return {
+        "geometry": {"type": "Point", "coordinates": [lon, lat]},
+        "properties": {"name": name, "osm_value": kind, "county": county, "state": state, "countrycode": country},
+    }
+
+
+PHOTON_VALEN = {
+    "features": [
+        photon_place("Valentine", "village", "Haute-Garonne", "Occitanie", country="FR"),
+        photon_place("Valencia de Don Juan", "village", "León", "Castilla y León"),
+        photon_place("València / Valencia", "province", None, "Comunitat Valenciana"),
+        photon_place("València", "city", "Comarca de València", "Comunitat Valenciana", lon=-0.376, lat=39.47),
+        photon_place("Valencia de Alcántara", "town", "Cáceres", "Extremadura"),
+        photon_place("Valencia de Don Juan", "village", "León", "Castilla y León"),
+    ]
+}
+
+
+class TestParsePhotonSuggestions:
+    def test_keeps_spanish_places_most_important_first_without_repeats(self):
+        suggestions = geocoder.parse_photon_suggestions(PHOTON_VALEN)
+
+        assert [(s.name, s.kind) for s in suggestions] == [
+            ("València", "city"),
+            ("Valencia de Alcántara", "town"),
+            ("Valencia de Don Juan", "village"),
+        ]
+        assert suggestions[0].context == "Comarca de València, Comunitat Valenciana"
+        assert (suggestions[0].lat, suggestions[0].lon) == (39.47, -0.376)
+
+    def test_context_skips_parts_equal_to_the_name(self):
+        payload = {"features": [photon_place("Madrid", "city", None, "Comunidad de Madrid")]}
+
+        assert geocoder.parse_photon_suggestions(payload)[0].context == "Comunidad de Madrid"
+
+    def test_respects_the_limit_and_tolerates_malformed_features(self):
+        payload = {"features": [{"properties": {}}, *[photon_place(f"Pueblo {i}", "village") for i in range(9)]]}
+
+        assert len(geocoder.parse_photon_suggestions(payload, limit=4)) == 4
+        assert geocoder.parse_photon_suggestions({"error": "x"}) == []
+
+
+class TestSuggestPlaces:
+    def test_asks_photon_for_places_in_spain_with_identifiable_user_agent(self, monkeypatch):
+        fake = FakeGet(lambda url, params: FakeResponse(PHOTON_VALEN))
+        monkeypatch.setattr(geocoder.requests, "get", fake)
+
+        names = [s.name for s in geocoder.suggest_places("  Valen ")]
+
+        assert names[0] == "València"
+        call = fake.calls[0]
+        assert call["url"] == PHOTON_URL
+        assert call["params"]["q"] == "Valen"
+        assert call["params"]["osm_tag"] == "place"
+        assert call["headers"]["User-Agent"] == USER_AGENT
+        assert call["timeout"] is not None
+
+    def test_caches_by_normalized_text(self, monkeypatch):
+        fake = FakeGet(lambda url, params: FakeResponse(PHOTON_VALEN))
+        monkeypatch.setattr(geocoder.requests, "get", fake)
+
+        geocoder.suggest_places("Valen")
+        geocoder.suggest_places("VALEN ")
+
+        assert len(fake.calls) == 1
+
+    def test_too_short_queries_do_not_call_photon(self, monkeypatch):
+        fake = FakeGet(lambda url, params: FakeResponse(PHOTON_VALEN))
+        monkeypatch.setattr(geocoder.requests, "get", fake)
+
+        assert geocoder.suggest_places(" v ") == []
+        assert fake.calls == []
+
+    def test_photon_down_raises_routing_service_error(self, monkeypatch):
+        fake = FakeGet(lambda url, params: requests.ConnectionError("down"))
+        monkeypatch.setattr(geocoder.requests, "get", fake)
+
+        with pytest.raises(geocoder.RoutingServiceError):
+            geocoder.suggest_places("Valen")

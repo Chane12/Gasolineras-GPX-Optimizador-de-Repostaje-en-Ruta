@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from gasolineras_api.catalogue import PriceCatalogue
 from gasolineras_api.logging_config import configure_logging
 from gasolineras_api.ratelimit import RateLimiter
-from gasolineras_api.routers import detours, export, route, search
+from gasolineras_api.routers import detours, export, places, route, search
 from gasolineras_api.routers.search import get_catalogue
 from gasolineras_api.schemas import PricesStatus
 
@@ -111,6 +111,7 @@ def create_app(
         return HealthResponse(status="ok", version=API_VERSION, prices=_prices_status(get_catalogue(request)))
 
     app.include_router(route.router)
+    app.include_router(places.router)
     app.include_router(search.router)
     app.include_router(detours.router)
     app.include_router(export.router)

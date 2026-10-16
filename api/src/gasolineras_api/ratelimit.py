@@ -1,8 +1,9 @@
 """Per-client rate limiting, in memory (one API instance; ADR 0005).
 
-Two budgets per client IP:
+Three budgets per client IP:
 - ``external``: endpoints that call the free OSM services (Nominatim, OSRM). One user must not use up
   the share of everybody else.
+- ``suggest``: place suggestions while typing (Photon). Many small requests per search, so its own budget.
 - ``default``: everything else except /health.
 
 Client IP behind proxies: set ``GASOLINERAS_TRUSTED_PROXY_HOPS`` to the number of proxies in front of
@@ -35,6 +36,7 @@ class Budget:
 
 DEFAULT_BUDGETS: dict[str, Budget] = {
     "external": Budget(requests=10, window_s=60),
+    "suggest": Budget(requests=60, window_s=60),
     "default": Budget(requests=60, window_s=60),
 }
 
