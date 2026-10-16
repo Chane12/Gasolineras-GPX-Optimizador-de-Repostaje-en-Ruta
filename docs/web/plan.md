@@ -49,16 +49,16 @@ Comportamientos clave:
 
 ## Paridad con Streamlit (lista de control)
 
-- [ ] Ruta desde texto, desde GPX y con la demo de Gredos
-- [ ] Combustible (12 tipos de `/fuels`), distancia máxima, número de resultados, más barata por tramo, solo 24 h, España Vaciada
-- [ ] Mapa con la ruta y las gasolineras por precio; centrar el mapa al elegir una de la lista
-- [ ] Ranking con precio, km, desvío real, horario y ahorro frente a la más cara
-- [ ] Resumen: mejor precio, ahorro y número de gasolineras en la zona
-- [ ] Plan de viaje: añadir y quitar paradas, km entre paradas, ahorro estimado
-- [ ] Exportar a Google Maps (máximo 9 paradas, con aviso) y GPX con paradas
-- [ ] Radar de autonomía (aquí, opcional) con perfiles moto 250 / coche 600 / gran autonomía 900 / manual
-- [ ] Compartir la búsqueda por enlace
-- [ ] Antigüedad de los precios y aviso si son de respaldo
+- [x] Ruta desde texto, desde GPX y con la demo de Gredos
+- [x] Combustible (12 tipos de `/fuels`), distancia máxima, número de resultados, más barata por tramo, solo 24 h, España Vaciada
+- [x] Mapa con la ruta y las gasolineras por precio; centrar el mapa al elegir una de la lista
+- [x] Ranking con precio, km, desvío real, horario y ahorro frente a la más cara
+- [x] Resumen: mejor precio, ahorro y número de gasolineras en la zona
+- [x] Plan de viaje: añadir y quitar paradas, km entre paradas, ahorro estimado
+- [x] Exportar a Google Maps (máximo 9 paradas, con aviso) y GPX con paradas
+- [x] Radar de autonomía (aquí, opcional) con perfiles moto 250 / coche 600 / gran autonomía 900 / manual
+- [x] Compartir la búsqueda por enlace
+- [x] Antigüedad de los precios y aviso si son de respaldo
 
 ## Calidad
 
