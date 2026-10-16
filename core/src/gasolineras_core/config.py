@@ -143,6 +143,9 @@ OSRM_SEMAPHORE_WAIT_S: float = 15.0
 # Tiempo máximo de una petición de desvíos / de un GPX con paradas: lo que no dé tiempo queda sin calcular
 # (Cloud Run corta las peticiones largas y el usuario no debe esperar minutos).
 DETOURS_MAX_S: float = 45.0
+# Desvío = ruta(antes → gasolinera → después) − ruta(antes → después), con "antes" y "después" a esta
+# distancia de la gasolinera sobre la ruta. Respeta el sentido de la marcha y las salidas de las autovías.
+DETOUR_ANCHOR_M: float = 2000.0
 GPX_SPLICE_MAX_S: float = 30.0
 # Desvíos (ida y vuelta a una gasolinera) cacheados por coordenadas redondeadas.
 DETOUR_CACHE_TTL_S: float = 24 * 3600
