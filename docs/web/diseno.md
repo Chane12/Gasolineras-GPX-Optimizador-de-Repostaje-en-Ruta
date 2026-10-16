@@ -115,6 +115,27 @@ En código: `web/src/components/` (tokens en `web/src/app/globals.css`). Catálo
 - Español cercano y directo, tuteando, con vocabulario de carretera. Ejemplos: "Elige tus paradas", "Tu ruta", "Hoja de ruta", "Añadir parada", "Cómo llegar", "Navegar con Google Maps".
 - Sin exclamaciones ni emojis. Los errores explican qué pasa y qué hacer; la API ya devuelve los mensajes en español.
 
+## Flujo aprobado (2026-10-16)
+
+Tras la revisión de experiencia ([`revision-ux.md`](revision-ux.md)), el propietario aprobó **las maquetas del flujo**, que **mandan sobre las de abajo** cuando no coinciden:
+
+- Lienzo: https://claude.ai/artifact/43WPRaqsBAE5mxtKr7moXN (privado del propietario).
+- Copia en el repo: [`maquetas/flujo/`](maquetas/flujo/).
+
+| Maqueta | Qué fija |
+|---|---|
+| `Escritorio-Inicio` | Inicio a dos columnas: formulario reducido (origen, destino, combustible) con sugerencias de lugares; ejemplo visual y los tres pasos |
+| `Escritorio-Ruta` | El sitio de trabajo: <ul><li>cabecera con la búsqueda editable;</li><li>panel izquierdo con filtros, resumen, orden, unas 8 recomendadas, "Ver las N gasolineras" y "Tu ruta" fija abajo;</li><li>mapa a la derecha con zoom, leyenda, placas solo en las recomendadas y puntos en las demás;</li><li>la fila con el ratón encima, resaltada también en el mapa.</li></ul> |
+| `Escritorio-Ficha` | La ficha sustituye a la lista en el panel: "Volver a la lista", anterior/siguiente por km, precio grande, desvío en km y minutos, horario, "En tus paradas" y "Cómo llegar" |
+| `Escritorio-HojaDeRuta` | Roadbook con viñetas de tulipán y quitar parada; a la derecha, Google Maps, GPX, imprimir o PDF, copiar el enlace para el móvil y la autonomía opcional |
+| `Movil-Inicio` / `Movil-Error` | Sugerencias al escribir; un lugar no encontrado se avisa en su campo, con alternativas ("¿Quisiste decir…?") |
+| `Movil-Resultados` | Mapa + hoja con filtros en fila, orden, recomendadas y la barra "Tu ruta" |
+| `Movil-Ficha` / `Movil-HojaDeRuta` | Ficha en hoja sobre el mapa; hoja de ruta con los botones de exportar abajo, al alcance del pulgar |
+
+Reglas nuevas que salen del flujo:
+- **Filtros con palabras de conductor**, aplicados al momento: "Hasta N km de desvío", "Solo abiertas 24 h", "Ver también las de paso" (antes "Modo España Vaciada") y "Avisar de mi autonomía". La opción "una cada N km" desaparece: las recomendadas ya incluyen la más barata de cada tramo.
+- **Legibilidad**: unas 8 recomendadas a la vista; las demás, detrás de "Ver las N gasolineras" y como puntos sin texto en el mapa.
+
 ## Pantallas de referencia
 
 | Maqueta | Qué fija |
