@@ -61,11 +61,26 @@ def test_gpx_contains_track_and_stop_waypoints(client):
     gpx = gpxpy.parse(response.text)
     assert len(gpx.waypoints) == 1
     name = gpx.waypoints[0].name or ""
-    assert "Repsol Ávila" in name
-    assert "1.559" in name
+    assert name == "1. Repsol Ávila · 20,0 L · 31,18 €"
+    assert "1,559 €/L" in (gpx.waypoints[0].description or "")
     points = [p for t in gpx.tracks for s in t.segments for p in s.points]
     # OSRM unavailable: the track still goes through the station
     assert any(abs(p.latitude - 40.7) < 1e-9 and abs(p.longitude + 4.5) < 1e-9 for p in points)
+
+
+def test_gpx_waypoints_are_readable_on_a_gps(client):
+    response = client.post(
+        "/export/gpx",
+        json={
+            "track": TRACK,
+            "stops": [{"name": "Ballenoil", "lat": 40.7, "lon": -4.5, "price": 1.629, "km": 82.4, "schedule": "24 h"}],
+        },
+    )
+
+    wpt = gpxpy.parse(response.text).waypoints[0]
+    assert wpt.name == "1. Ballenoil · 1,629 €/L"  # coma decimal y sin emojis
+    assert wpt.description == "Repostar en Ballenoil. km 82 de la ruta. 1,629 €/L. horario: 24 h."
+    assert wpt.symbol == "Fuel"
 
 
 def test_gpx_without_stops_is_just_the_route(client):

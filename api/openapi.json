@@ -345,6 +345,19 @@
             "description": "Coste previsto de la parada (€)",
             "title": "Cost"
           },
+          "km": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Km de la ruta, para la descripción del waypoint",
+            "title": "Km"
+          },
           "lat": {
             "maximum": 90.0,
             "minimum": -90.0,
@@ -387,6 +400,19 @@
             ],
             "description": "€/L, para la descripción del waypoint",
             "title": "Price"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Horario, para la descripción",
+            "title": "Schedule"
           }
         },
         "required": [

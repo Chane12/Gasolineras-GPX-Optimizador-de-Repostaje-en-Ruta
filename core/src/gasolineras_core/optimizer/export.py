@@ -294,6 +294,11 @@ def compute_detours(
     return results
 
 
+def _es(value: float, decimals: int) -> str:
+    """Número con coma decimal: 1.629 → "1,629"."""
+    return f"{value:.{decimals}f}".replace(".", ",")
+
+
 def build_gpx_from_track(track: LineString, name: str = "Ruta") -> bytes:
     """GPX 1.1 con un único track a partir de un LineString WGS84 (para rutas calculadas desde texto)."""
     gpx_obj = _gpx.GPX()
@@ -338,23 +343,31 @@ def enrich_gpx_with_stops(
         litros = float(row.get("litros_a_repostar") or 0.0)
         coste = float(row.get("coste_parada_eur") or 0.0)
         precio = float(row.get(fuel_column) or 0.0) if fuel_column else 0.0
+        km = row.get("km_ruta")
+        horario = row.get("Horario")
 
+        # Sin emojis (muchos GPS no los muestran) y con coma decimal, como se escribe en España.
         nombre_wpt = (
-            f"⛽ {i}. {rotulo} | {litros:.1f} L @ {precio:.3f} €/L = {coste:.2f} €"
+            f"{i}. {rotulo} · {_es(litros, 1)} L · {_es(coste, 2)} €"
             if litros > 0
-            else f"⛽ {i}. {rotulo} | {precio:.3f} €/L"
+            else f"{i}. {rotulo} · {_es(precio, 3)} €/L"
         )
+        detalles = [f"Repostar en {rotulo}"]
+        if km is not None and not pd.isna(km):
+            detalles.append(f"km {float(km):.0f} de la ruta")
+        if precio > 0:
+            detalles.append(f"{_es(precio, 3)} €/L")
+        if coste > 0:
+            detalles.append(f"coste estimado {_es(coste, 2)} €")
+        if isinstance(horario, str) and horario.strip():
+            detalles.append(f"horario: {horario.strip()}")
 
         wpt = _gpx.GPXWaypoint(
             latitude=lat,
             longitude=lon,
             name=nombre_wpt,
             symbol="Fuel",
-            description=(
-                f"Repostar en {rotulo}. Precio: {precio:.3f} €/L. Coste estimado: {coste:.2f} €."
-                if coste > 0
-                else f"Gasolinera {rotulo}. Precio: {precio:.3f} €/L."
-            ),
+            description=". ".join(detalles) + ".",
         )
         gpx_obj.waypoints.append(wpt)
         paradas.append({"lon": lon, "lat": lat})

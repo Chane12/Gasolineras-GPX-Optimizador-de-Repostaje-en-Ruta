@@ -278,6 +278,8 @@ class GpxStop(BaseModel):
     price: float | None = Field(default=None, ge=0, description="€/L, para la descripción del waypoint")
     liters: float | None = Field(default=None, ge=0, description="Litros previstos en esta parada")
     cost: float | None = Field(default=None, ge=0, description="Coste previsto de la parada (€)")
+    km: float | None = Field(default=None, ge=0, description="Km de la ruta, para la descripción del waypoint")
+    schedule: str | None = Field(default=None, max_length=120, description="Horario, para la descripción")
 
 
 class GpxExportRequest(BaseModel):

@@ -47,6 +47,8 @@ def gpx(body: GpxExportRequest) -> Response:
             _PRICE_COLUMN: [s.price or 0.0 for s in body.stops],
             "litros_a_repostar": [s.liters or 0.0 for s in body.stops],
             "coste_parada_eur": [s.cost or 0.0 for s in body.stops],
+            "km_ruta": [s.km for s in body.stops],
+            "Horario": [s.schedule for s in body.stops],
         },
         geometry=gpd.points_from_xy([s.lon for s in body.stops], [s.lat for s in body.stops]),
         crs=CRS_WGS84,

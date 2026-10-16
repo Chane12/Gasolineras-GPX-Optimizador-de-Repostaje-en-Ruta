@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { type Station, stationKey } from "@/lib/map/geo";
-import { formatStationName } from "@/lib/stations";
+import { formatSchedule, formatStationName } from "@/lib/stations";
 
 import { api, type ApiClient, type Schemas, unwrap } from "./client";
 
@@ -59,6 +59,8 @@ export async function downloadGpx(
           lat: s.lat,
           lon: s.lon,
           price: s.price,
+          km: Math.max(0, s.km_on_route),
+          schedule: (formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null))?.slice(0, 120) ?? null,
         })),
       },
       parseAs: "blob",
