@@ -76,4 +76,6 @@ Si algo no se pudo verificar (p. ej. requiere el móvil o el despliegue), dilo e
 
 - `main` se despliega solo en Streamlit Community Cloud (archivo principal: `legacy/streamlit/app.py`): https://gasolineras-gpx-optimizador-de-repostaje-en-ruta.streamlit.app/
 - Comprobar producción tras fusionar: `uvx --from playwright python scripts/check_prod.py` (usa el Chrome del sistema; da tiempo a que la app despierte si estaba dormida). Todo lo que entra en `main` llega a producción: por eso PR + CI.
+- **API**: Render (https://gasolineras-api-kwnx.onrender.com), se redespliega sola desde `main` (`render.yaml`; ver `api/CLAUDE.md`).
+- **Web (pruebas, hasta el lanzamiento)**: Vercel, proyecto `gasolineras-web` del equipo `gasol` (https://gasolineras-web.vercel.app). `main` se publica solo y cada PR tiene su vista previa (enlace en el PR). No se indexa en buscadores (`X-Robots-Tag`, `web/next.config.ts`). Ver `web/CLAUDE.md`.
 - Streamlit Cloud instala `legacy/streamlit/requirements.txt` y la app importa el core desde `core/src` (shim de `sys.path` en `app.py`). No quitar ese shim mientras exista el despliegue.

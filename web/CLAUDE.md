@@ -44,6 +44,13 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
 - **Mapa** (`src/components/route-map/`, estilo en `src/lib/map/style.ts`): MapLibre no funciona en jsdom (sin WebGL). La lógica pura va en `src/lib/map/` con tests, y en los tests de páginas el mapa se sustituye por un doble (ver `src/app/ruta/route-results.test.tsx`). Lo visual se comprueba con capturas de Playwright contra la API.
 - Estructura: `src/app/` (rutas, App Router), y más adelante `src/components/`, `src/lib/` (cliente de la API, utilidades) y `src/styles/` según se necesiten.
 
+## Despliegue (Vercel)
+
+- Proyecto `gasolineras-web` (equipo `gasol`, plan Hobby), conectado al repo con la carpeta raíz `web/`: `main` → https://gasolineras-web.vercel.app y cada PR → vista previa con su enlace en el PR. Se comprueba en el móvil real con ese enlace.
+- Variables del proyecto (todas las ramas): `NEXT_PUBLIC_API_URL` (la API de Render), `ENABLE_EXPERIMENTAL_COREPACK=1` (para usar el pnpm de `packageManager`) y `NEXT_TELEMETRY_DISABLED=1`. En el lanzamiento: `SITE_INDEXABLE=true` en producción.
+- La API solo acepta estos orígenes (CORS): `GASOLINERAS_CORS_ORIGINS` y `GASOLINERAS_CORS_ORIGIN_REGEX` en `/render.yaml`.
+- CLI (sesión ya iniciada en esta máquina): `./scripts/pnpm --silent dlx vercel@63.1.0 <comando>`, con `VERCEL_TELEMETRY_DISABLED=1`. La carpeta `.vercel/` no se sube al repo.
+
 ## Verificación
 
 `./scripts/verify.sh` (desde la raíz) ejecuta también la web: dependencias, lint, tipos, formato, tests y `next build`. Si cambias algo visual, compáralo con la maqueta correspondiente y di en el PR qué no has podido comprobar (p. ej. en un móvil real).

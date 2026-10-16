@@ -23,10 +23,15 @@ services:
         - uv.lock
         - render.yaml
     envVars:
-      # Dominios de la web que pueden llamar a la API desde el navegador (separados por comas).
-      # De momento, la web en local; se añadirá el de Vercel al publicarla.
+      # Dominios de la web que pueden llamar a la API desde el navegador (separados por comas):
+      # la web en local y la de Vercel (proyecto gasolineras-web, equipo gasol).
       - key: GASOLINERAS_CORS_ORIGINS
-        value: http://localhost:3000
+        value: http://localhost:3000,https://gasolineras-web.vercel.app,https://gasolineras-web-gasol.vercel.app
+      # Vistas previas de Vercel (una por PR o despliegue): gasolineras-web-<hash o git-rama>-gasol.vercel.app.
+      # La API es pública y sin sesiones, así que el CORS no protege datos: solo evita que otras webs la usen
+      # desde el navegador de sus visitantes.
+      - key: GASOLINERAS_CORS_ORIGIN_REGEX
+        value: https://gasolineras-web-[a-z0-9-]+-gasol\.vercel\.app
       # Detrás de Render, X-Forwarded-For llega como "[lo que mande el cliente], IP real, IP de Cloudflare,
       # IP del balanceador interno" (comprobado el 2026-10-16): la IP real es la tercera empezando por el final.
       - key: GASOLINERAS_TRUSTED_PROXY_HOPS

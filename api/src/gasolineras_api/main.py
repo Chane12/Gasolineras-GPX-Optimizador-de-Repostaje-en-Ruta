@@ -27,6 +27,7 @@ from gasolineras_api.schemas import PricesStatus
 API_VERSION = version("gasolineras-api")
 CORS_ORIGINS_ENV = "GASOLINERAS_CORS_ORIGINS"
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]  # Next.js en local
+CORS_ORIGIN_REGEX_ENV = "GASOLINERAS_CORS_ORIGIN_REGEX"
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ def cors_origins_from_env() -> list[str]:
     raw = os.environ.get(CORS_ORIGINS_ENV, "")
     origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
     return origins or DEFAULT_CORS_ORIGINS
+
+
+def cors_origin_regex_from_env() -> str | None:
+    """Pattern for origins that cannot be listed one by one (Vercel preview URLs). The whole origin must match."""
+    return os.environ.get(CORS_ORIGIN_REGEX_ENV, "").strip() or None
 
 
 class HealthResponse(BaseModel):
@@ -58,6 +64,7 @@ def create_app(
     warm_up: bool = True,
     rate_limiter: RateLimiter | None = None,
     cors_origins: list[str] | None = None,
+    cors_origin_regex: str | None = None,
 ) -> FastAPI:
     """Build the app. Tests pass their own ``catalogue`` (no network), ``warm_up=False`` and limits."""
 
@@ -83,6 +90,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins if cors_origins is not None else cors_origins_from_env(),
+        allow_origin_regex=cors_origin_regex if cors_origin_regex is not None else cors_origin_regex_from_env(),
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
         expose_headers=["Retry-After", "Content-Disposition"],
