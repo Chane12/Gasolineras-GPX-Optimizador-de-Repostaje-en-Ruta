@@ -11,9 +11,10 @@ case "$f" in
     uv run --no-sync ruff format --quiet "$f"
     uv run --no-sync ruff check --fix --quiet "$f" >/dev/null  # arregla imports/estilo; los avisos los ve el CI
     ;;
-  "$root"/web/*.ts|"$root"/web/*.tsx|"$root"/web/*.js|"$root"/web/*.jsx|"$root"/web/*.css|"$root"/web/*.json)
-    # Fase 2: prettier del proyecto web (solo si ya existe)
-    [ -x "$root/web/node_modules/.bin/prettier" ] && "$root/web/node_modules/.bin/prettier" --write --log-level warn "$f"
+  "$root"/web/*.ts|"$root"/web/*.tsx|"$root"/web/*.mts|"$root"/web/*.js|"$root"/web/*.mjs|"$root"/web/*.jsx|"$root"/web/*.css|"$root"/web/*.json|"$root"/web/*.md)
+    # Web: prettier con el Node del proyecto (.tools/node), solo si ya están instalados
+    [ -x "$root/web/node_modules/.bin/prettier" ] && [ -x "$root/.tools/node/bin/node" ] \
+      && PATH="$root/.tools/node/bin:$PATH" "$root/web/node_modules/.bin/prettier" --write --log-level warn "$f"
     ;;
 esac
 exit 0

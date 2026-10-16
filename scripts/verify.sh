@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Verificación completa del repo. La ejecutan el CI, la skill /verificar y cualquiera antes de un PR.
-#   ./scripts/verify.sh           → lint, formato, tipos, tests (sin red), requirements legacy y contrato OpenAPI al día
+#   ./scripts/verify.sh           → Python: lint, formato, tipos, tests (sin red), requirements legacy, contrato OpenAPI
+#                                   Web: dependencias, lint, tipos, formato, tests y build (Node propio en .tools/)
 #   ./scripts/verify.sh --smoke   → además arranca la app Streamlit con la demo (usa red: MITECO)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -20,6 +21,14 @@ step "Contrato OpenAPI al día (api/openapi.json)"
 ./scripts/export-openapi.sh >/dev/null
 git diff --exit-code -- api/openapi.json \
   || { echo "✗ api/openapi.json desactualizado (cambió el contrato de la API): commitea el archivo regenerado y dilo en el PR."; exit 1; }
+
+pnpm_web() { ./scripts/pnpm --silent -C web "$@"; }
+step "Web: dependencias (lockfile congelado)"; pnpm_web install --frozen-lockfile
+step "Web: lint (eslint)";                     pnpm_web lint
+step "Web: tipos (tsc)";                       pnpm_web typecheck
+step "Web: formato (prettier)";                pnpm_web format:check
+step "Web: tests (vitest)";                    pnpm_web test
+step "Web: build (next build)";                pnpm_web build >/dev/null
 
 if [[ "${1:-}" == "--smoke" ]]; then
   step "Smoke test app Streamlit (demo, red)"

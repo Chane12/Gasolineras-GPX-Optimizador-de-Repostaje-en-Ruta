@@ -1,0 +1,7 @@
+# Ajustes de pnpm para la web (un solo paquete; no es un monorepo JS).
+# No instalar versiones publicadas hace menos de 7 días: protección ante paquetes comprometidos.
+minimumReleaseAge: 10080
+# Scripts de instalación de dependencias: bloqueados salvo que se permitan aquí uno a uno.
+# unrs-resolver trae binarios precompilados; su script solo los verifica, no hace falta.
+allowBuilds:
+  unrs-resolver: false
