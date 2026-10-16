@@ -22,9 +22,9 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 | `core/` | Motor geoespacial `gasolineras_core` (lógica de negocio, sin UI) | Activo |
 | `legacy/streamlit/` | App Streamlit actual, **en producción** (Streamlit Community Cloud) | Congelada: solo bugs |
 | `api/` | FastAPI sobre `core` (`gasolineras_api`); contrato en `api/openapi.json` | Activo (sin desplegar hasta la Fase 3) |
-| `web/` | Next.js — plan en `docs/web/plan.md`, diseño en `docs/web/diseno.md` | Fase 2 (planificada; aún no existe) |
+| `web/` | Next.js — plan en `docs/web/plan.md`, diseño en `docs/web/diseno.md`; reglas en `web/CLAUDE.md` | Fase 2 (en construcción) |
 | `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs), `web/` (plan, sistema de diseño y maquetas de la web) | |
-| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py` | |
+| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py`, `setup-node.sh` + `pnpm` (Node propio en `.tools/`) | |
 | `.claude/` | Hooks (formateo automático) y skills del proyecto | |
 
 ## Comandos
@@ -40,9 +40,10 @@ uv run uvicorn gasolineras_api.main:app --reload  # API en local (http://127.0.0
 docker build -t gasolineras-api . && docker run -p 8080:8080 gasolineras-api  # API en contenedor (lo prueba el CI)
 ./scripts/export-legacy-requirements.sh           # tras cambiar dependencias o el core
 ./scripts/export-openapi.sh                       # tras cambiar el contrato de la API (verify.sh lo regenera y avisa)
+./scripts/pnpm -C web dev                         # web en local (http://localhost:3000); Node 24 propio en .tools/
 ```
 
-Dependencias: **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nunca pip ni requirements a mano. Después de cambiar dependencias **o el core**, regenera `legacy/streamlit/requirements.txt` con el script: lleva una huella de `core/src` para que Streamlit Cloud reinicie la app con el core nuevo (`verify.sh` lo regenera y avisa).
+Dependencias: Python **solo con `uv`** (`uv add --package gasolineras-core <pkg>`), nunca pip ni requirements a mano; web **solo con `./scripts/pnpm -C web add`** (nunca npm/yarn; ver `web/CLAUDE.md`). Después de cambiar dependencias **o el core**, regenera `legacy/streamlit/requirements.txt` con el script: lleva una huella de `core/src` para que Streamlit Cloud reinicie la app con el core nuevo (`verify.sh` lo regenera y avisa).
 
 ## Invariantes (no romper)
 

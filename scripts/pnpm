@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# pnpm con el Node del proyecto (.tools/node). Lo instala la primera vez.
+#   ./scripts/pnpm -C web dev      ./scripts/pnpm -C web test
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+"$root/scripts/setup-node.sh"
+export PATH="$root/.tools/node/bin:$PATH"
+export NEXT_TELEMETRY_DISABLED=1  # sin telemetría de Next.js
+exec pnpm "$@"

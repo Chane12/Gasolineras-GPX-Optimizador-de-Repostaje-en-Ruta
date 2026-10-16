@@ -90,6 +90,19 @@ output_*.html
 /cache/
 
 # =============================================================================
+# WEB (Node, Next.js) — Node propio del proyecto en .tools/ (scripts/setup-node.sh)
+# =============================================================================
+/.tools/
+node_modules/
+web/.next/
+web/out/
+web/coverage/
+web/playwright-report/
+web/test-results/
+*.tsbuildinfo
+web/next-env.d.ts
+
+# =============================================================================
 # TESTING Y LINTING
 # =============================================================================
 .pytest_cache/
