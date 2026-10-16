@@ -17,6 +17,8 @@ import {
 import { Logo } from "@/components/site-header";
 import { api, type ApiClient } from "@/lib/api/client";
 import { type DetourInfo, useDetours } from "@/lib/api/detours";
+import { applyDiscounts, type PricedStation } from "@/lib/discounts";
+import { useDiscounts } from "@/lib/use-discounts";
 import { downloadGpx, MAX_GPX_STOPS, useGmapsUrl } from "@/lib/api/exports";
 import type { RouteSource } from "@/lib/api/queries";
 import { formatKm, formatPrice, formatShortKm } from "@/lib/format";
@@ -193,7 +195,22 @@ function AutonomyCheck({ autonomyKm, onChange }: { autonomyKm: number; onChange:
  * llevársela (Google Maps, GPX, imprimir o PDF, enlace). Lee la búsqueda y las paradas de la URL.
  */
 export function RoadbookView({ client = api }: { client?: ApiClient }) {
-  const { params, setParams, source, route, routeKm, routeForSearch, search, stops } = useRouteData(client);
+  const {
+    params,
+    setParams,
+    source,
+    route,
+    routeKm,
+    routeForSearch,
+    search,
+    stops: rawStops,
+  } = useRouteData(client);
+  // Con "Mis descuentos" (10c), los precios de la hoja son los que pagará el usuario.
+  const { discounts } = useDiscounts();
+  const stops = {
+    ...rawStops,
+    list: rawStops.list.map((s): PricedStation => applyDiscounts(s, discounts)),
+  };
   const detours = useDetours(routeForSearch, stops.list, client);
   // Se prepara cuando ya se conocen las paradas (si no, se pediría una vez sin ellas).
   const gmaps = useGmapsUrl(
@@ -357,6 +374,7 @@ export function RoadbookView({ client = api }: { client?: ApiClient }) {
                                   {formatPrice(row.station.price)}
                                 </span>{" "}
                                 €/L
+                                {(row.station as PricedStation).list_price != null ? " con tu descuento" : ""}
                               </div>
                             </>
                           ) : (

@@ -311,6 +311,33 @@ describe("RouteResults", () => {
     expect(within(recommendedList()).getAllByRole("listitem")).toHaveLength(1);
   });
 
+  it("applies my discounts: prices I will pay, and a discounted station can become recommended", async () => {
+    const user = userEvent.setup();
+    renderAt("?origen=Madrid&destino=Valencia", api().client);
+
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Opciones avanzadas/ }));
+    await user.click(screen.getByRole("button", { name: "Añadir un descuento" }));
+    await user.type(screen.getByRole("combobox", { name: "Marca" }), "Repsol");
+    await user.type(screen.getByRole("textbox", { name: "Descuento" }), "10");
+
+    const repsol = within(recommendedList()).getAllByRole("listitem")[0] as HTMLElement;
+    expect(repsol).toHaveTextContent("1,559");
+    expect(repsol).toHaveTextContent("en el surtidor 1,659");
+    expect(within(repsol).getByText("MÁS BARATA")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Opciones avanzadas/ })).toHaveTextContent("1 activa");
+
+    // Cepsa (no recomendada, 1,712) con 20 céntimos queda en 1,512: pasa a recomendada, y la más barata.
+    await user.click(screen.getByRole("button", { name: "Añadir un descuento" }));
+    await user.type(screen.getAllByRole("combobox", { name: "Marca" })[1] as HTMLElement, "Cepsa");
+    await user.type(screen.getAllByRole("textbox", { name: "Descuento" })[1] as HTMLElement, "20");
+    const cepsa = within(recommendedList())
+      .getAllByRole("listitem")
+      .find((r) => r.textContent?.includes("Cepsa")) as HTMLElement;
+    expect(cepsa).toHaveTextContent("1,512");
+    expect(within(cepsa).getByText("MÁS BARATA")).toBeInTheDocument();
+  });
+
   it("highlights the plate of the row under the pointer", async () => {
     const user = userEvent.setup();
     renderAt("?origen=Madrid&destino=Valencia", api().client);

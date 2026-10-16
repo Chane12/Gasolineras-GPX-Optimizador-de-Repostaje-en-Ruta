@@ -5,6 +5,7 @@ import { Hito } from "@/components/hito";
 import { CheckIcon, ChevronLeftIcon, NavigateIcon, PlusIcon, WarningIcon } from "@/components/icons";
 import type { DetourInfo } from "@/lib/api/detours";
 import { formatAge, formatKm, formatPrice, formatPriceDelta, formatShortKm } from "@/lib/format";
+import type { PricedStation } from "@/lib/discounts";
 import type { Station } from "@/lib/map/geo";
 import { formatSchedule, formatStationName } from "@/lib/stations";
 
@@ -50,7 +51,7 @@ export function StationSheet({
   priceAgeMinutes,
   passingNote = null,
 }: {
-  station: Station;
+  station: PricedStation;
   detour: DetourInfo | undefined;
   cheapest: boolean;
   inPlan: boolean;
@@ -138,6 +139,12 @@ export function StationSheet({
         </span>
         <span className="text-[17px] font-semibold text-muted">€/L · {fuelLabel}</span>
       </p>
+      {station.list_price != null ? (
+        <p className="m-0 -mt-2 text-sm text-muted">
+          Con tu descuento de {station.discount_brand}. En el surtidor:{" "}
+          <span className="font-mono">{formatPrice(station.list_price)}</span> €/L.
+        </p>
+      ) : null}
 
       {passingNote ? (
         <p
