@@ -44,7 +44,7 @@ def test_cors_origins_from_env(monkeypatch):
     assert cors_origins_from_env() == DEFAULT_CORS_ORIGINS
 
 
-PREVIEWS = r"https://gasolineras-web-[a-z0-9-]+-gasol\.vercel\.app"
+PREVIEWS = r"https://gasolineras(-web)?-[a-z0-9-]+-gasol\.vercel\.app"
 
 
 @pytest.mark.parametrize(
@@ -52,6 +52,8 @@ PREVIEWS = r"https://gasolineras-web-[a-z0-9-]+-gasol\.vercel\.app"
     [
         ("https://gasolineras-web-a1b2c3d4e-gasol.vercel.app", True),
         ("https://gasolineras-web-git-feat-map-gasol.vercel.app", True),
+        ("https://gasolineras-3862di7d0-gasol.vercel.app", True),
+        ("https://gasolineras-3862di7d0-otro.vercel.app", False),
         ("https://otra-web-a1b2c3d4e-gasol.vercel.app", False),
         ("https://gasolineras-web-a1b2c3d4e-gasol.vercel.app.evil.example", False),
         ("http://gasolineras-web-a1b2c3d4e-gasol.vercel.app", False),
