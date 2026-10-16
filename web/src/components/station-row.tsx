@@ -73,7 +73,7 @@ export function StationRow({
               className="min-h-11 cursor-pointer text-left text-[17px] leading-tight font-bold text-ink hover:underline"
             >
               {name}
-              <span className="sr-only">, ver en el mapa</span>
+              <span className="sr-only">, ver la ficha</span>
             </button>
           ) : (
             <span className="text-[17px] leading-tight font-bold">{name}</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQueryStates } from "nuqs";
+import { parseAsString, useQueryState, useQueryStates } from "nuqs";
 import {
   type PointerEvent,
   type ReactNode,
@@ -21,9 +21,11 @@ import { RouteSearchBar } from "@/components/route-search-bar";
 import { Logo } from "@/components/site-header";
 import { ServerWarmupNotice } from "@/components/server-warmup-notice";
 import { StationRow } from "@/components/station-row";
+import { StationSheet } from "@/components/station-sheet";
 import { SummaryStats } from "@/components/summary-stats";
 import { TuRutaBar } from "@/components/tu-ruta-bar";
 import { api, type ApiClient } from "@/lib/api/client";
+import { useDetours } from "@/lib/api/detours";
 import { type RouteSource, routeSourceKey, useRoute, useStationSearch } from "@/lib/api/queries";
 import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
 import { plateTones, type Station, stationKey } from "@/lib/map/geo";
@@ -88,7 +90,7 @@ function snapHeight(snap: Snap, viewport: number): number {
   return viewport - 88;
 }
 
-type Sort = "km" | "price";
+type Sort = "km" | "price" | "detour";
 
 /**
  * La ruta como sitio de trabajo (maquetas Escritorio-Ruta y Movil-Resultados): búsqueda editable, filtros,
@@ -102,8 +104,11 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
 
   const route = useRoute(source, client);
   const routeKm = useMemo(() => (route.data ? trackLengthKm(route.data.track.coordinates) : 0), [route.data]);
-  const routeForSearch =
-    route.data && source ? { key: routeSourceKey(source), track: route.data.track } : null;
+  const routeKey = source ? routeSourceKey(source) : null;
+  const routeForSearch = useMemo(
+    () => (route.data && routeKey ? { key: routeKey, track: route.data.track } : null),
+    [route.data, routeKey],
+  );
   const options = {
     ...searchOptionsFrom(params),
     top_n: RECOMMENDED_CHEAPEST,
@@ -113,6 +118,11 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   const search = useStationSearch(routeForSearch, options, client);
 
   const [stops, setStops] = useState<ReadonlyMap<string, Station>>(new Map());
+  // La ficha abierta va en la URL: "atrás" vuelve a la lista y el enlace se puede compartir.
+  const [selectedKey, setSelectedKey] = useQueryState(
+    "gasolinera",
+    parseAsString.withOptions({ history: "push" }),
+  );
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort>("km");
@@ -142,18 +152,42 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   const recommended = useMemo(() => search.data?.stations ?? [], [search.data]);
   const others = useMemo(() => search.data?.other_stations ?? [], [search.data]);
   const total = recommended.length + others.length;
+  const selected = useMemo(
+    () =>
+      selectedKey ? ([...recommended, ...others].find((s) => stationKey(s) === selectedKey) ?? null) : null,
+    [selectedKey, recommended, others],
+  );
+
+  // Desvíos reales, en segundo plano: de las recomendadas, las paradas y la ficha abierta.
+  const detourTargets = useMemo(() => {
+    const byKey = new Map(recommended.map((s) => [stationKey(s), s]));
+    for (const s of [...stops.values(), ...(selected ? [selected] : [])]) byKey.set(stationKey(s), s);
+    return [...byKey.values()];
+  }, [recommended, stops, selected]);
+  const detours = useDetours(routeForSearch, detourTargets, client);
+
   const shown = useMemo(() => {
     const list = showAll ? [...recommended, ...others] : [...recommended];
-    return list.sort((a, b) => (sort === "km" ? a.km_on_route - b.km_on_route : a.price - b.price));
-  }, [recommended, others, showAll, sort]);
+    const detourOf = (s: Station) => detours.get(stationKey(s))?.km ?? Number.POSITIVE_INFINITY;
+    return list.sort((a, b) =>
+      sort === "km"
+        ? a.km_on_route - b.km_on_route
+        : sort === "price"
+          ? a.price - b.price
+          : detourOf(a) - detourOf(b) || a.km_on_route - b.km_on_route,
+    );
+  }, [recommended, others, showAll, sort, detours]);
   const tones = useMemo(() => plateTones(shown), [shown]);
 
   // En el mapa llevan placa las recomendadas y, aunque no lo sean, las paradas y la elegida; el resto, punto.
   const [mapPlates, mapDots] = useMemo(() => {
-    const withPlate = new Set([...stops.keys(), ...(focusedKey ? [focusedKey] : [])]);
+    const withPlate = new Set([
+      ...stops.keys(),
+      ...[focusedKey, selectedKey].filter((k): k is string => !!k),
+    ]);
     const promoted = others.filter((s) => withPlate.has(stationKey(s)));
     return [[...recommended, ...promoted], others.filter((s) => !withPlate.has(stationKey(s)))];
-  }, [recommended, others, stops, focusedKey]);
+  }, [recommended, others, stops, focusedKey, selectedKey]);
 
   if (!source) {
     return (
@@ -215,6 +249,19 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
       client={client}
     />
   );
+
+  function openStation(key: string) {
+    void setSelectedKey(key);
+    setFocusedKey(key);
+    if (!isDesktop) setSnap("half");
+  }
+
+  const byKm = [...shown].sort((a, b) => a.km_on_route - b.km_on_route);
+  const selectedIndex = selected ? byKm.findIndex((s) => stationKey(s) === stationKey(selected)) : -1;
+  const neighbourAt = (i: number) => {
+    const station = byKm[i];
+    return station ? { key: stationKey(station), station } : null;
+  };
 
   const error = route.error ?? search.error;
   const retry = () => void (route.isError ? route.refetch() : search.refetch());
@@ -307,151 +354,173 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
           </button>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pb-4 lg:px-6 lg:pt-5">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="m-0 truncate font-mono text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
-                  {search.data
-                    ? `${routeTitle(source)} · ${formatKm(search.data.route_km)} km`
-                    : "Gasolineras en tu ruta"}
-                </p>
-                <h2
-                  id="results-title"
-                  className="m-0 mt-0.5 text-2xl leading-tight font-bold tracking-[-0.015em]"
-                >
-                  Elige tus paradas
-                </h2>
-              </div>
-              {search.isFetching && search.data ? (
-                <span role="status" className="shrink-0 pb-1 text-sm text-muted">
-                  Actualizando…
-                </span>
-              ) : null}
-            </div>
-
-            <ServerWarmupNotice client={client} />
-
-            {route.data ? (
-              <FilterBar
-                filters={filters}
-                onChange={(next) => {
-                  void setParams(next);
-                  setShowAll(false);
-                }}
+            {selected && search.data ? (
+              <StationSheet
+                station={selected}
+                detour={detours.get(stationKey(selected))}
+                cheapest={best !== null && selected.price === best}
+                inPlan={stops.has(stationKey(selected))}
+                onTogglePlan={() => toggleStop(selected)}
+                onBack={() => void setSelectedKey(null)}
+                previous={selectedIndex > 0 ? neighbourAt(selectedIndex - 1) : null}
+                next={selectedIndex >= 0 ? neighbourAt(selectedIndex + 1) : null}
+                onNavigate={openStation}
+                nextRecommended={
+                  recommended
+                    .filter((s) => s.km_on_route > selected.km_on_route + 0.5)
+                    .sort((a, b) => a.km_on_route - b.km_on_route)[0] ?? null
+                }
+                fuelLabel={search.data.fuel.label}
+                priceAgeMinutes={search.data.prices.age_minutes ?? null}
               />
-            ) : null}
-
-            {error ? (
-              <div
-                role="alert"
-                className="flex items-center gap-3 rounded-card border-[1.5px] border-ink p-3 text-[15px]"
-              >
-                <WarningIcon size={20} className="shrink-0 text-warn" />
-                <span className="flex-1">{error.message}</span>
-                <Button variant="secondary" onClick={retry}>
-                  Reintentar
-                </Button>
-              </div>
-            ) : route.isPending || (search.isPending && !search.data) ? (
-              <p role="status" className="m-0 text-muted">
-                {route.isPending ? "Calculando la ruta…" : "Buscando gasolineras en tu ruta…"}
-              </p>
-            ) : total === 0 ? (
-              <p className="m-0">
-                No hay gasolineras con este combustible a menos de {filters.radio} km de la ruta. Prueba a
-                ampliar el desvío{filters.abierta24h ? " o a quitar «Solo abiertas 24 h»" : ""}.
-              </p>
             ) : (
               <>
-                {search.data?.autonomy && filters.autonomia > 0 ? (
-                  <AutonomyWarnings segments={search.data.autonomy} autonomyKm={filters.autonomia} />
-                ) : null}
-                <SummaryStats
-                  stats={[
-                    {
-                      label: "Recomendadas",
-                      value: (
-                        <>
-                          {recommended.length}
-                          <span className="text-xs text-muted"> de {total}</span>
-                        </>
-                      ),
-                    },
-                    {
-                      label: "Mejor precio",
-                      accent: true,
-                      value: best !== null ? <PriceValue>{formatPrice(best)}</PriceValue> : "—",
-                    },
-                    {
-                      label: "Ahorro hasta",
-                      value:
-                        best !== null && maxPrice !== null ? (
-                          <PriceValue>{formatPriceDelta(maxPrice - best)}</PriceValue>
-                        ) : (
-                          "—"
-                        ),
-                    },
-                  ]}
-                />
-                <div role="group" aria-label="Ordenar" className="flex gap-5">
-                  {(
-                    [
-                      ["km", "Por km"],
-                      ["price", "Por precio"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={sort === value}
-                      onClick={() => setSort(value)}
-                      className={`h-9 border-b-[2.5px] text-[15px] ${
-                        sort === value
-                          ? "border-accent font-bold text-accent"
-                          : "border-transparent font-semibold text-muted"
-                      }`}
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="m-0 truncate font-mono text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
+                      {search.data
+                        ? `${routeTitle(source)} · ${formatKm(search.data.route_km)} km`
+                        : "Gasolineras en tu ruta"}
+                    </p>
+                    <h2
+                      id="results-title"
+                      className="m-0 mt-0.5 text-2xl leading-tight font-bold tracking-[-0.015em]"
                     >
-                      {label}
-                    </button>
-                  ))}
+                      Elige tus paradas
+                    </h2>
+                  </div>
+                  {search.isFetching && search.data ? (
+                    <span role="status" className="shrink-0 pb-1 text-sm text-muted">
+                      Actualizando…
+                    </span>
+                  ) : null}
                 </div>
-                <ul
-                  className="m-0 list-none p-0"
-                  aria-label={showAll ? "Todas las gasolineras" : "Gasolineras recomendadas"}
-                >
-                  {shown.map((s, i) => {
-                    const key = stationKey(s);
-                    const name = formatStationName(s.name);
-                    return (
-                      <StationRow
-                        key={key}
-                        name={name}
-                        kmOnRoute={s.km_on_route}
-                        price={s.price}
-                        town={s.town ? formatStationName(s.town) : null}
-                        schedule={formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null)}
-                        cheapest={tones[i] === "best"}
-                        dimmed={tones[i] === "expensive"}
-                        inPlan={stops.has(key)}
-                        onTogglePlan={() => toggleStop(s)}
-                        onSelect={() => {
-                          setFocusedKey(key);
-                          if (!isDesktop) setSnap("peek");
-                        }}
-                        onHighlight={(on) => setHighlightedKey(on ? key : null)}
-                        highlighted={highlightedKey === key}
-                      />
-                    );
-                  })}
-                </ul>
-                {others.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAll((all) => !all)}
-                    className="self-start py-2 text-[15px] font-bold text-accent hover:text-accent-strong"
-                  >
-                    {showAll ? "Ver solo las recomendadas" : `Ver las ${total} gasolineras de la ruta`}
-                  </button>
+
+                <ServerWarmupNotice client={client} />
+
+                {route.data ? (
+                  <FilterBar
+                    filters={filters}
+                    onChange={(next) => {
+                      void setParams(next);
+                      setShowAll(false);
+                    }}
+                  />
                 ) : null}
+
+                {error ? (
+                  <div
+                    role="alert"
+                    className="flex items-center gap-3 rounded-card border-[1.5px] border-ink p-3 text-[15px]"
+                  >
+                    <WarningIcon size={20} className="shrink-0 text-warn" />
+                    <span className="flex-1">{error.message}</span>
+                    <Button variant="secondary" onClick={retry}>
+                      Reintentar
+                    </Button>
+                  </div>
+                ) : route.isPending || (search.isPending && !search.data) ? (
+                  <p role="status" className="m-0 text-muted">
+                    {route.isPending ? "Calculando la ruta…" : "Buscando gasolineras en tu ruta…"}
+                  </p>
+                ) : total === 0 ? (
+                  <p className="m-0">
+                    No hay gasolineras con este combustible a menos de {filters.radio} km de la ruta. Prueba a
+                    ampliar el desvío{filters.abierta24h ? " o a quitar «Solo abiertas 24 h»" : ""}.
+                  </p>
+                ) : (
+                  <>
+                    {search.data?.autonomy && filters.autonomia > 0 ? (
+                      <AutonomyWarnings segments={search.data.autonomy} autonomyKm={filters.autonomia} />
+                    ) : null}
+                    <SummaryStats
+                      stats={[
+                        {
+                          label: "Recomendadas",
+                          value: (
+                            <>
+                              {recommended.length}
+                              <span className="text-xs text-muted"> de {total}</span>
+                            </>
+                          ),
+                        },
+                        {
+                          label: "Mejor precio",
+                          accent: true,
+                          value: best !== null ? <PriceValue>{formatPrice(best)}</PriceValue> : "—",
+                        },
+                        {
+                          label: "Ahorro hasta",
+                          value:
+                            best !== null && maxPrice !== null ? (
+                              <PriceValue>{formatPriceDelta(maxPrice - best)}</PriceValue>
+                            ) : (
+                              "—"
+                            ),
+                        },
+                      ]}
+                    />
+                    <div role="group" aria-label="Ordenar" className="flex gap-5">
+                      {(
+                        [
+                          ["km", "Por km"],
+                          ["price", "Por precio"],
+                          ["detour", "Por desvío"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={sort === value}
+                          onClick={() => setSort(value)}
+                          className={`h-9 border-b-[2.5px] text-[15px] ${
+                            sort === value
+                              ? "border-accent font-bold text-accent"
+                              : "border-transparent font-semibold text-muted"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <ul
+                      className="m-0 list-none p-0"
+                      aria-label={showAll ? "Todas las gasolineras" : "Gasolineras recomendadas"}
+                    >
+                      {shown.map((s, i) => {
+                        const key = stationKey(s);
+                        const name = formatStationName(s.name);
+                        return (
+                          <StationRow
+                            key={key}
+                            name={name}
+                            kmOnRoute={s.km_on_route}
+                            price={s.price}
+                            town={s.town ? formatStationName(s.town) : null}
+                            schedule={formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null)}
+                            detourKm={detours.get(key)?.km ?? null}
+                            cheapest={tones[i] === "best"}
+                            dimmed={tones[i] === "expensive"}
+                            inPlan={stops.has(key)}
+                            onTogglePlan={() => toggleStop(s)}
+                            onSelect={() => openStation(key)}
+                            onHighlight={(on) => setHighlightedKey(on ? key : null)}
+                            highlighted={highlightedKey === key}
+                          />
+                        );
+                      })}
+                    </ul>
+                    {others.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAll((all) => !all)}
+                        className="self-start py-2 text-[15px] font-bold text-accent hover:text-accent-strong"
+                      >
+                        {showAll ? "Ver solo las recomendadas" : `Ver las ${total} gasolineras de la ruta`}
+                      </button>
+                    ) : null}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -473,7 +542,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
               stopKeys={new Set(stops.keys())}
               focusedKey={focusedKey}
               highlightedKey={highlightedKey}
-              onStationSelect={setFocusedKey}
+              onStationSelect={openStation}
               padding={
                 isDesktop
                   ? { top: 0, bottom: 0, left: 0, right: 0 }
