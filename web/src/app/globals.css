@@ -56,6 +56,25 @@
   }
 }
 
+/* Imprimir (hoja de ruta): siempre en claro, aunque el sistema esté en modo oscuro. */
+@media print {
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --ink: #161b1f;
+    --muted: #5b636a;
+    --rule: #dadad6;
+    --rule-soft: #e6e6e2;
+    --accent: #0b4c94;
+    --on-accent: #ffffff;
+    --hito-red: #c0392b;
+    --hito-body: #ffffff;
+    --hito-ink: #161b1f;
+    --warn: #e8a900;
+    color-scheme: light;
+  }
+}
+
 @theme inline {
   --color-*: initial;
   --color-transparent: transparent;

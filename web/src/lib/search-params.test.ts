@@ -90,6 +90,7 @@ describe("searchOptionsFrom", () => {
         abierta24h: true,
         vaciada: false,
         autonomia: 250,
+        paradas: [],
       }),
     ).toEqual({
       fuel: "diesel",
