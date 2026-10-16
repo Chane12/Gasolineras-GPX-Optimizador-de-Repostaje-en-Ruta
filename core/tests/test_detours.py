@@ -38,26 +38,74 @@ def fast_and_isolated(monkeypatch):
     export._leg_cache.clear()
 
 
-def test_detour_is_way_there_plus_way_back(monkeypatch):
+def osrm_route(*legs_m: float) -> FakeResponse:
+    """OSRM answer with one leg per pair of consecutive points (distance in m; 1 m = 0.1 s)."""
+    return FakeResponse({"code": "Ok", "routes": [{"legs": [{"distance": d, "duration": d / 10} for d in legs_m]}]})
+
+
+def points_in(url: str) -> list[tuple[float, float]]:
+    path = url.split("/driving/")[1].split("?")[0]
+    return [tuple(float(c) for c in p.split(",")) for p in path.split(";")]  # type: ignore[misc]
+
+
+def test_detour_is_the_extra_distance_of_stopping_on_the_way(monkeypatch):
     calls: list[dict] = []
 
     def fake_get(url, headers=None, timeout=None):
         calls.append({"url": url, "headers": headers, "timeout": timeout})
-        return osrm_leg(1500, 120)
+        # Through the station: 2 + 2.5 km; straight on: 4 km. Detour: 0.5 km.
+        return osrm_route(2000, 2500) if len(points_in(url)) == 3 else osrm_route(4000)
 
     monkeypatch.setattr(export.requests, "get", fake_get)
 
     [detour] = export.compute_detours(TRACK, [(-4.51, 40.71)])
 
-    assert detour == {"distance_km": pytest.approx(3.0), "duration_min": pytest.approx(4.0)}
+    assert detour == {"distance_km": pytest.approx(0.5), "duration_min": pytest.approx(500 / 10 / 60)}
     assert len(calls) == 2
     assert calls[0]["headers"]["User-Agent"] == USER_AGENT
     assert calls[0]["timeout"] is not None
 
 
+def test_detour_is_measured_in_the_direction_of_travel(monkeypatch):
+    urls: list[str] = []
+    monkeypatch.setattr(export.requests, "get", lambda url, **_k: urls.append(url) or osrm_route(1000, 1000))
+
+    export.compute_detours(TRACK, [(-4.51, 40.71)])
+
+    before, station, after = points_in(next(u for u in urls if len(points_in(u)) == 3))
+    assert station == pytest.approx((-4.51, 40.71))
+    # The track goes west → east: "before" is west of the station and "after" east of it, ~2 km away.
+    assert before[0] < station[0] < after[0]
+
+
+def test_anchors_stay_on_the_track_near_its_ends():
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    stations = gpd.GeoSeries([Point(-4.70, 40.60), Point(-4.50, 40.70)], crs="EPSG:4326")
+
+    [(start_before, start_after), (mid_before, mid_after)] = export.detour_anchors(TRACK, stations, anchor_m=2000)
+
+    assert start_before == pytest.approx((-4.70, 40.60), abs=1e-6)  # nothing before the start
+    assert start_after[0] > -4.70
+    # On the track (within ~10 m: anchors are computed in UTM and the track segments are straight in degrees).
+    assert TRACK.distance(Point(mid_before)) < 1e-4 and TRACK.distance(Point(mid_after)) < 1e-4
+
+
+def test_detour_is_never_negative(monkeypatch):
+    # OSRM may find a slightly shorter way through the station (e.g. a service road): that is 0, not < 0.
+    monkeypatch.setattr(
+        export.requests, "get", lambda url, **_k: osrm_route(900, 900) if len(points_in(url)) == 3 else osrm_route(2000)
+    )
+
+    [detour] = export.compute_detours(TRACK, [(-4.51, 40.71)])
+
+    assert detour == {"distance_km": 0.0, "duration_min": 0.0}
+
+
 def test_results_keep_the_input_order_and_failures_are_none(monkeypatch):
     def fake_get(url, headers=None, timeout=None):
-        if "-4.4" in url:  # the second station is unreachable
+        if "-4.400000,40.750000" in url:  # the second station is unreachable
             return FakeResponse({"code": "NoRoute"}, status_code=400)
         return osrm_leg(1000, 60)
 

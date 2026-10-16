@@ -22,7 +22,9 @@ import requests
 from shapely.geometry import LineString
 
 from gasolineras_core.config import (
+    CRS_UTM30N,
     CRS_WGS84,
+    DETOUR_ANCHOR_M,
     DETOUR_CACHE_MAX_ITEMS,
     DETOUR_CACHE_TTL_S,
     DETOURS_MAX_S,
@@ -118,35 +120,21 @@ def generate_google_maps_url(
     return url, n_truncated
 
 
-def _leg_key(lon1: float, lat1: float, lon2: float, lat2: float) -> tuple[float, float, float, float]:
-    return (round(lon1, 5), round(lat1, 5), round(lon2, 5), round(lat2, 5))
-
-
-def get_real_distance_osrm(
-    lon_origen: float,
-    lat_origen: float,
-    lon_destino: float,
-    lat_destino: float,
-    timeout: float = 5.0,
-) -> dict | None:
+def osrm_route_metrics(points: list[tuple[float, float]], timeout: float = 5.0) -> dict | None:
     """
-    Consulta la API pública de OSRM para obtener distancia y duración reales.
+    Distancia y duración por carretera (OSRM) de una ruta que pasa por ``points`` ([(lon, lat), …]) en orden.
 
     Returns
     -------
     dict | None
         {"distance_km": float, "duration_min": float} o None si falla.
     """
-    url = (
-        f"{OSRM_BASE_URL}"
-        f"/{lon_origen},{lat_origen}"
-        f";{lon_destino},{lat_destino}"
-        f"?overview=false&alternatives=false&steps=false"
-    )
-    key = _leg_key(lon_origen, lat_origen, lon_destino, lat_destino)
+    key = tuple(round(c, 5) for point in points for c in point)
     cached = _leg_cache.get(key)
     if cached is not None:
         return cached
+    path = ";".join(f"{lon:.6f},{lat:.6f}" for lon, lat in points)
+    url = f"{OSRM_BASE_URL}/{path}?overview=false&alternatives=false&steps=false"
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
         if not OSRM_SEMAPHORE.acquire(timeout=OSRM_SEMAPHORE_WAIT_S):
@@ -164,24 +152,47 @@ def get_real_distance_osrm(
 
         if data.get("code") != "Ok" or not data.get("routes"):
             return None
-
-        route = data["routes"][0]
-        if not route.get("legs"):
-            return None
-
-        leg = route["legs"][0]
-        if "distance" not in leg or "duration" not in leg:
+        legs = data["routes"][0].get("legs") or []
+        if not legs or any("distance" not in leg or "duration" not in leg for leg in legs):
             return None
 
         result = {
-            "distance_km": leg["distance"] / 1000.0,
-            "duration_min": leg["duration"] / 60.0,
+            "distance_km": sum(leg["distance"] for leg in legs) / 1000.0,
+            "duration_min": sum(leg["duration"] for leg in legs) / 60.0,
         }
         _leg_cache.set(key, result)
         return result
     except Exception as exc:
         logger.warning("OSRM request failed (%s)", type(exc).__name__)
         return None
+
+
+def get_real_distance_osrm(
+    lon_origen: float,
+    lat_origen: float,
+    lon_destino: float,
+    lat_destino: float,
+    timeout: float = 5.0,
+) -> dict | None:
+    """Distancia y duración por carretera entre dos puntos (ver ``osrm_route_metrics``)."""
+    return osrm_route_metrics([(lon_origen, lat_origen), (lon_destino, lat_destino)], timeout=timeout)
+
+
+def detour_anchors(
+    track: LineString, stations: gpd.GeoSeries, anchor_m: float = DETOUR_ANCHOR_M
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """
+    Para cada gasolinera, un punto de la ruta ``anchor_m`` antes y otro después de ella (lon, lat), en el
+    sentido de la marcha (el del track). Sirven para medir el desvío como lo viviría el conductor.
+    """
+    track_utm = gpd.GeoSeries([track], crs=CRS_WGS84).to_crs(CRS_UTM30N).iloc[0]
+    stations_utm = stations.to_crs(CRS_UTM30N)
+    along = [track_utm.project(p) for p in stations_utm]
+    before = gpd.GeoSeries([track_utm.interpolate(max(0.0, d - anchor_m)) for d in along], crs=CRS_UTM30N)
+    after = gpd.GeoSeries([track_utm.interpolate(min(track_utm.length, d + anchor_m)) for d in along], crs=CRS_UTM30N)
+    before_wgs = before.to_crs(CRS_WGS84)
+    after_wgs = after.to_crs(CRS_WGS84)
+    return [((a.x, a.y), (b.x, b.y)) for a, b in zip(before_wgs, after_wgs, strict=True)]
 
 
 def enrich_stations_with_osrm(
@@ -200,26 +211,28 @@ def enrich_stations_with_osrm(
 
     gdf_wgs84 = gdf_top.to_crs("EPSG:4326")
 
-    # Vectorized nearest-point computation (Shapely C-level)
-    rutas_origen_dict = {}
-    dist_along_array = gdf_wgs84.geometry.apply(lambda geom: track_original.project(geom))
-    nearest_points = dist_along_array.apply(lambda d: track_original.interpolate(d))
-    for idx, pt in zip(gdf_wgs84.index, nearest_points, strict=False):
-        rutas_origen_dict[idx] = (pt.x, pt.y)
+    # Desvío real: ruta(antes → gasolinera → después) − ruta(antes → después). Medirlo como ida y vuelta
+    # desde el punto más cercano de la ruta fallaba en autovías: OSRM puede encajar ese punto en la calzada
+    # contraria y sumar dos cambios de sentido (una gasolinera a 144 m salía con 65 km de desvío).
+    anchors = dict(zip(gdf_wgs84.index, detour_anchors(track_original, gdf_wgs84.geometry), strict=True))
+
+    def detour_from(via: dict, direct: dict) -> dict:
+        return {
+            "distance_km": max(0.0, via["distance_km"] - direct["distance_km"]),
+            "duration_min": max(0.0, via["duration_min"] - direct["duration_min"]),
+        }
 
     def process_station(idx, row_wgs84):
-        gas_lon = row_wgs84.geometry.x
-        gas_lat = row_wgs84.geometry.y
-        origin_lon, origin_lat = rutas_origen_dict[idx]
+        station = (row_wgs84.geometry.x, row_wgs84.geometry.y)
+        before, after = anchors[idx]
+        via_points = [before, station, after]
+        direct_points = [before, after]
 
-        # Both legs already cached: answer without the courtesy pauses meant for OSRM.
-        cached_in = _leg_cache.get(_leg_key(origin_lon, origin_lat, gas_lon, gas_lat))
-        cached_out = _leg_cache.get(_leg_key(gas_lon, gas_lat, origin_lon, origin_lat))
-        if cached_in is not None and cached_out is not None:
-            return idx, {
-                "distance_km": cached_in["distance_km"] + cached_out["distance_km"],
-                "duration_min": cached_in["duration_min"] + cached_out["duration_min"],
-            }
+        # Both routes already cached: answer without the courtesy pauses meant for OSRM.
+        cached_via = _leg_cache.get(tuple(round(c, 5) for p in via_points for c in p))
+        cached_direct = _leg_cache.get(tuple(round(c, 5) for p in direct_points for c in p))
+        if cached_via is not None and cached_direct is not None:
+            return idx, detour_from(cached_via, cached_direct)
 
         max_retries = 3
         # Jitter aleatorio para desincronizar los workers y evitar picos de peticiones
@@ -230,15 +243,12 @@ def enrich_stations_with_osrm(
                 return idx, None  # out of time: leave this detour without a result
             time.sleep(current_delay)
 
-            d_ida = get_real_distance_osrm(origin_lon, origin_lat, gas_lon, gas_lat)
-            if d_ida is not None:
-                time.sleep(0.2)  # Pausa mínima entre ida y vuelta
-                d_vuelta = get_real_distance_osrm(gas_lon, gas_lat, origin_lon, origin_lat)
-                if d_vuelta is not None:
-                    return idx, {
-                        "distance_km": d_ida["distance_km"] + d_vuelta["distance_km"],
-                        "duration_min": d_ida["duration_min"] + d_vuelta["duration_min"],
-                    }
+            via = osrm_route_metrics(via_points)
+            if via is not None:
+                time.sleep(0.2)  # Pausa mínima entre las dos consultas
+                direct = osrm_route_metrics(direct_points)
+                if direct is not None:
+                    return idx, detour_from(via, direct)
 
             # Si devuelve None (por 429 Too Many Requests o error de ruta), aplicamos backoff
             current_delay *= 2.0
