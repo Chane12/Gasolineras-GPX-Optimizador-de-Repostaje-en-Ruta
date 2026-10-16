@@ -1,4 +1,5 @@
 import { ServerWarmupNotice } from "@/components/server-warmup-notice";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 import { HomeSearch } from "./home-search";
@@ -124,9 +125,7 @@ export default function Home() {
         </div>
       </main>
 
-      <footer className="border-t border-rule px-4 pt-3.5 pb-5 text-[13px] leading-normal text-muted lg:px-10">
-        Precios: Ministerio para la Transición Ecológica · Mapas y rutas © colaboradores de OpenStreetMap
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

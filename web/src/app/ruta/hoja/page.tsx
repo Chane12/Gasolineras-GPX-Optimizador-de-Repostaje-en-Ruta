@@ -5,6 +5,7 @@ import { RoadbookView } from "./roadbook-view";
 
 export const metadata: Metadata = {
   title: "Hoja de ruta · Gasolineras en Ruta",
+  robots: { index: false, follow: false },
 };
 
 export default function RoadbookPage() {

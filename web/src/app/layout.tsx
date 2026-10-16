@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Familjen_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { SITE_URL } from "@/lib/site";
 import { THEME_COLOR } from "@/lib/theme-colors";
 
 import "./globals.css";
@@ -17,10 +18,24 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
+const DESCRIPTION =
+  "Organiza tu ruta y decide dónde repostar al mejor precio, con los precios oficiales del MITECO.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Gasolineras en Ruta",
-  description:
-    "Organiza tu ruta y decide dónde repostar al mejor precio, con los precios oficiales del MITECO.",
+  description: DESCRIPTION,
+  applicationName: "Gasolineras en Ruta",
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    siteName: "Gasolineras en Ruta",
+    title: "Gasolineras en Ruta",
+    description: DESCRIPTION,
+    url: "/",
+  },
+  twitter: { card: "summary_large_image", title: "Gasolineras en Ruta", description: DESCRIPTION },
+  alternates: { canonical: "/" },
 };
 
 export const viewport: Viewport = {

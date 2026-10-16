@@ -5,6 +5,8 @@ import { RouteResults } from "./route-results";
 
 export const metadata: Metadata = {
   title: "Gasolineras en tu ruta · Gasolineras en Ruta",
+  // Resultados de cada búsqueda: no son páginas para los buscadores.
+  robots: { index: false, follow: true },
 };
 
 export default function RoutePage() {
