@@ -410,6 +410,60 @@ describe("RouteResults", () => {
     ]);
   });
 
+  it("computes the route in the browser when the server cannot reach the routing service", async () => {
+    const osrmCalls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      osrmCalls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          code: "Ok",
+          routes: [{ distance: 352_000, duration: 14_000, geometry: { coordinates: track.coordinates } }],
+        }),
+      );
+    });
+    try {
+      const { client, requests } = api({
+        "/route/text": () =>
+          jsonResponse(
+            { detail: "El servicio de rutas por carretera no está disponible ahora mismo." },
+            { status: 503 },
+          ),
+      });
+      renderAt(
+        "?origen=Madrid&destino=Val%C3%A8ncia&origenGeo=40.41678,-3.70379&destinoGeo=39.46975,-0.37739",
+        client,
+      );
+
+      await loaded();
+      expect(osrmCalls[0]).toContain("/driving/-3.703790,40.416780;-0.377390,39.469750");
+      expect(requests.searches[0]).toMatchObject({ track: { coordinates: track.coordinates } });
+    } finally {
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Red desactivada en los tests")));
+    }
+  });
+
+  it(
+    "shows the server message when the browser cannot get the route either",
+    { timeout: 15_000 },
+    async () => {
+      const { client } = api({
+        "/route/text": () =>
+          jsonResponse(
+            { detail: "El servicio de rutas por carretera no está disponible ahora mismo." },
+            { status: 503 },
+          ),
+      });
+      renderAt(
+        "?origen=Madrid&destino=Val%C3%A8ncia&origenGeo=40.41678,-3.70379&destinoGeo=39.46975,-0.37739",
+        client,
+      );
+
+      expect(await screen.findByRole("alert", {}, { timeout: 8000 })).toHaveTextContent(
+        "El servicio de rutas por carretera no está disponible ahora mismo.",
+      );
+    },
+  );
+
   it("loads the sample route for the demo", async () => {
     const { client, requests } = api();
     renderAt("?demo=true", client);

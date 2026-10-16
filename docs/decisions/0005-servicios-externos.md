@@ -34,3 +34,12 @@ Como app de uso personal pasaba desapercibida; como web pública, puede provocar
 - La API necesita una capa de caché (en memoria para empezar; Redis gratuito si hace falta).
 - La geocodificación en vivo mientras se escribe (autocompletado) queda **fuera** con Nominatim: su política lo prohíbe. Si se quiere, Photon o un proveedor dedicado.
 - Hay que tener una URL o un email de contacto público para el User-Agent.
+
+## Revisión (2026-10-16): plan B desde el navegador
+
+Los servidores públicos de OSRM empezaron a rechazar las peticiones que salen de Render (direcciones compartidas por muchas aplicaciones), mientras seguían respondiendo a cualquier navegador. Sin ruta, la web no servía de nada.
+
+- **Ruta**: si `/route/text` responde 503, la web calcula la ruta **directamente desde el navegador** contra OSRM (admite CORS), con los puntos elegidos en las sugerencias o con el primer lugar que sugiere la API. Después sigue igual (`/search` valida la ruta). Un solo reintento.
+- **Desvíos**: si `/detours` no responde en 8 s o deja desvíos sin calcular, el navegador calcula los que faltan (como mucho 12 por tanda, de uno en uno), con el mismo método que el servidor.
+- Así las peticiones cuentan contra la conexión de cada usuario, como las de cualquier visitante de la web de OSRM. Se mantiene el uso moderado: pocas peticiones, tiempo máximo y el segundo servidor solo si falla el primero.
+- El punto 5 (OSRM propio o proveedor de pago) gana prioridad si el bloqueo a Render se mantiene: es la solución de fondo.

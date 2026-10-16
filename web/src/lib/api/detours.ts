@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { detourInBrowser } from "@/lib/browser-routing";
 import { stationKey } from "@/lib/map/geo";
 
 import { api, type ApiClient, type Schemas, unwrap } from "./client";
@@ -15,6 +16,12 @@ export interface DetourInfo {
 }
 
 type StationLike = Pick<Schemas["Station"], "id" | "lat" | "lon">;
+
+/** Lo que se espera al servidor antes de calcular los desvíos en el navegador. */
+const DETOURS_SERVER_WAIT_MS = 8_000;
+
+/** Desvíos que el navegador calcula por su cuenta en cada tanda, si el servidor no pudo. */
+const BROWSER_DETOURS_MAX = 12;
 
 /** Máximo de gasolineras por petición (límite de la API). */
 export const DETOURS_BATCH = 30;
@@ -60,8 +67,13 @@ export function useDetours(
       for (const batch of batches) {
         const keys = batch.map(stationKey);
         keys.forEach((k) => inFlight.current.add(k));
+        // Si el servidor tarda (está insistiendo a un OSRM que no le responde), no se le espera: a los
+        // DETOURS_SERVER_WAIT_MS se cuenta como fallo y el navegador los calcula por su cuenta.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), DETOURS_SERVER_WAIT_MS);
         unwrap(
           client.POST("/detours", {
+            signal: controller.signal,
             body: {
               track: route.track as Schemas["DetoursRequest"]["track"],
               stations: batch.map((s) => ({ id: s.id ?? null, lat: s.lat, lon: s.lon })),
@@ -71,8 +83,25 @@ export function useDetours(
           .then((response) =>
             response.detours.map((d) => ({ km: d.detour_km ?? null, minutes: d.detour_min ?? null })),
           )
-          // Sin red, API caída o respuesta inesperada: cuenta como intento, sin desvío.
+          // Sin red, API caída, tiempo agotado o respuesta inesperada: cuenta como intento, sin desvío.
           .catch(() => batch.map(() => ({ km: null, minutes: null })))
+          .finally(() => clearTimeout(timer))
+          // Los que el servidor no consiguió (OSRM le limita a veces), los pide el navegador directamente,
+          // de uno en uno y como mucho los primeros BROWSER_DETOURS_MAX de cada tanda.
+          .then(async (results) => {
+            let asked = 0;
+            for (const [i, result] of results.entries()) {
+              const station = batch[i];
+              if (result.km !== null || !station || asked >= BROWSER_DETOURS_MAX) continue;
+              asked++;
+              try {
+                results[i] = await detourInBrowser(route.track.coordinates, station);
+              } catch {
+                // Tampoco desde el navegador: se queda sin desvío y se reintenta más tarde.
+              }
+            }
+            return results;
+          })
           .then((results) => {
             keys.forEach((k) => inFlight.current.delete(k));
             setState((current) => {
