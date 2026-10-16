@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { ButtonLink } from "@/components/button";
 import { Hito } from "@/components/hito";
-import { CheckIcon, ChevronLeftIcon, NavigateIcon, PlusIcon } from "@/components/icons";
+import { CheckIcon, ChevronLeftIcon, NavigateIcon, PlusIcon, WarningIcon } from "@/components/icons";
 import type { DetourInfo } from "@/lib/api/detours";
 import { formatAge, formatKm, formatPrice, formatPriceDelta, formatShortKm } from "@/lib/format";
 import type { Station } from "@/lib/map/geo";
@@ -48,6 +48,7 @@ export function StationSheet({
   nextRecommended,
   fuelLabel,
   priceAgeMinutes,
+  passingNote = null,
 }: {
   station: Station;
   detour: DetourInfo | undefined;
@@ -62,6 +63,8 @@ export function StationSheet({
   nextRecommended: Station | null;
   fuelLabel: string;
   priceAgeMinutes: number | null;
+  /** "Abierta al pasar (≈ 14:20)" / "Cerrada al pasar…", si se activó en las opciones avanzadas. */
+  passingNote?: { text: string; warn: boolean } | null;
 }) {
   const name = formatStationName(station.name);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -135,6 +138,15 @@ export function StationSheet({
         </span>
         <span className="text-[17px] font-semibold text-muted">€/L · {fuelLabel}</span>
       </p>
+
+      {passingNote ? (
+        <p
+          className={`m-0 flex items-center gap-1.5 text-[15px] ${passingNote.warn ? "font-semibold" : "text-muted"}`}
+        >
+          {passingNote.warn ? <WarningIcon size={16} className="shrink-0 text-warn" /> : null}
+          {passingNote.text}
+        </p>
+      ) : null}
 
       <dl className="m-0 grid grid-cols-2 border-t-2 border-ink">
         {[

@@ -69,6 +69,7 @@ export function RefuelPlanner({
   detourKm,
   defaultAutonomyKm,
   onUse,
+  exclude,
 }: {
   stations: readonly Station[];
   routeKm: number;
@@ -76,6 +77,8 @@ export function RefuelPlanner({
   detourKm: (key: string) => number | null;
   defaultAutonomyKm: number;
   onUse: (keys: string[]) => void;
+  /** Gasolineras que no deben entrar en el plan (p. ej. cerradas cuando se pase por ellas). */
+  exclude?: (key: string) => boolean;
 }) {
   const ids = useId();
   const [settings, setSettings] = useState<Settings>(() => loadSettings(defaultAutonomyKm || 250));
@@ -103,7 +106,7 @@ export function RefuelPlanner({
 
   function propose() {
     const candidates = stations
-      .filter((s) => (detourKm(stationKey(s)) ?? 0) <= MAX_DETOUR_KM)
+      .filter((s) => (detourKm(stationKey(s)) ?? 0) <= MAX_DETOUR_KM && !exclude?.(stationKey(s)))
       .map((s) => ({ key: stationKey(s), km: s.km_on_route, price: s.price }));
     setPlan(planRefuels(candidates, routeKm, settings));
     setAlternative(

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NuqsTestingAdapter, type UrlUpdateEvent } from "nuqs/adapters/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,6 +102,7 @@ const loaded = () => screen.findAllByText("352 km · Gasolina 95");
 
 describe("RouteResults", () => {
   beforeEach(() => {
+    localStorage.clear();
     mapProps.last = null;
     loadGpx.mockReset();
   });
@@ -288,6 +289,26 @@ describe("RouteResults", () => {
     await user.click(screen.getByRole("button", { name: "Usar estas paradas" }));
     expect(updates.at(-1)).toContain("paradas=2~4");
     expect(screen.getByRole("region", { name: "Tu ruta" })).toHaveTextContent("2 paradas · km 118 y 300");
+  });
+
+  it("warns about stations that will be closed when passing, and can hide them", async () => {
+    const user = userEvent.setup();
+    renderAt("?origen=Madrid&destino=Valencia", api().client);
+
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Opciones avanzadas/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Tener en cuenta la hora a la que paso" }));
+    // Los campos de fecha y hora no se escriben tecla a tecla en jsdom: se cambia el valor directamente.
+    fireEvent.change(screen.getByLabelText("Salgo el"), { target: { value: "2026-10-19T21:00" } });
+
+    // Ballenoil (km 118, 6–22 h): a 80 km/h se pasa hacia las 22:28.
+    const rows = within(recommendedList()).getAllByRole("listitem");
+    expect(rows[1]).toHaveTextContent("Cerrada al pasar (≈ 22:28)");
+    expect(rows[0]).toHaveTextContent("Abierta al pasar (≈ 21:31)");
+    expect(screen.getByRole("button", { name: /Opciones avanzadas/ })).toHaveTextContent("1 activa");
+
+    await user.click(screen.getByRole("checkbox", { name: "Ocultar las que estarán cerradas" }));
+    expect(within(recommendedList()).getAllByRole("listitem")).toHaveLength(1);
   });
 
   it("highlights the plate of the row under the pointer", async () => {

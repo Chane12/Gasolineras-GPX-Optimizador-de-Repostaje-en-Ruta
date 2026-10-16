@@ -1,6 +1,6 @@
 import { IconButton } from "@/components/button";
 import { Hito } from "@/components/hito";
-import { CheckIcon, PlusIcon } from "@/components/icons";
+import { CheckIcon, PlusIcon, WarningIcon } from "@/components/icons";
 import { formatPrice, formatShortKm } from "@/lib/format";
 
 export interface StationRowProps {
@@ -20,6 +20,8 @@ export interface StationRowProps {
   onTogglePlan: () => void;
   /** Si se da, el nombre es un botón que centra el mapa en la gasolinera. */
   onSelect?: () => void;
+  /** Línea extra bajo los datos (p. ej. "Cerrada al pasar (≈ 23:40)"); `warn` la marca como aviso. */
+  note?: { text: string; warn: boolean } | null;
   /** Al pasar el ratón o el foco por la fila: resalta su placa en el mapa. */
   onHighlight?: (on: boolean) => void;
   highlighted?: boolean;
@@ -40,6 +42,7 @@ export function StationRow({
   onSelect,
   onHighlight,
   highlighted = false,
+  note = null,
 }: StationRowProps) {
   const details = [town, schedule, detourKm != null ? `desvío ${formatShortKm(detourKm)} km` : null].filter(
     Boolean,
@@ -85,6 +88,14 @@ export function StationRow({
           ) : null}
         </div>
         {details.length > 0 ? <div className="text-sm text-muted">{details.join(" · ")}</div> : null}
+        {note ? (
+          <div
+            className={`flex items-center gap-1 text-[13px] ${note.warn ? "font-semibold text-ink" : "text-muted"}`}
+          >
+            {note.warn ? <WarningIcon size={14} className="shrink-0 text-warn" /> : null}
+            {note.text}
+          </div>
+        ) : null}
       </div>
       <div className={`font-mono text-[19px] font-semibold ${priceColor}`}>
         {formatPrice(price)}
