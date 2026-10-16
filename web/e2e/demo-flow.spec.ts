@@ -54,10 +54,7 @@ test("from the sample route to the roadbook", async ({ page }) => {
   await expect(page.getByRole("table", { name: /Roadbook/ }).getByRole("row")).toHaveCount(5);
 });
 
-// PENDIENTE (2026-10-16): en la e2e no encuentra el botón «Repsol, ver la ficha», aunque existe con ese nombre
-// (comprobado con una prueba de depuración que lista los botones) y el test unitario equivalente pasa.
-// Investigar en la próxima sesión (¿visibilidad tras la hoja, momento de hidratación?).
-test.fixme("the station sheet opens from the list and goes back", async ({ page }) => {
+test("the station sheet opens from the list and goes back", async ({ page }) => {
   await page.goto("/ruta?demo=true");
   await expect(page.getByText("MÁS BARATA").first()).toBeVisible();
   await page.getByRole("button", { name: "Repsol, ver la ficha" }).click();

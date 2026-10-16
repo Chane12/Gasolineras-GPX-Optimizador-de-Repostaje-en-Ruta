@@ -76,10 +76,12 @@ export function StationRow({
             <button
               type="button"
               onClick={onSelect}
+              // Nombre accesible explícito: con el texto oculto en otro elemento, el navegador lo leía
+              // como "Repsol , ver la ficha".
+              aria-label={`${name}, ver la ficha`}
               className="min-h-11 cursor-pointer text-left text-[17px] leading-tight font-bold text-ink hover:underline"
             >
               {name}
-              <span className="sr-only">, ver la ficha</span>
             </button>
           ) : (
             <span className="text-[17px] leading-tight font-bold">{name}</span>
