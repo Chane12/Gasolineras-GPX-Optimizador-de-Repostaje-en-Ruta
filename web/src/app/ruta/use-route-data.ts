@@ -55,7 +55,21 @@ export function useStops(
     [keys, keySet, setKeys],
   );
 
-  return { list, keys: keySet, toggle };
+  /** Sustituye todas las paradas (p. ej. por las del planificador). */
+  const replaceAll = useCallback(
+    (stations: readonly Station[]) => {
+      setKeys(stations.map(stationKey));
+      const now = new Date().toISOString();
+      setSaved((current) => ({
+        ...current,
+        ...Object.fromEntries(stations.map((s) => [stationKey(s), { station: s, savedAt: now }])),
+      }));
+      stations.forEach((s) => void saveStop(stationKey(s), s));
+    },
+    [setKeys],
+  );
+
+  return { list, keys: keySet, toggle, replaceAll };
 }
 
 /** Todo lo que necesitan la pantalla de la ruta y la hoja de ruta: ruta, búsqueda y paradas, desde la URL. */

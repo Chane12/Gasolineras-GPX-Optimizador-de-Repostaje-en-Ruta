@@ -12,11 +12,13 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { AdvancedOptions } from "@/components/advanced-options";
 import { AutonomyWarnings } from "@/components/autonomy-warnings";
 import { Button, buttonClasses } from "@/components/button";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { CloseIcon, WarningIcon } from "@/components/icons";
+import { RefuelPlanner } from "@/components/refuel-planner";
 import { RouteSearchBar } from "@/components/route-search-bar";
 import { Logo } from "@/components/site-header";
 import { ServerWarmupNotice } from "@/components/server-warmup-notice";
@@ -143,6 +145,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   }, [recommended, stops, selected]);
   const detours = useDetours(routeForSearch, detourTargets, client);
 
+  const allStations = useMemo(() => [...recommended, ...others], [recommended, others]);
   const shown = useMemo(() => {
     const list = showAll ? [...recommended, ...others] : [...recommended];
     const detourOf = (s: Station) => detours.get(stationKey(s))?.km ?? Number.POSITIVE_INFINITY;
@@ -374,6 +377,21 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                       setShowAll(false);
                     }}
                   />
+                ) : null}
+
+                {search.data ? (
+                  <AdvancedOptions>
+                    <RefuelPlanner
+                      stations={allStations}
+                      routeKm={search.data.route_km}
+                      detourKm={(key) => detours.get(key)?.km ?? null}
+                      defaultAutonomyKm={filters.autonomia}
+                      onUse={(keys) => {
+                        const byKey = new Map(allStations.map((st) => [stationKey(st), st]));
+                        stops.replaceAll(keys.map((k) => byKey.get(k)).filter((st): st is Station => !!st));
+                      }}
+                    />
+                  </AdvancedOptions>
                 ) : null}
 
                 {error ? (

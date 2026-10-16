@@ -266,6 +266,30 @@ describe("RouteResults", () => {
     expect(await screen.findByRole("article", { name: /E.S Ballenoil/ })).toHaveTextContent("6–22 h");
   });
 
+  it("plans the refuelling stops from the advanced options and puts them in «Tu ruta»", async () => {
+    const user = userEvent.setup();
+    const updates: string[] = [];
+    renderAt("?origen=Madrid&destino=Valencia", api().client, (e) => updates.push(e.queryString));
+
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Opciones avanzadas/ }));
+    await user.click(screen.getByRole("button", { name: "Moto · 250 km" }));
+    await user.click(screen.getByRole("button", { name: "Proponer paradas" }));
+
+    const proposed = screen.getByRole("list", { name: "Paradas propuestas" });
+    const items = within(proposed).getAllByRole("listitem");
+    expect(items.map((i) => i.textContent)).toEqual([
+      expect.stringContaining("E.S Ballenoil"),
+      expect.stringContaining("Galp"),
+    ]);
+    expect(items[0]).toHaveTextContent("Llena el depósito"); // llega con el 53 % y echa el 47 %
+    expect(items[1]).toHaveTextContent("Echa ~10 % del depósito");
+
+    await user.click(screen.getByRole("button", { name: "Usar estas paradas" }));
+    expect(updates.at(-1)).toContain("paradas=2~4");
+    expect(screen.getByRole("region", { name: "Tu ruta" })).toHaveTextContent("2 paradas · km 118 y 300");
+  });
+
   it("highlights the plate of the row under the pointer", async () => {
     const user = userEvent.setup();
     renderAt("?origen=Madrid&destino=Valencia", api().client);

@@ -8,10 +8,11 @@ export interface RouteStop {
   kmOnRoute: number;
 }
 
+/** "km 82", "km 82 y 322", "km 82, 160 y 322". */
 function listKms(stops: readonly RouteStop[]): string {
-  const kms = stops.map((s) => `km ${formatKm(s.kmOnRoute)}`);
-  if (kms.length <= 1) return kms.join("");
-  return `${kms.slice(0, -1).join(", ")} y ${kms.at(-1)}`;
+  const kms = stops.map((s) => formatKm(s.kmOnRoute));
+  if (kms.length <= 1) return `km ${kms.join("")}`;
+  return `km ${kms.slice(0, -1).join(", ")} y ${kms.at(-1)}`;
 }
 
 /**
