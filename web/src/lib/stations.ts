@@ -10,6 +10,7 @@ const ACRONYMS = new Set(["EESS", "ES", "EE.SS", "EE.SS.", "SL", "SA", "SLU", "S
  */
 export function formatStationName(name: string): string {
   const trimmed = name.trim().replace(/\s+/g, " ");
+  if (/^\(?sin r[oó]tulo\)?$/i.test(trimmed)) return "Gasolinera";
   if (!trimmed || trimmed !== trimmed.toUpperCase() || !/\p{L}/u.test(trimmed)) return trimmed;
   return trimmed
     .split(" ")

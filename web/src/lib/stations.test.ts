@@ -13,6 +13,7 @@ describe("formatStationName", () => {
     ["Repsol", "Repsol"],
     ["GALP Energía", "GALP Energía"],
     ["24", "24"],
+    ["(sin Rótulo)", "Gasolinera"],
   ])("%s → %s", (raw, expected) => {
     expect(formatStationName(raw)).toBe(expected);
   });

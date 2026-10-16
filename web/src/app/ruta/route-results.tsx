@@ -19,6 +19,7 @@ import { Button, buttonClasses } from "@/components/button";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { CloseIcon, WarningIcon } from "@/components/icons";
+import { DiscountsOptions } from "@/components/discounts-options";
 import { PassingTimeOptions } from "@/components/passing-time-options";
 import { RefuelPlanner } from "@/components/refuel-planner";
 import { RouteSearchBar } from "@/components/route-search-bar";
@@ -34,7 +35,9 @@ import { type RouteSource, routeSourceKey } from "@/lib/api/queries";
 import { formatKm, formatPrice, formatPriceDelta } from "@/lib/format";
 import { plateTones, type Station, stationKey } from "@/lib/map/geo";
 import { normalizeOptions, serializeSearch } from "@/lib/search-params";
-import { formatSchedule, formatStationName } from "@/lib/stations";
+import { autoSegmentKm, formatSchedule, formatStationName, RECOMMENDED_CHEAPEST } from "@/lib/stations";
+import { type PricedStation, withDiscounts } from "@/lib/discounts";
+import { useDiscounts } from "@/lib/use-discounts";
 import { type PassingStatus, usePassingTime } from "@/lib/use-passing-time";
 import { placeValueFrom } from "@/lib/use-place-check";
 
@@ -98,8 +101,28 @@ type Sort = "km" | "price" | "detour";
  * En el ordenador, panel a la izquierda y mapa a la derecha; en el móvil, mapa con una hoja deslizable.
  */
 export function RouteResults({ client = api }: { client?: ApiClient }) {
-  const { params, setParams, source, route, routeKm, routeForSearch, search, recommended, others, stops } =
-    useRouteData(client);
+  const {
+    params,
+    setParams,
+    source,
+    route,
+    routeKm,
+    routeForSearch,
+    search,
+    recommended: rawRecommended,
+    others: rawOthers,
+    stops,
+  } = useRouteData(client);
+  // Mis descuentos (10c): precios que pagará el usuario; una gasolinera puede subir a recomendada.
+  const discounts = useDiscounts();
+  const { recommended, others } = useMemo(
+    () =>
+      withDiscounts(rawRecommended, rawOthers, discounts.discounts, {
+        topN: RECOMMENDED_CHEAPEST,
+        segmentKm: autoSegmentKm(routeKm),
+      }),
+    [rawRecommended, rawOthers, discounts.discounts, routeKm],
+  );
   const isDesktop = useIsDesktop();
   const passing = usePassingTime();
   const { statusOf } = passing;
@@ -401,7 +424,12 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 ) : null}
 
                 {search.data ? (
-                  <AdvancedOptions active={passing.settings.enabled ? 1 : 0}>
+                  <AdvancedOptions active={(passing.settings.enabled ? 1 : 0) + discounts.active}>
+                    <DiscountsOptions
+                      discounts={discounts.discounts}
+                      onChange={discounts.setDiscounts}
+                      brands={brandSuggestions(allStations)}
+                    />
                     <PassingTimeOptions settings={passing.settings} onChange={passing.update} />
                     <RefuelPlanner
                       stations={allStations}
@@ -509,6 +537,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                             schedule={formatSchedule(s.schedule) ?? (s.open_24h ? "24 h" : null)}
                             detourKm={detours.get(key)?.km ?? null}
                             note={passingNote(passingByKey.get(key))}
+                            listPrice={s.list_price ?? null}
                             cheapest={tones[i] === "best"}
                             dimmed={tones[i] === "expensive"}
                             inPlan={stops.keys.has(key)}
@@ -611,6 +640,19 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
       </dialog>
     </div>
   );
+}
+
+/** Marcas de la ruta, las más frecuentes primero, para sugerirlas en "Mis descuentos". */
+function brandSuggestions(stations: readonly PricedStation[]): string[] {
+  const counts = new Map<string, number>();
+  for (const s of stations) {
+    const brand = formatStationName(s.name);
+    counts.set(brand, (counts.get(brand) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 40)
+    .map(([brand]) => brand);
 }
 
 const clock = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit" });

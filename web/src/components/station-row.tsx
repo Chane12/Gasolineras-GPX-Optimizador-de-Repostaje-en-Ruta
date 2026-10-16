@@ -22,6 +22,8 @@ export interface StationRowProps {
   onSelect?: () => void;
   /** Línea extra bajo los datos (p. ej. "Cerrada al pasar (≈ 23:40)"); `warn` la marca como aviso. */
   note?: { text: string; warn: boolean } | null;
+  /** Precio del surtidor, si `price` ya lleva un descuento del usuario. */
+  listPrice?: number | null;
   /** Al pasar el ratón o el foco por la fila: resalta su placa en el mapa. */
   onHighlight?: (on: boolean) => void;
   highlighted?: boolean;
@@ -43,6 +45,7 @@ export function StationRow({
   onHighlight,
   highlighted = false,
   note = null,
+  listPrice = null,
 }: StationRowProps) {
   const details = [town, schedule, detourKm != null ? `desvío ${formatShortKm(detourKm)} km` : null].filter(
     Boolean,
@@ -97,9 +100,15 @@ export function StationRow({
           </div>
         ) : null}
       </div>
-      <div className={`font-mono text-[19px] font-semibold ${priceColor}`}>
+      <div className={`text-right font-mono text-[19px] font-semibold ${priceColor}`}>
         {formatPrice(price)}
-        <span className="sr-only"> euros por litro</span>
+        <span className="sr-only"> euros por litro{listPrice != null ? " con tu descuento" : ""}</span>
+        {listPrice != null ? (
+          <span className="block text-xs font-medium text-muted line-through">
+            <span className="sr-only">en el surtidor </span>
+            {formatPrice(listPrice)}
+          </span>
+        ) : null}
       </div>
       <IconButton
         label={inPlan ? `Quitar ${name} de tus paradas` : `Añadir ${name} a tus paradas`}
