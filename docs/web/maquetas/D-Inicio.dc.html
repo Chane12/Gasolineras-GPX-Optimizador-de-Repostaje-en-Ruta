@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Inicio y búsqueda</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B4C94}a:hover{color:#083770}
+</style>
+</helmet>
+<div style="width: 390px; height: 1180px; overflow: hidden; background: #FFFFFF; font-family: 'Familjen Grotesk', sans-serif; color: #161B1F; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #DADAD6">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #161B1F">
+      <svg width="20" height="28" viewBox="0 0 20 28" aria-hidden="true"><path d="M2 8a8 8 0 0 1 16 0v18H2z" fill="#FFFFFF" stroke="#161B1F" stroke-width="2"></path><path d="M2 8a8 8 0 0 1 16 0v2H2z" fill="#C0392B"></path><rect x="6" y="15" width="8" height="2" fill="#161B1F"></rect><rect x="6" y="19" width="5" height="2" fill="#161B1F"></rect></svg>
+      <span style="font-size: 18px; font-weight: 700; letter-spacing: -0.01em">Gasolineras en Ruta</span>
+    </a>
+    <a href="#como-funciona" style="font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 0">Cómo funciona</a>
+  </header>
+
+  <section style="padding: 28px 16px 22px; display: flex; flex-direction: column; gap: 12px">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #5B636A">PRECIOS OFICIALES DEL MITECO</div>
+    <h1 style="margin: 0; font-size: 38px; font-weight: 700; line-height: 1.02; letter-spacing: -0.025em">Organiza tu ruta y decide dónde repostar.</h1>
+    <p style="margin: 0; font-size: 17px; line-height: 1.45; color: #3E464D">Te enseñamos las gasolineras más baratas del camino. Tú eliges las paradas y te llevas la hoja de ruta.</p>
+  </section>
+
+  <form style="margin: 0 16px; border: 1.5px solid #161B1F; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; gap: 10px; align-items: stretch">
+      <div style="width: 14px; display: flex; flex-direction: column; align-items: center; padding: 36px 0 32px">
+        <span style="width: 12px; height: 12px; border-radius: 50%; border: 3px solid #0B4C94; box-sizing: border-box"></span>
+        <span style="flex: 1; width: 0; border-left: 2px dotted #9AA0A6; margin: 4px 0"></span>
+        <span style="width: 12px; height: 12px; background: #0B4C94"></span>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 10px">
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600">Origen
+          <input type="text" value="Madrid" style="height: 48px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 17px; color: #161B1F; background: #FFFFFF">
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600">Destino
+          <input type="text" placeholder="¿A dónde vas?" style="height: 48px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 17px; color: #161B1F; background: #FFFFFF">
+        </label>
+      </div>
+      <button type="button" aria-label="Intercambiar origen y destino" style="align-self: center; width: 44px; height: 44px; margin-top: 20px; border: 1.5px solid #DADAD6; border-radius: 8px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161B1F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg>
+      </button>
+    </div>
+
+    <button type="button" style="align-self: flex-start; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 2px; border: 0; background: transparent; color: #0B4C94; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B4C94" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>
+      Usar mi archivo GPX
+    </button>
+
+    <label style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600">Combustible
+      <select style="height: 48px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 10px; font-family: inherit; font-size: 17px; color: #161B1F; background: #FFFFFF">
+        <option>Gasolina 95</option>
+        <option>Gasolina 98</option>
+        <option>Diésel</option>
+        <option>GLP / Autogas</option>
+      </select>
+    </label>
+
+    <button type="button" aria-expanded="false" style="display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0; border: 0; border-top: 1px solid #DADAD6; border-bottom: 1px solid #DADAD6; background: transparent; color: #161B1F; font-family: inherit; cursor: pointer; text-align: left">
+      <span style="display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 15px; font-weight: 700">Más opciones</span>
+        <span style="font-size: 13px; color: #5B636A">Hasta <span style="font-family: 'IBM Plex Mono', monospace">5</span> km de la ruta · aviso de autonomía desactivado</span>
+      </span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161B1F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+
+    <button type="submit" style="height: 54px; border: 0; border-radius: 10px; background: #0B4C94; color: #FFFFFF; font-family: inherit; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer">
+      Ver gasolineras de la ruta
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg>
+    </button>
+    <a href="#" style="align-self: center; font-size: 15px; font-weight: 600; padding: 6px 0">o prueba con una ruta por la Sierra de Gredos</a>
+  </form>
+
+  <svg width="390" height="140" viewBox="0 0 390 140" style="margin-top: 28px; display: block" aria-hidden="true">
+    <rect width="390" height="140" fill="#EFEFEC"></rect>
+    <g fill="none" stroke="#E0E0DB" stroke-width="1.2">
+      <path d="M-10 26 C 70 6, 140 56, 220 36 S 330 6, 400 36"></path>
+      <path d="M-10 48 C 70 28, 140 78, 220 58 S 330 28, 400 58"></path>
+      <path d="M-10 104 C 90 84, 160 134, 250 114 S 340 94, 400 124"></path>
+    </g>
+    <path d="M0 92 C 80 86, 150 116, 230 96 S 350 76, 390 88" fill="none" stroke="#FFFFFF" stroke-width="6"></path>
+    <path d="M20 116 C 90 96, 120 56, 200 66 S 320 36, 372 26" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"></path>
+    <path d="M20 116 C 90 96, 120 56, 200 66 S 320 36, 372 26" fill="none" stroke="#0B4C94" stroke-width="4.5" stroke-linecap="round"></path>
+    <circle cx="20" cy="116" r="6" fill="#FFFFFF" stroke="#0B4C94" stroke-width="3"></circle>
+    <rect x="366" y="20" width="12" height="12" fill="#0B4C94" stroke="#FFFFFF" stroke-width="2"></rect>
+    <g>
+      <path d="M186 44 a 12 12 0 0 1 24 0 v 20 h -24 z" fill="#FFFFFF" stroke="#161B1F" stroke-width="2"></path>
+      <path d="M186 44 a 12 12 0 0 1 24 0 z" fill="#C0392B"></path>
+      <text x="198" y="59" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" fill="#161B1F">118</text>
+    </g>
+    <g font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600" text-anchor="middle">
+      <rect x="216" y="22" width="52" height="24" rx="4" fill="#0B4C94"></rect><text x="242" y="38" fill="#FFFFFF">1,639</text>
+    </g>
+  </svg>
+
+  <section id="como-funciona" style="padding: 24px 16px 8px; display: flex; flex-direction: column">
+    <h2 style="margin: 0 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -0.015em">Tu viaje, parada a parada</h2>
+    <div style="display: grid; grid-template-columns: 36px 1fr; column-gap: 10px; padding: 14px 0; border-top: 2px solid #161B1F">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #0B4C94">01</span>
+      <div><div style="font-size: 17px; font-weight: 700">Elige dónde parar</div><div style="font-size: 15px; line-height: 1.45; color: #3E464D; margin-top: 2px">Las gasolineras de tu camino, por kilómetro o por precio, con el desvío real.</div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: 36px 1fr; column-gap: 10px; padding: 14px 0; border-top: 1px solid #DADAD6">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #0B4C94">02</span>
+      <div><div style="font-size: 17px; font-weight: 700">Tu hoja de ruta, sin cobertura</div><div style="font-size: 15px; line-height: 1.45; color: #3E464D; margin-top: 2px">Las paradas quedan guardadas en el móvil para consultarlas en mitad del puerto.</div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: 36px 1fr; column-gap: 10px; padding: 14px 0; border-top: 1px solid #DADAD6">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #0B4C94">03</span>
+      <div><div style="font-size: 17px; font-weight: 700">Al navegador, en un toque</div><div style="font-size: 15px; line-height: 1.45; color: #3E464D; margin-top: 2px">Abre la ruta con tus paradas en Google Maps o descarga el GPX para tu GPS.</div></div>
+    </div>
+  </section>
+
+  <footer style="margin-top: auto; padding: 14px 16px 18px; border-top: 1px solid #DADAD6; font-size: 13px; line-height: 1.5; color: #5B636A">
+    Precios: Ministerio para la Transición Ecológica · Mapas y rutas © colaboradores de OpenStreetMap
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
