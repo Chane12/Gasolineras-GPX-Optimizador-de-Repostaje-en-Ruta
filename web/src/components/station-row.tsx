@@ -20,6 +20,9 @@ export interface StationRowProps {
   onTogglePlan: () => void;
   /** Si se da, el nombre es un botón que centra el mapa en la gasolinera. */
   onSelect?: () => void;
+  /** Al pasar el ratón o el foco por la fila: resalta su placa en el mapa. */
+  onHighlight?: (on: boolean) => void;
+  highlighted?: boolean;
 }
 
 /** Fila del índice de gasolineras: hito · nombre y datos · precio · añadir/quitar parada. */
@@ -35,6 +38,8 @@ export function StationRow({
   inPlan,
   onTogglePlan,
   onSelect,
+  onHighlight,
+  highlighted = false,
 }: StationRowProps) {
   const details = [town, schedule, detourKm != null ? `desvío ${formatShortKm(detourKm)} km` : null].filter(
     Boolean,
@@ -42,7 +47,22 @@ export function StationRow({
   const priceColor = cheapest ? "text-accent" : dimmed ? "text-muted" : "text-ink";
 
   return (
-    <li className="flex items-center gap-3 border-b border-rule-soft py-2.5">
+    <li
+      className={`flex items-center gap-3 border-b border-rule-soft py-2.5 ${
+        highlighted ? "-mx-2.5 rounded-field px-2.5 outline-2 -outline-offset-2 outline-ink" : ""
+      }`}
+      onMouseEnter={onHighlight ? () => onHighlight(true) : undefined}
+      onMouseLeave={onHighlight ? () => onHighlight(false) : undefined}
+      // Con el teclado (foco visible), no al tocar: en el móvil el toque dejaría la fila marcada.
+      onFocus={
+        onHighlight
+          ? (e) => {
+              if ((e.target as HTMLElement).matches(":focus-visible")) onHighlight(true);
+            }
+          : undefined
+      }
+      onBlur={onHighlight ? () => onHighlight(false) : undefined}
+    >
       <Hito km={kmOnRoute} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-1.5">

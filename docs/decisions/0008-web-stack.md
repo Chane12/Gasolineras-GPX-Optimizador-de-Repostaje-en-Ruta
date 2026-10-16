@@ -33,6 +33,10 @@ El ADR 0001 fija Next.js + TypeScript para la web, con tipos generados desde el 
 - **Estado global (Redux/Zustand) para la búsqueda**: la URL y TanStack Query cubren casi todo. Si hace falta algo local más complejo (la hoja de ruta), se hace con un hook sobre IndexedDB.
 - **Remix / Astro**: válidos, pero el ADR 0001 ya eligió Next.js y no hay motivo nuevo para cambiar.
 
+## Revisión (2026-10-16)
+
+- **Hoja deslizable propia, sin Vaul**: la hoja del móvil es un panel con asa (se pulsa o se arrastra entre tres alturas) y "Cambiar la búsqueda" usa el `<dialog>` nativo. Vaul (sobre Radix Dialog) atrapa el foco y el desplazamiento como un modal, lo que choca con un mapa que debe seguir manejable debajo; lo propio pesa menos y es la misma estructura que el panel del ordenador.
+
 ## Consecuencias
 
 - `web/` tendrá su propio `CLAUDE.md`, su lockfile de pnpm y un job de CI. `scripts/verify.sh` comprobará también la web.

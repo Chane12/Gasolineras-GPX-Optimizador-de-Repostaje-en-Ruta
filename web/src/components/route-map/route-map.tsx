@@ -32,6 +32,8 @@ export interface RouteMapProps {
   stopKeys?: ReadonlySet<string>;
   /** Gasolinera elegida en la lista: el mapa se centra en ella y la resalta. */
   focusedKey?: string | null;
+  /** Fila con el ratón o el foco encima: su placa se resalta, sin mover el mapa. */
+  highlightedKey?: string | null;
   onStationSelect?: (key: string) => void;
   /** Lo que tapan la tarjeta de arriba y la hoja de abajo: el encuadre lo deja libre. */
   padding?: MapPadding;
@@ -64,6 +66,7 @@ interface MarkerSlot {
 function useMarkers(
   map: maplibregl.Map | null,
   items: readonly { key: string; lngLat: [number, number]; zIndex: number }[],
+  raised: ReadonlySet<string> = new Set(),
 ): MarkerSlot[] {
   // Nodos sueltos (aún fuera del documento) donde React pinta cada marcador con un portal.
   const slots = useMemo(
@@ -86,6 +89,12 @@ function useMarkers(
     );
     return () => markers.forEach((marker) => marker.remove());
   }, [map, items, slots]);
+  // Los marcadores resaltados, por encima de los demás.
+  useEffect(() => {
+    slots.forEach((slot, i) => {
+      slot.element.style.zIndex = String(raised.has(slot.key) ? 10 : (items[i]?.zIndex ?? 1));
+    });
+  }, [slots, items, raised]);
   return slots;
 }
 
@@ -98,6 +107,7 @@ export function RouteMap({
   stations,
   stopKeys,
   focusedKey = null,
+  highlightedKey = null,
   onStationSelect,
   padding = DEFAULT_PADDING,
 }: RouteMapProps) {
@@ -187,7 +197,11 @@ export function RouteMap({
       })),
     [stations, tones],
   );
-  const slots = useMarkers(map, markerItems);
+  const raised = useMemo(
+    () => new Set([focusedKey, highlightedKey].filter((k): k is string => k !== null)),
+    [focusedKey, highlightedKey],
+  );
+  const slots = useMarkers(map, markerItems, raised);
   const endpoints = useMemo(() => {
     const first = track[0];
     const last = track[track.length - 1];
@@ -231,7 +245,7 @@ export function RouteMap({
         if (!entry) return null;
         const { s, i } = entry;
         const isStop = stopKeys?.has(key) ?? false;
-        const focused = key === focusedKey;
+        const focused = key === focusedKey || key === highlightedKey;
         return createPortal(
           <span className="relative flex items-end">
             {isStop ? (
@@ -243,7 +257,9 @@ export function RouteMap({
               type="button"
               onClick={() => onStationSelect?.(key)}
               aria-label={`${s.name}, ${formatPrice(s.price)} euros por litro, km ${formatKm(s.km_on_route)}${isStop ? ", en tus paradas" : ""}`}
-              className={`block cursor-pointer rounded-plate p-0 transition-transform ${focused ? "scale-115" : ""}`}
+              className={`block cursor-pointer rounded-plate p-0 transition-transform ${
+                focused ? "scale-120 rounded-plate outline-2 outline-offset-2 outline-ink" : ""
+              }`}
             >
               <PricePlate price={s.price} tone={tones[i] ?? "suggested"} />
             </button>

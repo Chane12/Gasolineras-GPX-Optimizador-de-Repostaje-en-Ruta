@@ -43,6 +43,7 @@ export function PlaceInput({
   invalid = false,
   describedBy,
   enterKeyHint,
+  hideLabel = false,
   client = api,
 }: {
   label: string;
@@ -54,6 +55,8 @@ export function PlaceInput({
   invalid?: boolean;
   describedBy?: string;
   enterKeyHint?: "next" | "search";
+  /** Etiqueta solo para lectores de pantalla (barra compacta de la ruta). */
+  hideLabel?: boolean;
   client?: ApiClient;
 }) {
   const ids = useId();
@@ -101,7 +104,7 @@ export function PlaceInput({
 
   return (
     <div className="relative flex flex-col gap-1">
-      <label htmlFor={`${ids}-input`} className="text-sm font-bold">
+      <label htmlFor={`${ids}-input`} className={hideLabel ? "sr-only" : "text-sm font-bold"}>
         {label}
       </label>
       <div

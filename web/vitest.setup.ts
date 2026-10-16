@@ -21,3 +21,11 @@ vi.stubGlobal(
     disconnect() {}
   },
 );
+
+// jsdom no tiene matchMedia: se comporta como un móvil sin preferencias (sin modo oscuro ni menos movimiento).
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+}));
