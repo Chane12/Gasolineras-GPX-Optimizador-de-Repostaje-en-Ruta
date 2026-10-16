@@ -144,5 +144,8 @@ desktop.ini
 # Fixtures de test (GPX mínimo, snapshot JSON del MITECO)
 !core/tests/fixtures/**
 
+# Maquetas aprobadas de la web (referencia de diseño, docs/web/diseno.md)
+!docs/web/maquetas/*.html
+
 # uv.lock DEBE estar en el repo (determinismo de dependencias)
 # pyproject.toml DEBE estar en el repo

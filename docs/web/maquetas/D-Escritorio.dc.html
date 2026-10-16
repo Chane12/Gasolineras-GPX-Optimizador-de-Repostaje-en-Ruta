@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Escritorio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B4C94}a:hover{color:#083770}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; background: #FFFFFF; font-family: 'Familjen Grotesk', sans-serif; color: #161B1F; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 24px; border-bottom: 2px solid #161B1F">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #161B1F; flex-shrink: 0">
+      <svg width="20" height="28" viewBox="0 0 20 28" aria-hidden="true"><path d="M2 8a8 8 0 0 1 16 0v18H2z" fill="#FFFFFF" stroke="#161B1F" stroke-width="2"></path><path d="M2 8a8 8 0 0 1 16 0v2H2z" fill="#C0392B"></path><rect x="6" y="15" width="8" height="2" fill="#161B1F"></rect><rect x="6" y="19" width="5" height="2" fill="#161B1F"></rect></svg>
+      <span style="font-size: 19px; font-weight: 700; letter-spacing: -0.01em">Gasolineras en Ruta</span>
+    </a>
+    <form style="flex: 1 1 640px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 0">
+      <label style="flex: 1 1 170px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 600">Origen
+        <input type="text" value="Madrid" style="height: 44px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 16px; color: #161B1F; background: #FFFFFF">
+      </label>
+      <label style="flex: 1 1 170px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 600">Destino
+        <input type="text" value="Valencia" style="height: 44px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 16px; color: #161B1F; background: #FFFFFF">
+      </label>
+      <label style="flex: 0 1 160px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 600">Combustible
+        <select style="height: 44px; border: 1.5px solid #BDBDB7; border-radius: 8px; padding: 0 8px; font-family: inherit; font-size: 16px; color: #161B1F; background: #FFFFFF"><option>Gasolina 95</option><option>Diésel</option></select>
+      </label>
+      <button type="button" style="height: 44px; padding: 0 14px; border: 1.5px solid #BDBDB7; border-radius: 8px; background: #FFFFFF; color: #161B1F; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#161B1F" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg>
+        Opciones
+      </button>
+      <button type="submit" style="height: 44px; padding: 0 22px; border: 0; border-radius: 8px; background: #0B4C94; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer">Buscar</button>
+    </form>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 820px">
+    <aside style="flex: 1 1 380px; max-width: 470px; border-right: 1px solid #DADAD6; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #5B636A">GASOLINERAS EN TU RUTA</div>
+          <h1 style="margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1">Elige tus paradas</h1>
+        </div>
+        <div style="display: flex; align-items: center; gap: 7px; border: 1px solid #DADAD6; border-radius: 999px; padding: 5px 11px 4px 9px; font-size: 13px; font-weight: 600; color: #3E464D">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #1E8A4C"></span>MITECO · <span style="font-family: 'IBM Plex Mono', monospace">12</span> min
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid #161B1F; border-bottom: 1px solid #DADAD6">
+        <div style="padding: 8px 0"><div style="font-size: 13px; font-weight: 600; color: #5B636A">Encontradas</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600">9</div></div>
+        <div style="padding: 8px 0 8px 12px; border-left: 1px solid #DADAD6"><div style="font-size: 13px; font-weight: 600; color: #5B636A">Mejor precio</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; color: #0B4C94">1,639 €/L</div></div>
+        <div style="padding: 8px 0 8px 12px; border-left: 1px solid #DADAD6"><div style="font-size: 13px; font-weight: 600; color: #5B636A">Ahorro hasta</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600">0,21 €/L</div></div>
+      </div>
+
+      <div style="display: flex; gap: 18px; border-bottom: 1px solid #E6E6E2">
+        <button type="button" aria-pressed="true" style="height: 38px; padding: 0; border: 0; border-bottom: 2.5px solid #0B4C94; background: transparent; color: #0B4C94; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">Por km</button>
+        <button type="button" aria-pressed="false" style="height: 38px; padding: 0; border: 0; border-bottom: 2.5px solid transparent; background: transparent; color: #5B636A; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Por precio</button>
+        <button type="button" aria-pressed="false" style="height: 38px; padding: 0; border: 0; border-bottom: 2.5px solid transparent; background: transparent; color: #5B636A; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Por desvío</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6E6E2">
+          <div style="width: 38px; flex-shrink: 0; border: 1.5px solid #161B1F; border-radius: 9px 9px 2px 2px; overflow: hidden; text-align: center; background: #FFFFFF"><div style="height: 9px; background: #C0392B"></div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; padding: 5px 0">42</div></div>
+          <div style="flex: 1; min-width: 0"><div style="font-size: 16px; font-weight: 700">Repsol</div><div style="font-size: 14px; color: #5B636A">Arganda del Rey · 24 h · desvío <span style="font-family: 'IBM Plex Mono', monospace">1,2</span> km</div></div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600">1,659</div>
+          <button type="button" aria-label="Añadir Repsol a tus paradas" style="width: 40px; height: 40px; border: 1.5px solid #0B4C94; border-radius: 8px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B4C94" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6E6E2">
+          <div style="width: 38px; flex-shrink: 0; border: 1.5px solid #161B1F; border-radius: 9px 9px 2px 2px; overflow: hidden; text-align: center; background: #FFFFFF"><div style="height: 9px; background: #C0392B"></div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; padding: 5px 0">118</div></div>
+          <div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 6px"><span style="font-size: 16px; font-weight: 700">Ballenoil</span><span style="background: #0B4C94; color: #FFFFFF; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; border-radius: 3px; padding: 2px 5px 1px">MÁS BARATA</span></div><div style="font-size: 14px; color: #5B636A">Tarancón · 24 h · desvío <span style="font-family: 'IBM Plex Mono', monospace">0,4</span> km</div></div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; color: #0B4C94">1,639</div>
+          <button type="button" aria-label="Quitar Ballenoil de tus paradas" style="width: 40px; height: 40px; border: 0; border-radius: 8px; background: #0B4C94; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6E6E2">
+          <div style="width: 38px; flex-shrink: 0; border: 1.5px solid #161B1F; border-radius: 9px 9px 2px 2px; overflow: hidden; text-align: center; background: #FFFFFF"><div style="height: 9px; background: #C0392B"></div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; padding: 5px 0">205</div></div>
+          <div style="flex: 1; min-width: 0"><div style="font-size: 16px; font-weight: 700">Cepsa</div><div style="font-size: 14px; color: #5B636A">Motilla del Palancar · 7–22 h · desvío <span style="font-family: 'IBM Plex Mono', monospace">2,8</span> km</div></div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; color: #5B636A">1,712</div>
+          <button type="button" aria-label="Añadir Cepsa a tus paradas" style="width: 40px; height: 40px; border: 1.5px solid #0B4C94; border-radius: 8px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B4C94" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6E6E2">
+          <div style="width: 38px; flex-shrink: 0; border: 1.5px solid #161B1F; border-radius: 9px 9px 2px 2px; overflow: hidden; text-align: center; background: #FFFFFF"><div style="height: 9px; background: #C0392B"></div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; padding: 5px 0">322</div></div>
+          <div style="flex: 1; min-width: 0"><div style="font-size: 16px; font-weight: 700">Repsol</div><div style="font-size: 14px; color: #5B636A">Buñol · 24 h · desvío <span style="font-family: 'IBM Plex Mono', monospace">0,9</span> km</div></div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600">1,668</div>
+          <button type="button" aria-label="Quitar Repsol Buñol de tus paradas" style="width: 40px; height: 40px; border: 0; border-radius: 8px; background: #0B4C94; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>
+        </div>
+      </div>
+
+      <section style="margin-top: auto; border: 2px solid #161B1F; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 700">Tu ruta</h2>
+          <span style="font-size: 14px; color: #3E464D"><span style="font-family: 'IBM Plex Mono', monospace">352</span> km · 2 paradas · ahorras ≈ <b style="font-family: 'IBM Plex Mono', monospace; color: #0B4C94">5,40 €</b></span>
+        </div>
+        <div style="display: grid; grid-template-columns: 44px 1fr auto; column-gap: 10px; row-gap: 6px; font-size: 14px; align-items: baseline">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600">118</span><span style="font-weight: 600">Ballenoil · Tarancón</span><span style="font-family: 'IBM Plex Mono', monospace; color: #0B4C94; font-weight: 600">1,639</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600">322</span><span style="font-weight: 600">Repsol · Buñol</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600">1,668</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <a href="#" style="height: 44px; border-radius: 8px; background: #0B4C94; color: #FFFFFF; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">Google Maps</a>
+          <a href="#" style="height: 44px; border-radius: 8px; border: 1.5px solid #161B1F; color: #161B1F; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">Hoja de ruta y GPX</a>
+        </div>
+      </section>
+    </aside>
+
+    <div style="flex: 999 1 560px; min-width: 0; min-height: 560px; position: relative; overflow: hidden; background: #EFEFEC">
+      <svg viewBox="0 0 1000 820" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0; width: 100%; height: 100%" role="img" aria-label="Mapa de la ruta Madrid–Valencia con los precios de las gasolineras y tus paradas">
+        <rect width="1000" height="820" fill="#EFEFEC"></rect>
+        <g fill="none" stroke="#E1E1DC" stroke-width="1.5">
+          <path d="M-20 140 C 150 100, 300 200, 480 160 S 800 100, 1020 160"></path>
+          <path d="M-20 175 C 150 135, 300 235, 480 195 S 800 135, 1020 195"></path>
+          <path d="M-20 560 C 200 520, 340 620, 560 580 S 820 540, 1020 600"></path>
+          <path d="M-20 600 C 200 560, 340 660, 560 620 S 820 580, 1020 640"></path>
+          <path d="M-20 640 C 200 600, 340 700, 560 660 S 820 620, 1020 680"></path>
+          <path d="M420 300 C 520 250, 640 320, 610 400 S 460 440, 420 390 Z"></path>
+          <path d="M395 285 C 520 220, 670 310, 635 420 S 440 470, 395 400 Z"></path>
+        </g>
+        <path d="M780 820 C 820 740, 920 720, 1000 690 L 1000 820 Z" fill="#D9DFE2"></path>
+        <g fill="none" stroke-linecap="round">
+          <path d="M0 420 C 200 400, 360 520, 540 500 S 840 400, 1000 460" stroke="#CFCFC9" stroke-width="9"></path>
+          <path d="M0 420 C 200 400, 360 520, 540 500 S 840 400, 1000 460" stroke="#FFFFFF" stroke-width="5"></path>
+          <path d="M300 0 C 320 160, 260 320, 350 460 S 380 700, 300 820" stroke="#CFCFC9" stroke-width="9"></path>
+          <path d="M300 0 C 320 160, 260 320, 350 460 S 380 700, 300 820" stroke="#FFFFFF" stroke-width="5"></path>
+          <path d="M90 250 C 190 280, 290 380, 430 410 S 640 470, 770 620 S 900 720, 940 740" stroke="#FFFFFF" stroke-width="15"></path>
+          <path d="M90 250 C 190 280, 290 380, 430 410 S 640 470, 770 620 S 900 720, 940 740" stroke="#0B4C94" stroke-width="7"></path>
+        </g>
+        <circle cx="90" cy="250" r="10" fill="#FFFFFF" stroke="#0B4C94" stroke-width="4"></circle>
+        <rect x="930" y="730" width="20" height="20" fill="#0B4C94" stroke="#FFFFFF" stroke-width="3"></rect>
+        <text x="74" y="228" font-family="'Familjen Grotesk', sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#161B1F">MADRID</text>
+        <text x="850" y="780" font-family="'Familjen Grotesk', sans-serif" font-size="16" font-weight="700" letter-spacing="1.5" fill="#161B1F">VALENCIA</text>
+        <text x="455" y="345" font-family="'Familjen Grotesk', sans-serif" font-size="14" font-style="italic" fill="#8A8F94">Serranía de Cuenca</text>
+        <g>
+          <path d="M410 372 a 18 18 0 0 1 36 0 v 28 h -36 z" fill="#FFFFFF" stroke="#161B1F" stroke-width="2.5"></path>
+          <path d="M410 372 a 18 18 0 0 1 36 0 z" fill="#C0392B"></path>
+          <text x="428" y="393" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600" fill="#161B1F">118</text>
+          <path d="M752 584 a 18 18 0 0 1 36 0 v 28 h -36 z" fill="#FFFFFF" stroke="#161B1F" stroke-width="2.5"></path>
+          <path d="M752 584 a 18 18 0 0 1 36 0 z" fill="#C0392B"></path>
+          <text x="770" y="605" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600" fill="#161B1F">322</text>
+        </g>
+        <g font-family="'IBM Plex Mono', monospace" font-size="16" font-weight="600" text-anchor="middle">
+          <path d="M175 302 l7 8 l7 -8 z" fill="#161B1F"></path>
+          <rect x="146" y="270" width="72" height="32" rx="5" fill="#FFFFFF" stroke="#161B1F" stroke-width="2"></rect>
+          <text x="182" y="292" fill="#161B1F">1,659</text>
+          <rect x="454" y="350" width="80" height="34" rx="5" fill="#0B4C94"></rect>
+          <text x="494" y="373" fill="#FFFFFF">1,639</text>
+          <path d="M553 488 l7 8 l7 -8 z" fill="#9AA0A6"></path>
+          <rect x="524" y="456" width="72" height="32" rx="5" fill="#FFFFFF" stroke="#9AA0A6" stroke-width="1.5"></rect>
+          <text x="560" y="478" fill="#5B636A">1,712</text>
+          <rect x="796" y="566" width="72" height="32" rx="5" fill="#FFFFFF" stroke="#161B1F" stroke-width="2"></rect>
+          <text x="832" y="588" fill="#161B1F">1,668</text>
+        </g>
+      </svg>
+      <div style="position: absolute; right: 20px; top: 20px; display: flex; flex-direction: column; border: 1px solid #DADAD6; border-radius: 10px; background: #FFFFFF; overflow: hidden; box-shadow: 0 2px 8px rgba(22,27,31,0.10)">
+        <button type="button" aria-label="Acercar" style="width: 44px; height: 44px; border: 0; border-bottom: 1px solid #DADAD6; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161B1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+        <button type="button" aria-label="Alejar" style="width: 44px; height: 44px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161B1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
+      </div>
+      <div style="position: absolute; left: 20px; bottom: 20px; background: #FFFFFF; border: 1px solid #DADAD6; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; color: #3E464D">
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 26px; height: 14px; border-radius: 3px; background: #0B4C94"></span>La más barata</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 26px; height: 14px; border-radius: 3px; background: #FFFFFF; border: 1.5px solid #161B1F; box-sizing: border-box"></span>Sugerida</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 18px; margin: 0 6px; border-radius: 7px 7px 1px 1px; border: 1.5px solid #161B1F; box-sizing: border-box; overflow: hidden; background: #FFFFFF"><span style="display: block; height: 6px; background: #C0392B"></span></span>Tu parada</div>
+      </div>
+      <div style="position: absolute; right: 20px; bottom: 20px; font-size: 12px; color: #5B636A; background: rgba(255,255,255,0.9); padding: 3px 6px; border-radius: 4px">© OpenStreetMap · OpenFreeMap</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
