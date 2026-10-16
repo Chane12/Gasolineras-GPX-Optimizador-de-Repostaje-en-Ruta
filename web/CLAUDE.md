@@ -62,6 +62,14 @@ NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C 
 uvx --from playwright python scripts/screenshots.py --out /tmp/capturas            # 8 capturas: inicio y ruta
 ```
 
+## e2e (Playwright + axe)
+
+`web/e2e/`: el recorrido completo en móvil y ordenador, accesibilidad (axe, WCAG 2.1 AA) y presupuesto de JavaScript del inicio. La API se simula (`e2e/fake-api.ts`) y las teselas del mapa se bloquean: sin red. Usa el último `next build` y el Chrome del sistema:
+
+```bash
+./scripts/pnpm -C web build && ./scripts/pnpm -C web e2e      # o ./scripts/verify.sh --e2e
+```
+
 ## Verificación
 
 `./scripts/verify.sh` (desde la raíz) ejecuta también la web: dependencias, lint, tipos, formato, tests y `next build`. Si cambias algo visual, compáralo con la maqueta correspondiente y di en el PR qué no has podido comprobar (p. ej. en un móvil real).

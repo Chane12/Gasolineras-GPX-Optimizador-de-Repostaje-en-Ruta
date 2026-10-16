@@ -33,6 +33,7 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 uv sync --all-packages                            # instalar todo el workspace
 ./scripts/verify.sh                               # lint + formato + tipos + tests + requirements (lo mismo que el CI)
 ./scripts/verify.sh --smoke                       # + arranca la app Streamlit con la demo (usa red)
+./scripts/verify.sh --e2e                         # + e2e de la web (Playwright + axe, Chrome del sistema)
 uv run pytest -q                                  # solo tests
 uv run gasolineras --help                         # CLI del motor
 uv run streamlit run legacy/streamlit/app.py      # app actual en local
