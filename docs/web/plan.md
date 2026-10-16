@@ -77,6 +77,8 @@ Comportamientos clave:
   - Flujo de la demo de punta a punta con Playwright y la API simulada.
   - Comprobación de accesibilidad automática (axe) en el e2e.
 
+> **Revisión de experiencia y flujo (2026-10-16)**: [`revision-ux.md`](revision-ux.md). Guía los puntos 7–9.
+
 ## Listón de calidad (ordenador y móvil)
 
 Decisión del propietario (2026-10-16): los dos tamaños valen lo mismo. En la práctica:
