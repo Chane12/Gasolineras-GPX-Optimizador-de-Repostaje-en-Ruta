@@ -1,19 +1,16 @@
-import Link from "next/link";
-
 import { ServerWarmupNotice } from "@/components/server-warmup-notice";
 import { SiteHeader } from "@/components/site-header";
-import { serializeSearch } from "@/lib/search-params";
 
 import { HomeSearch } from "./home-search";
 
 const STEPS = [
   {
     title: "Elige dónde parar",
-    text: "Las gasolineras de tu camino, por kilómetro o por precio, con el desvío real.",
+    text: "Las más baratas de tu camino, por kilómetro o por precio, con el desvío real.",
   },
   {
-    title: "Tu hoja de ruta, sin cobertura",
-    text: "Las paradas quedan guardadas en el móvil para consultarlas en mitad del puerto.",
+    title: "Llévate la hoja de ruta",
+    text: "Tus paradas en orden, para consultarla en el móvil o imprimirla.",
   },
   {
     title: "Al navegador, en un toque",
@@ -74,62 +71,60 @@ function RouteIllustration() {
 
 export default function Home() {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-xl flex-col">
+    <div className="flex min-h-dvh flex-col">
       <SiteHeader>
         <a href="#como-funciona" className="py-3 text-[15px] font-semibold no-underline">
           Cómo funciona
         </a>
       </SiteHeader>
 
-      <main className="flex flex-1 flex-col">
-        <section className="flex flex-col gap-3 px-4 pt-7 pb-5">
-          <p className="m-0 font-mono text-xs font-semibold tracking-[0.08em] text-muted">
-            PRECIOS OFICIALES DEL MITECO
-          </p>
-          <h1 className="m-0 text-[38px] leading-[1.02] font-bold tracking-[-0.025em]">
-            Organiza tu ruta y decide dónde repostar.
-          </h1>
-          <p className="m-0 text-[17px] leading-snug text-muted">
-            Te enseñamos las gasolineras más baratas del camino. Tú eliges las paradas y te llevas la hoja de
-            ruta.
-          </p>
-        </section>
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col lg:max-w-7xl lg:flex-row lg:items-start lg:gap-14 lg:px-10 lg:py-12">
+        <div className="flex flex-col lg:w-[540px] lg:shrink-0">
+          <section className="flex flex-col gap-3 px-4 pt-7 pb-5 lg:px-0 lg:pt-0">
+            <p className="m-0 font-mono text-xs font-semibold tracking-[0.08em] text-muted">
+              PRECIOS OFICIALES DEL MITECO
+            </p>
+            <h1 className="m-0 text-[38px] leading-[1.02] font-bold tracking-[-0.025em] lg:text-5xl lg:leading-[1.05]">
+              Organiza tu ruta y decide dónde repostar.
+            </h1>
+            <p className="m-0 text-[17px] leading-snug text-muted lg:text-lg">
+              Te enseñamos las gasolineras más baratas del camino. Tú eliges las paradas y te llevas la hoja
+              de ruta.
+            </p>
+          </section>
 
-        <div className="flex flex-col gap-3 px-4">
-          <ServerWarmupNotice />
-          <HomeSearch />
-          <Link
-            href={serializeSearch("/ruta", { demo: true })}
-            className="self-center py-1.5 text-[15px] font-semibold"
-          >
-            o prueba con una ruta por la Sierra de Gredos
-          </Link>
+          <div className="flex flex-col gap-3 px-4 lg:px-0">
+            <ServerWarmupNotice />
+            <HomeSearch />
+          </div>
         </div>
 
-        <div className="mt-7">
-          <RouteIllustration />
-        </div>
+        <div className="mt-7 flex min-w-0 flex-1 flex-col gap-7 lg:mt-0">
+          <div className="lg:overflow-hidden lg:rounded-card lg:border lg:border-rule">
+            <RouteIllustration />
+          </div>
 
-        <section id="como-funciona" className="flex flex-col px-4 pt-6 pb-2">
-          <h2 className="m-0 mb-2.5 text-2xl font-bold tracking-[-0.015em]">Tu viaje, parada a parada</h2>
-          <ol className="m-0 list-none p-0">
-            {STEPS.map((step, index) => (
-              <li
-                key={step.title}
-                className={`grid grid-cols-[36px_1fr] gap-x-2.5 py-3.5 ${index === 0 ? "border-t-2 border-ink" : "border-t border-rule"}`}
-              >
-                <span className="font-mono text-[13px] font-semibold text-accent">0{index + 1}</span>
-                <div>
-                  <h3 className="m-0 text-[17px] font-bold">{step.title}</h3>
-                  <p className="m-0 mt-0.5 text-[15px] leading-snug text-muted">{step.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
+          <section id="como-funciona" className="flex flex-col px-4 pb-2 lg:px-0">
+            <h2 className="m-0 mb-2.5 text-2xl font-bold tracking-[-0.015em]">Tu viaje, parada a parada</h2>
+            <ol className="m-0 grid list-none grid-cols-1 p-0 lg:grid-cols-3 lg:gap-6 lg:border-t-2 lg:border-ink lg:pt-4">
+              {STEPS.map((step, index) => (
+                <li
+                  key={step.title}
+                  className={`grid grid-cols-[36px_1fr] gap-x-2.5 py-3.5 lg:block lg:border-0 lg:py-0 ${index === 0 ? "border-t-2 border-ink" : "border-t border-rule"}`}
+                >
+                  <span className="font-mono text-[13px] font-semibold text-accent">0{index + 1}</span>
+                  <div>
+                    <h3 className="m-0 text-[17px] font-bold lg:mt-1">{step.title}</h3>
+                    <p className="m-0 mt-0.5 text-[15px] leading-snug text-muted">{step.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
       </main>
 
-      <footer className="border-t border-rule px-4 pt-3.5 pb-5 text-[13px] leading-normal text-muted">
+      <footer className="border-t border-rule px-4 pt-3.5 pb-5 text-[13px] leading-normal text-muted lg:px-10">
         Precios: Ministerio para la Transición Ecológica · Mapas y rutas © colaboradores de OpenStreetMap
       </footer>
     </div>

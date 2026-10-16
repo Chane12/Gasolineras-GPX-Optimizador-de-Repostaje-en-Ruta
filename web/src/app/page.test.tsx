@@ -15,9 +15,10 @@ describe("Home", () => {
       screen.getByRole("heading", { level: 1, name: "Organiza tu ruta y decide dónde repostar." }),
     ).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Buscar gasolineras en tu ruta" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "o prueba con una ruta por la Sierra de Gredos" }),
-    ).toHaveAttribute("href", "/ruta?demo=true");
+    expect(screen.getByRole("link", { name: "Probar con una ruta de ejemplo" })).toHaveAttribute(
+      "href",
+      "/ruta?demo=true",
+    );
   });
 
   it("credits the data sources", () => {
