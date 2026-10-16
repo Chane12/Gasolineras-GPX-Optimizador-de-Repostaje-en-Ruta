@@ -162,6 +162,20 @@ class TestFetchRoadRoute:
         assert fake.calls[0]["headers"]["User-Agent"] == USER_AGENT
         assert "-4.66,40.65;-4.12,40.95" in fake.calls[0]["url"]  # OSRM expects lon,lat
 
+    def test_details_include_the_osrm_duration(self, monkeypatch):
+        with_duration = {"code": "Ok", "routes": [{**OSRM_OK["routes"][0], "duration": 3720.5}]}
+        monkeypatch.setattr(geocoder.requests, "get", FakeGet(lambda url, params: FakeResponse(with_duration)))
+
+        route = geocoder.fetch_road_route_details((40.65, -4.66), (40.95, -4.12))
+
+        assert route.duration_s == 3720.5
+        assert len(route.track.coords) == 3
+
+    def test_details_without_duration_say_so(self, monkeypatch):
+        monkeypatch.setattr(geocoder.requests, "get", FakeGet(lambda url, params: FakeResponse(OSRM_OK)))
+
+        assert geocoder.fetch_road_route_details((40.65, -4.66), (40.95, -4.12)).duration_s is None
+
     def test_osrm_no_route_raises_no_route_error(self, monkeypatch):
         fake = FakeGet(lambda url, params: FakeResponse({"code": "NoRoute"}, status_code=400))
         monkeypatch.setattr(geocoder.requests, "get", fake)

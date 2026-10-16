@@ -75,6 +75,9 @@ class RouteResponse(BaseModel):
     point_count: int = Field(description="Número de puntos del track")
     origin: Place | None = Field(default=None, description="Solo en rutas calculadas desde texto")
     destination: Place | None = Field(default=None, description="Solo en rutas calculadas desde texto")
+    duration_min: float | None = Field(
+        default=None, description="Duración por carretera sin paradas (OSRM); solo en rutas calculadas desde texto"
+    )
 
 
 # ---------------------------------------------------------------------------

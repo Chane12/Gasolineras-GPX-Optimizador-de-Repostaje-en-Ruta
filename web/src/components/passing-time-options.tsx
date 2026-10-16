@@ -8,9 +8,12 @@ import type { PassingSettings } from "@/lib/use-passing-time";
 export function PassingTimeOptions({
   settings,
   onChange,
+  routeSpeedKmh = null,
 }: {
   settings: PassingSettings;
   onChange: (next: Partial<PassingSettings>) => void;
+  /** Media de la ruta calculada (sin paradas), para proponerla; null en rutas GPX. */
+  routeSpeedKmh?: number | null;
 }) {
   const ids = useId();
   return (
@@ -59,8 +62,19 @@ export function PassingTimeOptions({
             </label>
           </div>
           <p id={`${ids}-speed-hint`} className="m-0 text-[13px] text-muted">
-            Contando paradas: por autovía, unos 90 km/h; por carreteras de montaña, 50–60.
+            {routeSpeedKmh !== null
+              ? `Esta ruta sale a unos ${routeSpeedKmh} km/h de media sin contar paradas.`
+              : "Contando paradas: por autovía, unos 90 km/h; por carreteras de montaña, 50–60."}
           </p>
+          {routeSpeedKmh !== null && settings.speedKmh !== routeSpeedKmh ? (
+            <button
+              type="button"
+              onClick={() => onChange({ speedKmh: routeSpeedKmh })}
+              className="-mt-1.5 min-h-11 self-start text-sm font-semibold text-accent underline underline-offset-2"
+            >
+              Usar {routeSpeedKmh} km/h
+            </button>
+          ) : null}
           <label className="flex min-h-11 items-center gap-3 text-[15px]">
             <input
               type="checkbox"

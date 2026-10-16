@@ -9,7 +9,7 @@ from shapely.geometry import LineString
 from gasolineras_api.main import create_app
 from gasolineras_api.routers import route as route_module
 from gasolineras_core.ingestion import geocoder
-from gasolineras_core.ingestion.geocoder import GeocodedPlace
+from gasolineras_core.ingestion.geocoder import GeocodedPlace, RoadRoute
 
 SAMPLE_GPX = Path(__file__).resolve().parents[2] / "core" / "tests" / "fixtures" / "sample_track.gpx"
 
@@ -33,7 +33,7 @@ def fake_services(monkeypatch):
         return PLACES[place]
 
     monkeypatch.setattr(geocoder, "geocode_place", geocode_place)
-    monkeypatch.setattr(geocoder, "fetch_road_route", lambda origin, destination: ROAD)
+    monkeypatch.setattr(geocoder, "fetch_road_route_details", lambda origin, destination: RoadRoute(ROAD, 7200.0))
 
 
 class TestRouteFromText:
@@ -47,6 +47,7 @@ class TestRouteFromText:
         assert body["point_count"] == 3
         assert body["origin"] == {"query": "Ávila", "lat": 40.6572, "lon": -4.6627}
         assert body["destination"]["query"] == "Segovia"
+        assert body["duration_min"] == 120.0
 
     def test_unknown_place_is_400_with_message_for_the_user(self, client, fake_services):
         response = client.post("/route/text", json={"origin": "Ávila", "destination": "Villarriba"})
@@ -58,7 +59,7 @@ class TestRouteFromText:
         def no_route(origin, destination):
             raise geocoder.NoRouteError("No hay ruta por carretera entre esos dos puntos.")
 
-        monkeypatch.setattr(geocoder, "fetch_road_route", no_route)
+        monkeypatch.setattr(geocoder, "fetch_road_route_details", no_route)
 
         response = client.post("/route/text", json={"origin": "Ávila", "destination": "Segovia"})
 
@@ -77,7 +78,9 @@ class TestRouteFromText:
         assert "no está disponible" in response.json()["detail"]
 
     def test_route_outside_spain_is_400(self, client, fake_services, monkeypatch):
-        monkeypatch.setattr(geocoder, "fetch_road_route", lambda o, d: LineString([(-0.1, 51.5), (-0.2, 51.6)]))
+        monkeypatch.setattr(
+            geocoder, "fetch_road_route_details", lambda o, d: RoadRoute(LineString([(-0.1, 51.5), (-0.2, 51.6)]), None)
+        )
 
         response = client.post("/route/text", json={"origin": "Ávila", "destination": "Segovia"})
 
@@ -94,7 +97,9 @@ class TestRouteFromText:
 
         routed: list[tuple] = []
         monkeypatch.setattr(geocoder, "geocode_place", no_geocoding)
-        monkeypatch.setattr(geocoder, "fetch_road_route", lambda o, d: routed.append((o, d)) or ROAD)
+        monkeypatch.setattr(
+            geocoder, "fetch_road_route_details", lambda o, d: routed.append((o, d)) or RoadRoute(ROAD, None)
+        )
 
         response = client.post(
             "/route/text",

@@ -59,19 +59,20 @@ def route_from_text(body: RouteTextRequest) -> RouteResponse:
     try:
         origin = _place(body.origin, body.origin_point)
         destination = _place(body.destination, body.destination_point)
-        track = geocoder.fetch_road_route((origin.lat, origin.lon), (destination.lat, destination.lon))
+        road = geocoder.fetch_road_route_details((origin.lat, origin.lon), (destination.lat, destination.lon))
     except geocoder.RoutingServiceError as exc:
         logger.warning("External routing service unavailable: %s", exc)
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     except geocoder.RouteTextError as exc:  # place not found / no road route
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    track = _validated(track)
+    track = _validated(road.track)
     return RouteResponse(
         track=LineStringGeometry.from_shapely(track),
         point_count=len(track.coords),
         origin=Place(query=origin.query, lat=origin.lat, lon=origin.lon),
         destination=Place(query=destination.query, lat=destination.lat, lon=destination.lon),
+        duration_min=round(road.duration_s / 60, 1) if road.duration_s else None,
     )
 
 

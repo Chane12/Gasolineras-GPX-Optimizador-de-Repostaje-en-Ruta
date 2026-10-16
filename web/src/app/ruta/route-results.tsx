@@ -48,7 +48,7 @@ import { personalize, type PricedStation } from "@/lib/discounts";
 import { type RoadSide, roadSides } from "@/lib/road-side";
 import { useDiscounts } from "@/lib/use-discounts";
 import { useStoredState } from "@/lib/use-stored-state";
-import { type PassingStatus, usePassingTime } from "@/lib/use-passing-time";
+import { type PassingStatus, routeSpeedKmh, usePassingTime } from "@/lib/use-passing-time";
 import { placeValueFrom } from "@/lib/use-place-check";
 
 import { RouteMapLazy } from "./route-map-lazy";
@@ -482,7 +482,11 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                       onChange={discounts.setDiscounts}
                       brands={brandSuggestions(allStations)}
                     />
-                    <PassingTimeOptions settings={passing.settings} onChange={passing.update} />
+                    <PassingTimeOptions
+                      settings={passing.settings}
+                      onChange={passing.update}
+                      routeSpeedKmh={routeSpeedKmh(search.data?.route_km, route.data?.duration_min)}
+                    />
                     <MySideOptions enabled={onlyMySide} onChange={setOnlyMySide} />
                     <ExcludedBrandsOptions
                       brands={excludedBrands}
