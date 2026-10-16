@@ -32,3 +32,6 @@ services:
         value: "1"
       - key: GASOLINERAS_LOG_LEVEL
         value: INFO
+      # TEMPORAL: endpoint /debug/ip para diagnosticar la IP del cliente tras el proxy. Quitar tras el arreglo.
+      - key: GASOLINERAS_DEBUG_IP
+        value: "1"
