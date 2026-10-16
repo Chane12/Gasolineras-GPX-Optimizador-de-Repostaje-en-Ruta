@@ -20,6 +20,7 @@ import { FilterBar, type Filters } from "@/components/filter-bar";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { CloseIcon, WarningIcon } from "@/components/icons";
 import { DiscountsOptions } from "@/components/discounts-options";
+import { MySideOptions } from "@/components/my-side-options";
 import { PassingTimeOptions } from "@/components/passing-time-options";
 import { RefuelPlanner } from "@/components/refuel-planner";
 import { RouteSearchBar } from "@/components/route-search-bar";
@@ -37,7 +38,9 @@ import { plateTones, type Station, stationKey } from "@/lib/map/geo";
 import { normalizeOptions, serializeSearch } from "@/lib/search-params";
 import { autoSegmentKm, formatSchedule, formatStationName, RECOMMENDED_CHEAPEST } from "@/lib/stations";
 import { type PricedStation, withDiscounts } from "@/lib/discounts";
+import { type RoadSide, roadSides } from "@/lib/road-side";
 import { useDiscounts } from "@/lib/use-discounts";
+import { useStoredState } from "@/lib/use-stored-state";
 import { type PassingStatus, usePassingTime } from "@/lib/use-passing-time";
 import { placeValueFrom } from "@/lib/use-place-check";
 
@@ -183,13 +186,28 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
     }
     return map;
   }, [allStations, statusOf]);
+  // "Solo las de mi lado" (10d): lado de cada gasolinera pegada a la ruta, según el sentido de la marcha.
+  const [onlyMySide, setOnlyMySide] = useStoredState("gasolineras:mi-lado", false);
+  const track = route.data?.track.coordinates;
+  const sides = useMemo(
+    () =>
+      track
+        ? roadSides(
+            track,
+            allStations.map((s) => ({ key: stationKey(s), lat: s.lat, lon: s.lon })),
+          )
+        : new Map<string, RoadSide>(),
+    [track, allStations],
+  );
   const closedWhenPassing = useCallback(
     (key: string) => passingByKey.get(key)?.open === false,
     [passingByKey],
   );
   const shown = useMemo(() => {
     const list = (showAll ? [...recommended, ...others] : [...recommended]).filter(
-      (s) => !(passing.settings.hideClosed && closedWhenPassing(stationKey(s))),
+      (s) =>
+        !(passing.settings.hideClosed && closedWhenPassing(stationKey(s))) &&
+        !(onlyMySide && sides.get(stationKey(s)) === "left"),
     );
     const detourOf = (s: Station) => detours.get(stationKey(s))?.km ?? Number.POSITIVE_INFINITY;
     return list.sort((a, b) =>
@@ -199,7 +217,17 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
           ? a.price - b.price
           : detourOf(a) - detourOf(b) || a.km_on_route - b.km_on_route,
     );
-  }, [recommended, others, showAll, sort, detours, passing.settings.hideClosed, closedWhenPassing]);
+  }, [
+    recommended,
+    others,
+    showAll,
+    sort,
+    detours,
+    passing.settings.hideClosed,
+    closedWhenPassing,
+    onlyMySide,
+    sides,
+  ]);
   const tones = useMemo(() => plateTones(shown), [shown]);
 
   // En el mapa llevan placa las recomendadas y, aunque no lo sean, las paradas y la elegida; el resto, punto.
@@ -387,6 +415,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 fuelLabel={search.data.fuel.label}
                 priceAgeMinutes={search.data.prices.age_minutes ?? null}
                 passingNote={passingNote(passingByKey.get(stationKey(selected)))}
+                side={sides.get(stationKey(selected)) ?? null}
               />
             ) : (
               <>
@@ -424,19 +453,22 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                 ) : null}
 
                 {search.data ? (
-                  <AdvancedOptions active={(passing.settings.enabled ? 1 : 0) + discounts.active}>
+                  <AdvancedOptions
+                    active={(passing.settings.enabled ? 1 : 0) + discounts.active + (onlyMySide ? 1 : 0)}
+                  >
                     <DiscountsOptions
                       discounts={discounts.discounts}
                       onChange={discounts.setDiscounts}
                       brands={brandSuggestions(allStations)}
                     />
                     <PassingTimeOptions settings={passing.settings} onChange={passing.update} />
+                    <MySideOptions enabled={onlyMySide} onChange={setOnlyMySide} />
                     <RefuelPlanner
                       stations={allStations}
                       routeKm={search.data.route_km}
                       detourKm={(key) => detours.get(key)?.km ?? null}
                       defaultAutonomyKm={filters.autonomia}
-                      exclude={closedWhenPassing}
+                      exclude={(key) => closedWhenPassing(key) || (onlyMySide && sides.get(key) === "left")}
                       onUse={(keys) => {
                         const byKey = new Map(allStations.map((st) => [stationKey(st), st]));
                         stops.replaceAll(keys.map((k) => byKey.get(k)).filter((st): st is Station => !!st));
