@@ -110,11 +110,12 @@ Hechos: 1–6 (ver `ROADMAP.md`). Desde el punto 7, el orden se revisó el 2026-
    - Roadbook (`D-Plan`) y versión para imprimir o PDF.
    - Exportar a Google Maps y GPX, y autonomía opcional.
    - En el ordenador, se diseña antes.
-10. **Inicio en el ordenador y revisión visual completa**:
+10. **Opciones avanzadas** (decisión del propietario, 2026-10-16): una sección plegada que casi nadie abre, pero muy útil para quien la abre. Planificar los repostajes automáticamente, "Abierta cuando pases", descuentos propios por marca, "Solo las de mi lado" y ajustes pequeños (ver `ROADMAP.md`, punto 10).
+11. **Inicio en el ordenador y revisión visual completa**:
     - Inicio a dos columnas, y "Editar" vuelve con el formulario relleno.
     - Repaso de todas las pantallas en los dos tamaños, en claro y en oscuro, contra las maquetas.
-11. **Legales y SEO**: aviso legal, privacidad, fuentes y metadatos.
-12. **Cierre**: e2e de la demo en los dos tamaños, accesibilidad (axe), presupuesto de rendimiento y la lista de paridad completa.
+12. **Legales y SEO**: aviso legal, privacidad, fuentes y metadatos.
+13. **Cierre**: e2e de la demo en los dos tamaños, accesibilidad (axe), presupuesto de rendimiento y la lista de paridad completa.
 
 **Después del lanzamiento**: PWA y hoja de ruta sin conexión (manifest, iconos con el hito y service worker con Serwist, ADR 0008).
 
