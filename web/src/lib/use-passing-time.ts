@@ -62,6 +62,16 @@ export function etaAt(settings: Pick<PassingSettings, "departure" | "speedKmh">,
   return new Date(start + (km / Math.max(5, settings.speedKmh)) * 3600_000);
 }
 
+/**
+ * Velocidad media de la ruta calculada (OSRM, sin paradas), redondeada a 5 km/h; null si no hay
+ * duración (rutas GPX) o el resultado no tiene sentido.
+ */
+export function routeSpeedKmh(routeKm: number | undefined, durationMin: number | null | undefined) {
+  if (!routeKm || !durationMin || durationMin <= 0) return null;
+  const speed = Math.round(routeKm / (durationMin / 60) / 5) * 5;
+  return speed >= 20 && speed <= 130 ? speed : null;
+}
+
 export function usePassingTime() {
   // El servidor no tiene almacenamiento: allí son los valores por defecto (nada se pinta con ellos hasta que
   // llegan los resultados, ya en el navegador).

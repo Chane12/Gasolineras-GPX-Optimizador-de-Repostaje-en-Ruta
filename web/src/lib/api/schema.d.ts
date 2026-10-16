@@ -515,6 +515,11 @@ export interface components {
         RouteResponse: {
             /** @description Solo en rutas calculadas desde texto */
             destination?: components["schemas"]["Place"] | null;
+            /**
+             * Duration Min
+             * @description Duración por carretera sin paradas (OSRM); solo en rutas calculadas desde texto
+             */
+            duration_min?: number | null;
             /** @description Solo en rutas calculadas desde texto */
             origin?: components["schemas"]["Place"] | null;
             /**

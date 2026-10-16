@@ -80,10 +80,18 @@ class GeocodedPlace:
     source: str  # "nominatim" | "photon"
 
 
+@dataclass(frozen=True)
+class RoadRoute:
+    """Ruta por carretera de OSRM: el track (EPSG:4326) y la duración sin paradas, si OSRM la da."""
+
+    track: LineString
+    duration_s: float | None
+
+
 _nominatim_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
 _photon_limiter = RateLimiter(GEOCODER_MIN_INTERVAL_S, GEOCODER_MAX_WAIT_S)
 _geocode_cache: TTLCache[GeocodedPlace] = TTLCache(GEOCODE_CACHE_MAX_ITEMS, GEOCODE_CACHE_TTL_S)
-_route_cache: TTLCache[LineString] = TTLCache(ROUTE_CACHE_MAX_ITEMS, ROUTE_CACHE_TTL_S)
+_route_cache: TTLCache[RoadRoute] = TTLCache(ROUTE_CACHE_MAX_ITEMS, ROUTE_CACHE_TTL_S)
 _suggest_limiter = RateLimiter(SUGGEST_MIN_INTERVAL_S, SUGGEST_MAX_WAIT_S)
 _suggest_cache: TTLCache[list[PlaceSuggestion]] = TTLCache(SUGGEST_CACHE_MAX_ITEMS, SUGGEST_CACHE_TTL_S)
 
@@ -273,8 +281,13 @@ def suggest_places(query: str, limit: int = SUGGEST_LIMIT, timeout: float = SUGG
 
 
 def fetch_road_route(origin: LatLon, destination: LatLon, timeout: float = 12.0) -> LineString:
+    """Track por carretera entre dos puntos (lat, lon), en EPSG:4326 (ver ``fetch_road_route_details``)."""
+    return fetch_road_route_details(origin, destination, timeout=timeout).track
+
+
+def fetch_road_route_details(origin: LatLon, destination: LatLon, timeout: float = 12.0) -> RoadRoute:
     """
-    Pide a OSRM la ruta por carretera entre dos puntos (lat, lon) y la devuelve en EPSG:4326.
+    Pide a OSRM la ruta por carretera entre dos puntos (lat, lon): el track en EPSG:4326 y su duración.
 
     Raises
     ------
@@ -329,10 +342,14 @@ def fetch_road_route(origin: LatLon, destination: LatLon, timeout: float = 12.0)
     if len(coords) < 2:
         raise NoRouteError("La ruta devuelta es demasiado corta: el origen y el destino están casi en el mismo punto.")
 
-    track = LineString(coords)
-    _route_cache.set(key, track)
+    duration = routes[0].get("duration")
+    route = RoadRoute(
+        track=LineString(coords),
+        duration_s=float(duration) if isinstance(duration, int | float) and duration > 0 else None,
+    )
+    _route_cache.set(key, route)
     logger.info("OSRM route: %d points", len(coords))
-    return track
+    return route
 
 
 def get_route_from_text(origen: str, destino: str) -> LineString:

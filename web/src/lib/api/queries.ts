@@ -136,6 +136,7 @@ async function routeWithoutServer(
       point_count: route.coordinates.length,
       origin: { query: source.origin, lat: origin.lat, lon: origin.lon },
       destination: { query: source.destination, lat: destination.lat, lon: destination.lon },
+      duration_min: route.durationMin,
     };
   } catch (error) {
     if (error instanceof ApiError && error.status === 400) throw error;
