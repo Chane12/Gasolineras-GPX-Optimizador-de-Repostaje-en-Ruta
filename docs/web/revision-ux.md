@@ -86,3 +86,13 @@ Los puntos 7–9 siguen en el mismo orden, pero con este flujo como guía:
 - **9**: "Tu ruta" y la hoja de ruta.
 
 La decisión A (sugerencias) puede ir en un PR propio dentro del 7. Antes de programar, el agente prepara las maquetas del flujo en los dos tamaños para que el propietario las apruebe.
+
+## Decisiones del propietario (2026-10-16)
+
+| # | Decisión |
+|---|---|
+| A | **Sí**: sugerencias de lugares al escribir, con Photon |
+| B | **Sí**: la pantalla de resultados es el sitio de trabajo, con búsqueda y filtros editables ahí; el inicio, solo origen, destino y combustible |
+| C | **No de momento**: el ahorro en euros según los litros que repostas queda como posibilidad futura (`ROADMAP.md`, Fase 4+) |
+| D | **Sí**: opciones con frases de conductor, con los textos que proponga el agente |
+| E | **Sí, con una condición: que no aparezcan tantas que sea ilegible**. Regla propuesta, a validar con las maquetas: <ul><li>La lista enseña primero las **recomendadas**: la más barata de cada tramo de la ruta y las más baratas en general, unas 8–10 como máximo según la longitud. Debajo, "Ver todas (N)".</li><li>En el mapa, **solo las recomendadas llevan placa de precio**. Las demás son un punto pequeño, sin texto, que se puede tocar.</li><li>Si dos placas se solapan, se queda la más barata.</li></ul> |
