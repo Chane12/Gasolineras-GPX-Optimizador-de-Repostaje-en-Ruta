@@ -6,7 +6,7 @@ Two budgets per client IP:
 - ``default``: everything else except /health.
 
 Client IP behind proxies: set ``GASOLINERAS_TRUSTED_PROXY_HOPS`` to the number of proxies in front of
-the API (Cloud Run: 1). The client is then the N-th address from the right of ``X-Forwarded-For``;
+the API (Render: 3 — Cloudflare, Render edge and internal load balancer, checked 2026-10-16; Cloud Run: 1). The client is then the N-th address from the right of ``X-Forwarded-For``;
 addresses further left can be forged by the client and are ignored. With 0 (default), the socket
 peer address is used.
 """

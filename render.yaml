@@ -27,11 +27,9 @@ services:
       # De momento, la web en local; se añadirá el de Vercel al publicarla.
       - key: GASOLINERAS_CORS_ORIGINS
         value: http://localhost:3000
-      # Render pone un proxy delante: la IP real del cliente es la última de X-Forwarded-For.
+      # Detrás de Render, X-Forwarded-For llega como "[lo que mande el cliente], IP real, IP de Cloudflare,
+      # IP del balanceador interno" (comprobado el 2026-10-16): la IP real es la tercera empezando por el final.
       - key: GASOLINERAS_TRUSTED_PROXY_HOPS
-        value: "1"
+        value: "3"
       - key: GASOLINERAS_LOG_LEVEL
         value: INFO
-      # TEMPORAL: endpoint /debug/ip para diagnosticar la IP del cliente tras el proxy. Quitar tras el arreglo.
-      - key: GASOLINERAS_DEBUG_IP
-        value: "1"

@@ -49,7 +49,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funci
 - [x] Planificación con el propietario: disposición, alcance, estilo y API en Render (`docs/web/plan.md`)
 - [x] Dirección visual aprobada (mezcla de A y C, sin pastel, paradas en el centro y autonomía opcional) y maquetas en `docs/web/maquetas/`
 - [x] **Acción del propietario**: crear la cuenta gratuita de Render (2026-10-16)
-- [ ] 1. API publicada en Render: `render.yaml` hecho; falta que el propietario aplique el Blueprint en el panel (New → Blueprint) y comprobar el despliegue
+- [x] 1. API publicada en Render: https://gasolineras-api-kwnx.onrender.com (`render.yaml`, Fráncfort, se redespliega sola). Comprobado: precios directos del MITECO, ruta/búsqueda/desvíos, CORS y límite por IP (`TRUSTED_PROXY_HOPS=3`, verificado con cabeceras falseadas)
 - [x] 2. `web/` con Next.js 16 + TypeScript 6 estricto + pnpm 12; Node 24 propio en `.tools/` (`scripts/setup-node.sh`, `scripts/pnpm`); `web/CLAUDE.md`; `verify.sh` y CI cubren la web (lint, tipos, formato, tests, build); dependencias con ≥ 7 días de antigüedad y scripts de instalación bloqueados
 - [x] 3. Sistema de diseño en código: tokens claro/oscuro en `globals.css` (paleta de Tailwind desactivada; un test impide colores sueltos), fuentes con `next/font`, componentes base (botones, hito, placa de precio, fila de gasolinera, resumen, frescura de precios), formato en español y catálogo en `/diseno`
 - [x] 4. Cliente de la API: tipos generados desde `api/openapi.json` (comprobados en `verify.sh`), `openapi-fetch` + TanStack Query (reintenta solo fallos transitorios), errores en español y aviso de servidor despertando / no disponible con "Reintentar"
@@ -64,7 +64,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit y la hoja de ruta funci
 
 ## Fase 3 — Lanzamiento
 
-- [ ] Despliegue: web en Vercel, API en Cloud Run (o Render) — ADR 0002. Variables de la API: `GASOLINERAS_CORS_ORIGINS=<dominio de la web>`, `GASOLINERAS_TRUSTED_PROXY_HOPS=1`
+- [ ] Despliegue: web en Vercel, API ya en Render (`render.yaml`) — ADR 0002. Al publicar la web: añadir su dominio a `GASOLINERAS_CORS_ORIGINS`
 - [ ] Monitorización básica de errores y disponibilidad
 - [ ] Periodo en paralelo con Streamlit; después, retirar `legacy/streamlit/`
 

@@ -82,14 +82,3 @@ def test_unexpected_errors_are_500_with_a_spanish_message(monkeypatch):
 def test_small_responses_are_not_compressed(path):
     response = TestClient(create_app(warm_up=False)).get(path, headers={"Accept-Encoding": "gzip"})
     assert "content-encoding" not in response.headers
-
-
-def test_debug_ip_endpoint_only_exists_when_enabled(monkeypatch):
-    assert TestClient(create_app(warm_up=False)).get("/debug/ip").status_code == 404
-
-    monkeypatch.setenv("GASOLINERAS_DEBUG_IP", "1")
-    client = TestClient(create_app(warm_up=False))
-    body = client.get("/debug/ip", headers={"X-Forwarded-For": "1.2.3.4"}).json()
-
-    assert body["x-forwarded-for"] == "1.2.3.4"
-    assert "/debug/ip" not in client.get("/openapi.json").json()["paths"]
