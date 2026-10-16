@@ -49,6 +49,7 @@ import { type RoadSide, roadSides } from "@/lib/road-side";
 import { useDiscounts } from "@/lib/use-discounts";
 import { useStoredState } from "@/lib/use-stored-state";
 import { type PassingStatus, routeSpeedKmh, usePassingTime } from "@/lib/use-passing-time";
+import { useSeenKeys } from "@/lib/use-seen-keys";
 import { placeValueFrom } from "@/lib/use-place-check";
 
 import { RouteMapLazy } from "./route-map-lazy";
@@ -183,12 +184,19 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
     [selectedKey, recommended, others],
   );
 
-  // Desvíos reales, en segundo plano: de las recomendadas, las paradas y la ficha abierta.
+  // Desvíos reales, en segundo plano: de las recomendadas, las paradas, la ficha abierta y, en "Ver
+  // todas", las que se van viendo al bajar por la lista (pedirlas todas de golpe saturaría OSRM).
+  const othersByKey = useMemo(() => new Map(others.map((s) => [stationKey(s), s])), [others]);
+  const { seen: seenKeys, observe: observeRow } = useSeenKeys(showAll);
   const detourTargets = useMemo(() => {
     const byKey = new Map(recommended.map((s) => [stationKey(s), s]));
     for (const s of [...stops.list, ...(selected ? [selected] : [])]) byKey.set(stationKey(s), s);
+    for (const key of seenKeys) {
+      const station = othersByKey.get(key);
+      if (station) byKey.set(key, station);
+    }
     return [...byKey.values()];
-  }, [recommended, stops, selected]);
+  }, [recommended, stops, selected, seenKeys, othersByKey]);
   const detours = useDetours(routeForSearch, detourTargets, client);
 
   const allStations = useMemo(() => [...recommended, ...others], [recommended, others]);
@@ -593,6 +601,7 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
                         return (
                           <StationRow
                             key={key}
+                            ref={showAll ? observeRow(key) : undefined}
                             name={name}
                             kmOnRoute={s.km_on_route}
                             price={s.price}

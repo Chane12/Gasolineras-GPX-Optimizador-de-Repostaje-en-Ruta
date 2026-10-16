@@ -1,3 +1,5 @@
+import type { Ref } from "react";
+
 import { IconButton } from "@/components/button";
 import { Hito } from "@/components/hito";
 import { CheckIcon, PlusIcon, WarningIcon } from "@/components/icons";
@@ -27,6 +29,8 @@ export interface StationRowProps {
   /** Al pasar el ratón o el foco por la fila: resalta su placa en el mapa. */
   onHighlight?: (on: boolean) => void;
   highlighted?: boolean;
+  /** Para saber cuándo aparece en pantalla (desvíos de "Ver todas"). */
+  ref?: Ref<HTMLLIElement>;
 }
 
 /** Fila del índice de gasolineras: hito · nombre y datos · precio · añadir/quitar parada. */
@@ -46,6 +50,7 @@ export function StationRow({
   highlighted = false,
   note = null,
   listPrice = null,
+  ref,
 }: StationRowProps) {
   const details = [town, schedule, detourKm != null ? `desvío ${formatShortKm(detourKm)} km` : null].filter(
     Boolean,
@@ -54,6 +59,7 @@ export function StationRow({
 
   return (
     <li
+      ref={ref}
       className={`flex items-center gap-3 border-b border-rule-soft py-2.5 ${
         highlighted ? "-mx-2.5 rounded-field px-2.5 outline-2 -outline-offset-2 outline-ink" : ""
       }`}
