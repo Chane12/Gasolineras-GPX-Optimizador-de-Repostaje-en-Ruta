@@ -44,7 +44,7 @@ Exponer el motor como API HTTP. Hecho cuando la API reproduce los resultados de 
 
 Hecho cuando iguala la funcionalidad de la app Streamlit **con el mismo acabado en el ordenador y en el móvil** (decisión del 2026-10-16: los dos igual de importantes; el modo sin conexión pasa a después del lanzamiento). **Plan completo: [`docs/web/plan.md`](web/plan.md) · diseño: [`docs/web/diseno.md`](web/diseno.md) · stack: ADR 0008.**
 
-> **Retomar aquí (2026-10-16)**: hechos los puntos 1–6. La API está en Render (https://gasolineras-api-kwnx.onrender.com) y la web de pruebas en Vercel (https://gasolineras-web.vercel.app; cada PR, con vista previa). La web tiene inicio, formulario, búsqueda en la URL y `/ruta` con el mapa y una lista provisional abajo. **El plan se revisó con el propietario el 2026-10-16**: ordenador y móvil valen lo mismo y cada pantalla se hace para los dos tamaños a la vez (ver "Listón de calidad" en `docs/web/plan.md`). **Antes del punto 7: revisión de experiencia y flujo en [`docs/web/revision-ux.md`](web/revision-ux.md); faltan las decisiones A–E del propietario y las maquetas del flujo.** Siguiente tarea: el punto 7 (resultados en los dos tamaños: panel + mapa en el ordenador según `D-Escritorio` y hoja deslizable en el móvil según `D-Resultados`, más el script de capturas).** Notas:
+> **Retomar aquí (2026-10-16)**: hechos los puntos 1–6. La API está en Render (https://gasolineras-api-kwnx.onrender.com) y la web de pruebas en Vercel (https://gasolineras-web.vercel.app; cada PR, con vista previa). La web tiene inicio, formulario, búsqueda en la URL y `/ruta` con el mapa y una lista provisional abajo. **El plan se revisó con el propietario el 2026-10-16**: ordenador y móvil valen lo mismo y cada pantalla se hace para los dos tamaños a la vez (ver "Listón de calidad" en `docs/web/plan.md`). **Antes del punto 7: revisión de experiencia y flujo en [`docs/web/revision-ux.md`](web/revision-ux.md); decisiones A–E tomadas; faltan las maquetas del flujo en los dos tamaños, para aprobarlas.** Siguiente tarea: el punto 7 (resultados en los dos tamaños: panel + mapa en el ordenador según `D-Escritorio` y hoja deslizable en el móvil según `D-Resultados`, más el script de capturas).** Notas:
 > - La lista provisional está en `web/src/app/ruta/route-results.tsx`; las paradas viven solo en memoria hasta el punto 8. El mapa (`web/src/components/route-map/`) recibe `padding` con lo que tapan la tarjeta y la hoja, y encuadra la ruta en el hueco que queda.
 > - El OSRM público a veces limita las peticiones desde Render: `/detours` devuelve `complete: false`. La web debe volver a pedir solo los desvíos que falten, tras una pausa.
 > - Para probar la web contra la API publicada: `NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C web dev`.
@@ -75,7 +75,7 @@ Hecho cuando iguala la funcionalidad de la app Streamlit **con el mismo acabado 
 
 ## Fase 4+ — Crecimiento (sin fecha)
 
-Dominio propio y SEO · cuentas de usuario (rutas y vehículos guardados) · monetización. Se decidirá con un plan de monetización.
+Ahorro en euros según los litros que repostas (decisión C de `docs/web/revision-ux.md`: posible, no de momento) · Dominio propio y SEO · cuentas de usuario (rutas y vehículos guardados) · monetización. Se decidirá con un plan de monetización.
 
 ---
 
