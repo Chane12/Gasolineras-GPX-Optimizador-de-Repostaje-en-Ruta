@@ -53,6 +53,15 @@ Sustituye a la app Streamlit (Fase 2). Antes de tocar nada, lee:
 - La API solo acepta estos orígenes (CORS): `GASOLINERAS_CORS_ORIGINS` y `GASOLINERAS_CORS_ORIGIN_REGEX` en `/render.yaml`.
 - CLI (sesión ya iniciada en esta máquina): `./scripts/pnpm --silent dlx vercel@63.1.0 <comando>`, con `VERCEL_TELEMETRY_DISABLED=1`. La carpeta `.vercel/` no se sube al repo.
 
+## Capturas (listón de calidad)
+
+Cada cambio visual se revisa en los dos tamaños y en claro y oscuro, contra `docs/web/maquetas/flujo/`:
+
+```bash
+NEXT_PUBLIC_API_URL=https://gasolineras-api-kwnx.onrender.com ./scripts/pnpm -C web dev   # en otra terminal
+uvx --from playwright python scripts/screenshots.py --out /tmp/capturas            # 8 capturas: inicio y ruta
+```
+
 ## Verificación
 
 `./scripts/verify.sh` (desde la raíz) ejecuta también la web: dependencias, lint, tipos, formato, tests y `next build`. Si cambias algo visual, compáralo con la maqueta correspondiente y di en el PR qué no has podido comprobar (p. ej. en un móvil real).

@@ -24,7 +24,7 @@ El propietario aporta **ideas y decisiones**; el agente hace **todo lo ejecutivo
 | `api/` | FastAPI sobre `core` (`gasolineras_api`); contrato en `api/openapi.json` | Activo (sin desplegar hasta la Fase 3) |
 | `web/` | Next.js — plan en `docs/web/plan.md`, diseño en `docs/web/diseno.md`; reglas en `web/CLAUDE.md` | Fase 2 (en construcción) |
 | `docs/` | `ROADMAP.md`, `architecture.md`, `decisions/` (ADRs), `web/` (plan, sistema de diseño y maquetas de la web) | |
-| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py`, `setup-node.sh` + `pnpm` (Node propio en `.tools/`) | |
+| `scripts/` | `verify.sh`, `export-legacy-requirements.sh`, `export-openapi.sh`, `smoke_legacy.py`, `check_prod.py`, `screenshots.py` (capturas de la web), `setup-node.sh` + `pnpm` (Node propio en `.tools/`) | |
 | `.claude/` | Hooks (formateo automático) y skills del proyecto | |
 
 ## Comandos

@@ -49,6 +49,16 @@ const FONT_BOLD = ["Noto Sans Bold"];
 const FONT_ITALIC = ["Noto Sans Italic"];
 
 export const ROUTE_SOURCE = "route";
+export const OTHERS_SOURCE = "others";
+/** Capa de las demás gasolineras (puntos): se puede tocar para elegir una. */
+export const OTHERS_LAYER = "others-dots";
+
+/** Una gasolinera sin placa: solo su posición y su clave. */
+export interface DotPoint {
+  key: string;
+  lon: number;
+  lat: number;
+}
 
 /** Track de la ruta en GeoJSON ([lon, lat]). */
 export type TrackCoordinates = ReadonlyArray<readonly [number, number] | readonly number[]>;
@@ -205,6 +215,23 @@ function labelLayers(p: MapPalette): LayerSpecification[] {
   ];
 }
 
+/** Las demás gasolineras: puntos pequeños en gris, con borde del fondo para despegarlos de la ruta. */
+function dotLayers(p: MapPalette): LayerSpecification[] {
+  return [
+    {
+      id: OTHERS_LAYER,
+      type: "circle",
+      source: OTHERS_SOURCE,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 3, 12, 5],
+        "circle-color": p.muted,
+        "circle-stroke-color": p.bg,
+        "circle-stroke-width": 1.5,
+      },
+    },
+  ];
+}
+
 /** La ruta: azul de 5 px con un halo del color del fondo (blanco en claro). */
 function routeLayers(p: MapPalette): LayerSpecification[] {
   const layout = { "line-cap": "round", "line-join": "round" } as const;
@@ -230,7 +257,11 @@ function routeLayers(p: MapPalette): LayerSpecification[] {
  * Estilo completo de MapLibre con la ruta dentro: al cambiar de tema basta con `setStyle` de nuevo.
  * Los nombres de lugar van por encima de la ruta para que se lean.
  */
-export function buildMapStyle(palette: MapPalette, track: TrackCoordinates): StyleSpecification {
+export function buildMapStyle(
+  palette: MapPalette,
+  track: TrackCoordinates,
+  dots: readonly DotPoint[] = [],
+): StyleSpecification {
   return {
     version: 8,
     glyphs: GLYPHS,
@@ -244,7 +275,18 @@ export function buildMapStyle(palette: MapPalette, track: TrackCoordinates): Sty
           geometry: { type: "LineString", coordinates: track.map(([lon, lat]) => [lon ?? 0, lat ?? 0]) },
         },
       },
+      [OTHERS_SOURCE]: {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: dots.map((d) => ({
+            type: "Feature",
+            properties: { key: d.key },
+            geometry: { type: "Point", coordinates: [d.lon, d.lat] },
+          })),
+        },
+      },
     },
-    layers: [...baseLayers(palette), ...routeLayers(palette), ...labelLayers(palette)],
+    layers: [...baseLayers(palette), ...routeLayers(palette), ...dotLayers(palette), ...labelLayers(palette)],
   };
 }

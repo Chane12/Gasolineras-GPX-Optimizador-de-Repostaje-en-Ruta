@@ -84,7 +84,7 @@ Comportamientos clave:
 Decisión del propietario (2026-10-16): los dos tamaños valen lo mismo. En la práctica:
 
 - **Cada pantalla se construye a la vez para los dos tamaños**, en el mismo PR. Nada de "ya haremos el escritorio después".
-- **Cada PR visual se revisa con capturas** a 390 × 844 (móvil) y 1440 × 900 (ordenador), en claro y en oscuro, contra la maqueta. Las capturas se hacen con un script del repo (se crea en el punto 7).
+- **Cada PR visual se revisa con capturas** a 390 × 844 (móvil) y 1440 × 900 (ordenador), en claro y en oscuro, contra la maqueta. Las capturas se hacen con `scripts/screenshots.py` (ver `web/CLAUDE.md`).
 - **Cosas propias del ordenador**: ratón (al pasar por una fila se resalta su placa en el mapa, y al revés), teclado (moverse por la lista, atajos sencillos) y aprovechar el ancho (más datos por fila, mapa grande).
 - **Cosas propias del móvil**: gestos, objetivos de 44 px, la hoja deslizable y uso con una mano.
 - **Pantallas sin maqueta de escritorio** (ficha y hoja de ruta): antes de programarlas se diseña su versión de ordenador y el propietario la aprueba.

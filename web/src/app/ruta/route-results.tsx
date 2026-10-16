@@ -148,6 +148,13 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
   }, [recommended, others, showAll, sort]);
   const tones = useMemo(() => plateTones(shown), [shown]);
 
+  // En el mapa llevan placa las recomendadas y, aunque no lo sean, las paradas y la elegida; el resto, punto.
+  const [mapPlates, mapDots] = useMemo(() => {
+    const withPlate = new Set([...stops.keys(), ...(focusedKey ? [focusedKey] : [])]);
+    const promoted = others.filter((s) => withPlate.has(stationKey(s)));
+    return [[...recommended, ...promoted], others.filter((s) => !withPlate.has(stationKey(s)))];
+  }, [recommended, others, stops, focusedKey]);
+
   if (!source) {
     return (
       <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-10">
@@ -461,7 +468,8 @@ export function RouteResults({ client = api }: { client?: ApiClient }) {
           {route.data ? (
             <RouteMapLazy
               track={route.data.track.coordinates}
-              stations={recommended}
+              stations={mapPlates}
+              otherStations={mapDots}
               stopKeys={new Set(stops.keys())}
               focusedKey={focusedKey}
               highlightedKey={highlightedKey}
